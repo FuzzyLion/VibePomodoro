@@ -90,44 +90,35 @@ struct FloatingTabBar: View {
     @Binding var selection: AppTab
 
     var body: some View {
-        HStack(spacing: 16) {
+        HStack(spacing: 4) {
             ForEach(AppTab.allCases) { tab in
-                Button {
-                    withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
-                        selection = tab
-                    }
-                } label: {
-                    VStack(spacing: 8) {
-                        Image(systemName: iconName(for: tab))
-                            .font(.system(size: 20, weight: .semibold))
-                            .foregroundStyle(selection == tab ? VibePalette.focusTint : .secondary)
-                            .frame(width: 44, height: 44)
-                            .background(
-                                Circle()
-                                    .fill(selection == tab ? VibePalette.focusTint.opacity(0.16) : Color.clear)
-                            )
-
-                        Circle()
-                            .fill(selection == tab ? VibePalette.focusTint : Color.clear)
-                            .frame(width: 6, height: 6)
-                    }
-                    .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.plain)
+                tabButton(for: tab)
             }
         }
-        .padding(.horizontal, 18)
-        .padding(.vertical, 14)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .frame(width: 188, height: 64)
         .background(
             Capsule(style: .continuous)
-                .fill(.regularMaterial)
+                .fill(.ultraThinMaterial)
         )
         .overlay(
             Capsule(style: .continuous)
-                .strokeBorder(Color.white.opacity(0.28), lineWidth: 1)
+                .strokeBorder(Color.white.opacity(0.34), lineWidth: 1)
         )
-        .shadow(color: Color.black.opacity(0.08), radius: 24, y: 12)
-        .padding(.horizontal, 28)
+        .overlay(alignment: .top) {
+            Capsule(style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [Color.white.opacity(0.86), Color.white.opacity(0.0)],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
+                .frame(height: 1)
+                .padding(.horizontal, 16)
+        }
+        .shadow(color: Color.black.opacity(0.10), radius: 22, y: 10)
     }
 
     private func iconName(for tab: AppTab) -> String {
@@ -140,6 +131,54 @@ struct FloatingTabBar: View {
             return "gearshape"
         }
     }
+
+    @ViewBuilder
+    private func tabButton(for tab: AppTab) -> some View {
+        let isSelected = selection == tab
+
+        Button {
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+                selection = tab
+            }
+        } label: {
+            VStack(spacing: 0) {
+                Image(systemName: iconName(for: tab))
+                    .font(.system(size: 22, weight: .regular))
+                    .foregroundStyle(isSelected ? VibePalette.focusTint : Color.primary.opacity(0.38))
+                    .frame(width: 52, height: 44)
+                    .background(
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .fill(isSelected ? selectedTabBackground : AnyShapeStyle(Color.clear))
+                            .overlay {
+                                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                    .strokeBorder(isSelected ? Color.white.opacity(0.35) : Color.clear, lineWidth: 1)
+                            }
+                    )
+
+                Circle()
+                    .fill(isSelected ? VibePalette.focusTint : Color.clear)
+                    .frame(width: 4, height: 4)
+                    .offset(y: 4)
+            }
+            .frame(width: 56, height: 48)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var selectedTabBackground: AnyShapeStyle {
+        AnyShapeStyle(
+            RadialGradient(
+                colors: [
+                    VibePalette.focusTint.opacity(0.24),
+                    VibePalette.focusTint.opacity(0.08),
+                    Color.clear
+                ],
+                center: .center,
+                startRadius: 4,
+                endRadius: 36
+            )
+        )
+    }
 }
 
 struct PhaseStatusBadge: View {
@@ -147,25 +186,28 @@ struct PhaseStatusBadge: View {
     let phase: SessionPhase
 
     var body: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 8) {
             Circle()
                 .fill(phase.tintColor)
-                .frame(width: 10, height: 10)
+                .frame(width: 8, height: 8)
+                .shadow(color: phase.tintColor.opacity(0.48), radius: 6)
             Text(text)
-                .font(.system(.headline, design: .rounded, weight: .semibold))
-                .tracking(2.6)
+                .font(.system(size: 13, weight: .semibold, design: .rounded))
+                .tracking(1.5)
+                .textCase(.uppercase)
         }
-        .foregroundStyle(.secondary)
-        .padding(.horizontal, 18)
-        .padding(.vertical, 12)
+        .foregroundStyle(Color.primary.opacity(0.48))
+        .padding(.horizontal, 20)
+        .frame(height: 32)
         .background(
             Capsule(style: .continuous)
-                .fill(.regularMaterial)
+                .fill(.ultraThinMaterial)
         )
         .overlay(
             Capsule(style: .continuous)
-                .strokeBorder(Color.white.opacity(0.28), lineWidth: 1)
+                .strokeBorder(Color.white.opacity(0.36), lineWidth: 1)
         )
+        .shadow(color: Color.black.opacity(0.05), radius: 12, y: 4)
     }
 }
 
@@ -175,31 +217,42 @@ struct SessionProgressPill: View {
     let totalRounds: Int
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 10) {
             Text(title.uppercased())
-                .font(.system(.subheadline, design: .rounded, weight: .semibold))
-                .tracking(2)
+                .font(.system(size: 13, weight: .semibold, design: .rounded))
+                .tracking(1)
 
-            Spacer(minLength: 12)
+            Spacer(minLength: 10)
 
-            HStack(spacing: 8) {
+            HStack(spacing: 6) {
                 ForEach(0..<max(1, totalRounds), id: \.self) { index in
                     Circle()
-                        .fill(index < currentRound ? VibePalette.focusTint : Color.secondary.opacity(0.18))
-                        .frame(width: 10, height: 10)
+                        .fill(index < currentRound ? activeDotFill : AnyShapeStyle(Color.primary.opacity(0.10)))
+                        .frame(width: 8, height: 8)
                 }
             }
         }
-        .foregroundStyle(.secondary)
-        .padding(.horizontal, 20)
-        .padding(.vertical, 16)
+        .foregroundStyle(Color.primary.opacity(0.40))
+        .padding(.horizontal, 22)
+        .frame(height: 40)
         .background(
             Capsule(style: .continuous)
-                .fill(.regularMaterial)
+                .fill(.ultraThinMaterial)
         )
         .overlay(
             Capsule(style: .continuous)
-                .strokeBorder(Color.white.opacity(0.28), lineWidth: 1)
+                .strokeBorder(Color.white.opacity(0.34), lineWidth: 1)
+        )
+        .shadow(color: Color.black.opacity(0.04), radius: 18, y: 8)
+    }
+
+    private var activeDotFill: AnyShapeStyle {
+        AnyShapeStyle(
+            LinearGradient(
+                colors: [VibePalette.focusTint, Color(red: 0.77, green: 0.60, blue: 0.29)],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
         )
     }
 }
@@ -212,23 +265,27 @@ struct SecondaryActionButton: View {
 
     var body: some View {
         Button(action: action) {
-            Label(title, systemImage: systemImage)
-                .font(.system(.title3, design: .rounded, weight: .semibold))
-                .foregroundStyle(isEnabled ? .secondary : .tertiary)
+            HStack(spacing: 8) {
+                Image(systemName: systemImage)
+                    .font(.system(size: 16, weight: .medium))
+                Text(title)
+                    .font(.system(size: 15, weight: .semibold, design: .rounded))
+            }
+                .foregroundStyle(isEnabled ? Color.primary.opacity(0.46) : Color.primary.opacity(0.22))
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 20)
+                .frame(height: 50.5)
                 .background(
-                    RoundedRectangle(cornerRadius: 26, style: .continuous)
-                        .fill(.regularMaterial)
+                    RoundedRectangle(cornerRadius: 24, style: .continuous)
+                        .fill(.ultraThinMaterial)
                 )
                 .overlay(
-                    RoundedRectangle(cornerRadius: 26, style: .continuous)
-                        .strokeBorder(Color.white.opacity(0.28), lineWidth: 1)
+                    RoundedRectangle(cornerRadius: 24, style: .continuous)
+                        .strokeBorder(Color.white.opacity(0.34), lineWidth: 1)
                 )
         }
         .buttonStyle(.plain)
         .disabled(!isEnabled)
-        .shadow(color: Color.black.opacity(0.05), radius: 18, y: 10)
+        .shadow(color: Color.black.opacity(0.04), radius: 10, y: 4)
     }
 }
 
@@ -241,75 +298,137 @@ struct BubbleTimerView: View {
 
     var body: some View {
         ZStack {
-            Circle()
+            BubbleGlassShape()
                 .fill(.ultraThinMaterial)
                 .overlay(
-                    Circle()
-                        .strokeBorder(Color.white.opacity(0.34), lineWidth: 1.2)
+                    BubbleGlassShape()
+                        .stroke(Color.white.opacity(0.42), lineWidth: 1)
                 )
+                .shadow(color: phase.tintColor.opacity(0.10), radius: 42, y: 24)
+                .shadow(color: Color.white.opacity(0.18), radius: 26, y: -8)
 
-            Circle()
-                .stroke(phase.tintColor.opacity(0.16), lineWidth: 20)
-                .blur(radius: 10)
-                .padding(12)
+            BubbleGlassShape()
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            Color.white.opacity(0.22),
+                            phase.tintColor.opacity(0.06),
+                            phase.tintColor.opacity(0.03)
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
+                .blur(radius: 14)
+                .padding(8)
 
             GeometryReader { proxy in
                 let size = proxy.size
-                let fillHeight = size.height * max(0.1, min(progress, 1))
+                let clampedProgress = max(0, min(progress, 1))
+                let fillHeight = size.height * (0.16 + clampedProgress * 0.42)
+                let innerWidth = size.width * 0.78
 
                 ZStack(alignment: .bottom) {
                     RoundedRectangle(cornerRadius: size.width * 0.25, style: .continuous)
                         .fill(
                             LinearGradient(
                                 colors: [
-                                    phase.tintColor.opacity(0.55),
-                                    phase.tintColor.opacity(0.14)
+                                    phase.tintColor.opacity(0.24),
+                                    phase.tintColor.opacity(0.12),
+                                    Color.white.opacity(0.02)
                                 ],
                                 startPoint: .bottom,
                                 endPoint: .top
                             )
                         )
-                        .frame(height: fillHeight)
+                        .frame(width: innerWidth, height: fillHeight)
+                        .blur(radius: 2)
                         .overlay(alignment: .top) {
                             Ellipse()
-                                .fill(Color.white.opacity(0.28))
-                                .blur(radius: 8)
-                                .frame(width: size.width * 0.72, height: 16)
-                                .offset(y: -6)
+                                .fill(Color.white.opacity(0.24))
+                                .blur(radius: 10)
+                                .frame(width: innerWidth * 0.94, height: 18)
+                                .offset(y: -8)
+                        }
+                        .overlay(alignment: .bottom) {
+                            Ellipse()
+                                .fill(Color.black.opacity(0.08))
+                                .blur(radius: 12)
+                                .frame(width: innerWidth * 0.82, height: 18)
+                                .offset(y: 10)
                         }
                 }
-                .clipShape(Circle())
-                .padding(22)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+                .clipShape(BubbleGlassShape())
+                .padding(.horizontal, 30)
+                .padding(.vertical, 24)
             }
 
-            VStack(spacing: 18) {
+            VStack(spacing: 8) {
                 Text(timeText)
-                    .font(.system(size: 62, weight: .heavy, design: .rounded))
-                    .foregroundStyle(.primary)
+                    .font(.system(size: 56, weight: .heavy, design: .rounded))
+                    .foregroundStyle(Color.white.opacity(0.96))
                     .monospacedDigit()
-                    .minimumScaleFactor(0.65)
+                    .minimumScaleFactor(0.72)
+                    .shadow(color: Color.white.opacity(0.18), radius: 8, y: 0)
 
                 Button(action: action) {
                     Image(systemName: actionTitle == "Pause" ? "pause.fill" : "play.fill")
-                        .font(.system(size: 22, weight: .bold))
-                        .foregroundStyle(.primary)
-                        .frame(width: 64, height: 64)
+                        .font(.system(size: 12, weight: .heavy))
+                        .foregroundStyle(Color.white.opacity(0.96))
+                        .frame(width: 28, height: 28)
                         .background(
                             Circle()
-                                .fill(.regularMaterial)
+                                .fill(Color.white.opacity(0.18))
                         )
                         .overlay(
                             Circle()
-                                .strokeBorder(Color.white.opacity(0.28), lineWidth: 1)
+                                .strokeBorder(Color.white.opacity(0.20), lineWidth: 0.8)
                         )
                 }
                 .buttonStyle(.plain)
-                .shadow(color: Color.black.opacity(0.08), radius: 16, y: 8)
+                .shadow(color: Color.white.opacity(0.10), radius: 6, y: 0)
             }
         }
-        .frame(maxWidth: 360)
-        .aspectRatio(1, contentMode: .fit)
-        .padding(.horizontal, 10)
+        .frame(width: 280, height: 280)
+    }
+}
+
+private struct BubbleGlassShape: Shape {
+    func path(in rect: CGRect) -> Path {
+        let width = rect.width
+        let height = rect.height
+        var path = Path()
+
+        path.move(to: CGPoint(x: width * 0.5, y: height * 0.045))
+        path.addCurve(
+            to: CGPoint(x: width * 0.88, y: height * 0.43),
+            control1: CGPoint(x: width * 0.76, y: height * 0.055),
+            control2: CGPoint(x: width * 0.92, y: height * 0.22)
+        )
+        path.addCurve(
+            to: CGPoint(x: width * 0.80, y: height * 0.90),
+            control1: CGPoint(x: width * 0.89, y: height * 0.66),
+            control2: CGPoint(x: width * 0.89, y: height * 0.84)
+        )
+        path.addCurve(
+            to: CGPoint(x: width * 0.20, y: height * 0.90),
+            control1: CGPoint(x: width * 0.66, y: height * 0.98),
+            control2: CGPoint(x: width * 0.34, y: height * 0.98)
+        )
+        path.addCurve(
+            to: CGPoint(x: width * 0.12, y: height * 0.43),
+            control1: CGPoint(x: width * 0.11, y: height * 0.84),
+            control2: CGPoint(x: width * 0.11, y: height * 0.66)
+        )
+        path.addCurve(
+            to: CGPoint(x: width * 0.5, y: height * 0.045),
+            control1: CGPoint(x: width * 0.08, y: height * 0.22),
+            control2: CGPoint(x: width * 0.24, y: height * 0.055)
+        )
+
+        path.closeSubpath()
+        return path
     }
 }
 
@@ -501,4 +620,3 @@ struct SettingPickerRow: View {
         }
     }
 }
-
