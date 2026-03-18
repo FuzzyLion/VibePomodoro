@@ -349,6 +349,23 @@ enum PomodoroEngine {
         return advanceToNextStep(session: &session, startDate: now, shouldContinueRunning: shouldContinueRunning)
     }
 
+    static func resetCurrentStep(session: inout SessionSnapshot, now: Date = .now) -> [PomodoroEvent] {
+        guard session.runState != .completed, let step = session.currentStep else { return [] }
+
+        session.segments.removeAll { $0.stepID == step.id }
+        session.currentSegmentStartDate = nil
+        session.targetEndDate = nil
+
+        guard session.runState == .running else {
+            session.runState = .idle
+            return []
+        }
+
+        session.currentSegmentStartDate = now
+        session.targetEndDate = now.addingTimeInterval(step.plannedDuration)
+        return [.phaseStarted(step.phase, step.roundNumber)]
+    }
+
     static func goBack(session: inout SessionSnapshot, now: Date = .now) -> [PomodoroEvent] {
         guard !session.steps.isEmpty else { return [] }
 
@@ -460,4 +477,3 @@ enum PomodoroEngine {
         return [.phaseStarted(nextStep.phase, nextStep.roundNumber)]
     }
 }
-

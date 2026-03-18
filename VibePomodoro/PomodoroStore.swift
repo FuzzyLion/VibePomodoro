@@ -56,8 +56,29 @@ final class PomodoroStore: ObservableObject {
         return session.currentStepIndex > 0 || session.statistics(now: .now).sessionTime > 0
     }
 
+    var shouldShowBackAction: Bool {
+        guard let session = activeSession else { return false }
+
+        switch session.runState {
+        case .idle:
+            return session.statistics(now: .now).sessionTime > 0
+        case .running, .paused, .completed:
+            return true
+        }
+    }
+
     var canSkip: Bool {
         activeSession?.currentStep != nil
+    }
+
+    var canResetCurrentStep: Bool {
+        guard let session = activeSession,
+              session.runState != .completed,
+              let step = session.currentStep else { return false }
+
+        return session.runState == .running
+            || session.runState == .paused
+            || session.accumulatedDuration(for: step) > 0
     }
 
     var primaryActionTitle: String {
@@ -90,15 +111,17 @@ final class PomodoroStore: ObservableObject {
     var statusText: String {
         guard let session = activeSession else { return "READY" }
 
-        switch session.runState {
-        case .idle:
-            return "READY"
-        case .running:
-            return "RUNNING"
-        case .paused:
-            return "PAUSED"
-        case .completed:
+        if session.runState == .completed {
             return "COMPLETE"
+        }
+
+        switch session.currentPhase ?? .focus {
+        case .focus:
+            return "FOCUS"
+        case .shortBreak:
+            return "SHORT BREAK"
+        case .longBreak:
+            return "LONG BREAK"
         }
     }
 
@@ -153,6 +176,13 @@ final class PomodoroStore: ObservableObject {
         handle(events: events)
     }
 
+    func resetCurrentStep() {
+        guard var session = activeSession else { return }
+        let events = PomodoroEngine.resetCurrentStep(session: &session, now: .now)
+        activeSession = session
+        handle(events: events)
+    }
+
     func goBackOneStep() {
         guard var session = activeSession else { return }
         let events = PomodoroEngine.goBack(session: &session, now: .now)
@@ -161,23 +191,31 @@ final class PomodoroStore: ObservableObject {
     }
 
     func updateFocusMinutes(_ minutes: Int) {
+        guard settings.focusMinutes != minutes else { return }
         settings.focusMinutes = minutes
         persist()
+        fireAdjustmentFeedback()
     }
 
     func updateShortBreakMinutes(_ minutes: Int) {
+        guard settings.shortBreakMinutes != minutes else { return }
         settings.shortBreakMinutes = minutes
         persist()
+        fireAdjustmentFeedback()
     }
 
     func updateLongBreakMinutes(_ minutes: Int) {
+        guard settings.longBreakMinutes != minutes else { return }
         settings.longBreakMinutes = minutes
         persist()
+        fireAdjustmentFeedback()
     }
 
     func updateTargetRounds(_ rounds: Int) {
+        guard settings.targetRounds != rounds else { return }
         settings.targetRounds = rounds
         persist()
+        fireAdjustmentFeedback()
     }
 
     func setKeepScreenOn(_ enabled: Bool) {
@@ -373,6 +411,13 @@ final class PomodoroStore: ObservableObject {
         let generator = UINotificationFeedbackGenerator()
         generator.prepare()
         generator.notificationOccurred(type)
+    }
+
+    private func fireAdjustmentFeedback() {
+        guard settings.hapticsEnabled else { return }
+        let generator = UIImpactFeedbackGenerator(style: .soft)
+        generator.prepare()
+        generator.impactOccurred(intensity: 0.82)
     }
 
     private func syncIdleTimer() {

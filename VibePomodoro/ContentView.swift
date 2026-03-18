@@ -13,22 +13,26 @@ struct ContentView: View {
     var body: some View {
         ZStack {
             VibeBackground()
+            TabView(selection: $store.selectedTab) {
+                FocusScreen()
+                    .tag(AppTab.focus)
+                    .tabItem {
+                        Label("Focus", systemImage: "timer")
+                    }
 
-            Group {
-                switch store.selectedTab {
-                case .focus:
-                    FocusScreen()
-                case .productivity:
-                    ProductivityScreen()
-                case .settings:
-                    SettingsScreen()
-                }
+                ProductivityScreen()
+                    .tag(AppTab.productivity)
+                    .tabItem {
+                        Label("Productivity", systemImage: "chart.bar")
+                    }
+
+                SettingsScreen()
+                    .tag(AppTab.settings)
+                    .tabItem {
+                        Label("Settings", systemImage: "gearshape")
+                    }
             }
-            .transition(.opacity.combined(with: .scale(scale: 0.98)))
-        }
-        .safeAreaInset(edge: .bottom) {
-            FloatingTabBar(selection: $store.selectedTab)
-                .padding(.bottom, 6)
+            .tint(VibePalette.warmAmberAccent)
         }
         .animation(.spring(response: 0.38, dampingFraction: 0.88), value: store.selectedTab)
     }
