@@ -444,7 +444,7 @@ struct SessionProgressPill: View {
                 .padding(.horizontal, -8)
                 .padding(.vertical, -6)
         }
-        .frame(height: 39.5)
+        .frame(height: 31.5)
         .shadow(color: Color.black.opacity(0.04), radius: 20, y: 4)
         .zIndex(4)
     }
@@ -472,7 +472,7 @@ private struct SessionProgressNode: View {
                 Circle()
                     .stroke(Color.white.opacity(colorScheme == .dark ? 0.18 : 0.30), lineWidth: 0.4)
             }
-            .frame(width: 10, height: 10)
+            .frame(width: 9, height: 9)
             .shadow(
                 color: state == .inactive ? .clear : VibePalette.warmAmberAccent.opacity(colorScheme == .dark ? 0.22 : 0.12),
                 radius: 4
@@ -600,198 +600,73 @@ struct BubbleTimerView: View {
     @Environment(\.colorScheme) private var colorScheme
 
     let phase: SessionPhase
-    let timeText: String
-    let progress: Double
-    let actionTitle: String
-    let now: Date
-    let isAnimating: Bool
+    let timer: FocusTimerSnapshot
     let action: () -> Void
 
     @State private var accumulatedWaveTime: TimeInterval = 0
     @State private var waveAnimationStart: Date?
 
     var body: some View {
-        let wavePhase = currentWavePhase(now: now)
-        let glowExpansion = 0.52 + (sin(wavePhase * 0.75) + 1) * 0.24
         let sphereSize: CGFloat = 280
 
         ZStack {
-            Ellipse()
-                .fill(
-                    RadialGradient(
-                        colors: [
-                            phase.shadowColor.opacity(0.12 + glowExpansion * 0.10),
-                            phase.shadowColor.opacity(0.04 + glowExpansion * 0.04),
-                            Color.clear
-                        ],
-                        center: .center,
-                        startRadius: 8,
-                        endRadius: 108 + glowExpansion * 28
-                    )
-                )
-                .frame(width: 176 + glowExpansion * 34, height: 42 + glowExpansion * 8)
-                .blur(radius: 24 + glowExpansion * 8)
-                .offset(y: 128)
-                .zIndex(0)
+            TimelineView(.periodic(from: .now, by: timer.animationRefreshInterval)) { context in
+                let wavePhase = currentWavePhase(now: context.date)
+                let glowExpansion = 0.52 + (sin(wavePhase * 0.75) + 1) * 0.24
 
-            Ellipse()
-                .fill(Color.white.opacity(0.16 + glowExpansion * 0.04))
-                .frame(width: 146 + glowExpansion * 14, height: 22 + glowExpansion * 4)
-                .blur(radius: 18)
-                .offset(y: 118)
-                .zIndex(0)
-
-            ZStack {
-                BubbleGlassShape()
-                    .fill(.ultraThinMaterial)
-                    .overlay {
-                        BubbleGlassShape()
-                            .fill(phase.glassTint.opacity(0.24))
-                    }
-
-                BubbleLiquidLayer(
-                    phase: phase,
-                    progress: progress,
-                    wavePhase: wavePhase,
-                    glowExpansion: glowExpansion
-                )
-                .mask(BubbleGlassShape())
-
-                BubbleGlassShape()
-                    .stroke(Color.white.opacity(0.62), lineWidth: 1)
-
-                BubbleGlassShape()
-                    .stroke(Color.black.opacity(0.06), lineWidth: 18)
-                    .blur(radius: 18)
-                    .mask {
-                        BubbleGlassShape()
-                            .fill(
-                                RadialGradient(
-                                    colors: [Color.black, Color.clear],
-                                    center: .top,
-                                    startRadius: 20,
-                                    endRadius: sphereSize * 0.62
-                                )
-                            )
-                    }
-
-                BubbleGlassShape()
-                    .stroke(
-                        LinearGradient(
-                            colors: [
-                                Color.white.opacity(0.72),
-                                Color.white.opacity(0.18),
-                                Color.white.opacity(0.04)
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        ),
-                        lineWidth: 1.2
-                    )
-                    .blur(radius: 0.4)
-
-                BubbleGlassShape()
-                    .fill(
-                        LinearGradient(
-                            colors: [
-                                Color.white.opacity(0.24),
-                                Color.clear
-                            ],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                    )
-                    .mask {
-                        BubbleGlassShape()
-                            .stroke(lineWidth: 12)
-                    }
-
-                BubbleGlassShape()
-                    .fill(
-                        LinearGradient(
-                            colors: [
-                                Color.white.opacity(0.26),
-                                Color.white.opacity(0.08),
-                                Color.clear
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .blur(radius: 16)
-                    .padding(12)
-                    .offset(x: -20, y: -20)
-            }
-            .shadow(color: phase.shadowColor.opacity(0.08), radius: 28, y: 14)
-            .shadow(color: Color.white.opacity(0.16), radius: 14, y: -8)
-            .zIndex(1)
-
-            ZStack {
                 ZStack {
-                    timerTextShape
-                        .foregroundStyle(Color.black.opacity(colorScheme == .dark ? 0.14 : 0.045))
-                        .opacity(colorScheme == .dark ? 0.92 : 0.72)
-                        .blur(radius: colorScheme == .dark ? 20 : 10)
-                        .offset(y: colorScheme == .dark ? 10 : 4)
-
-                    Rectangle()
-                        .fill(.ultraThinMaterial)
-                        .mask(timerTextShape)
-                        .opacity(colorScheme == .dark ? 0.95 : 0.90)
-
-                    timerTextShape
-                        .foregroundStyle(
-                            LinearGradient(
+                    Ellipse()
+                        .fill(
+                            RadialGradient(
                                 colors: [
-                                    Color.white.opacity(colorScheme == .dark ? 0.96 : 0.985),
-                                    Color.white.opacity(colorScheme == .dark ? 0.86 : 0.92),
-                                    phase.glassTint.opacity(colorScheme == .dark ? 0.42 : 0.14)
+                                    phase.shadowColor.opacity(0.12 + glowExpansion * 0.10),
+                                    phase.shadowColor.opacity(0.04 + glowExpansion * 0.04),
+                                    Color.clear
                                 ],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
+                                center: .center,
+                                startRadius: 8,
+                                endRadius: 108 + glowExpansion * 28
                             )
                         )
-                        .overlay {
-                            timerTextShape
-                                .foregroundStyle(
-                                    LinearGradient(
-                                        colors: [
-                                            Color.white.opacity(colorScheme == .dark ? 0.42 : 0.30),
-                                            Color.white.opacity(colorScheme == .dark ? 0.12 : 0.05),
-                                            Color.clear
-                                        ],
-                                        startPoint: .top,
-                                        endPoint: .bottom
-                                    )
-                                )
-                                .mask(timerTextShape)
-                        }
-                        .shadow(
-                            color: Color.black.opacity(colorScheme == .dark ? 0.055 : 0.022),
-                            radius: colorScheme == .dark ? 18 : 8,
-                            y: colorScheme == .dark ? 8 : 3
-                        )
-                        .shadow(color: Color.white.opacity(colorScheme == .dark ? 0.08 : 0.10), radius: 6, y: -1)
+                        .frame(width: 176 + glowExpansion * 34, height: 42 + glowExpansion * 8)
+                        .blur(radius: 24 + glowExpansion * 8)
+                        .offset(y: 128)
+                        .zIndex(0)
 
-                    timerTextShape
-                        .foregroundStyle(Color.white.opacity(colorScheme == .dark ? 0.18 : 0.12))
-                        .blur(radius: 0.55)
-                        .mask(alignment: .top) {
-                            Rectangle()
-                                .frame(height: 16)
-                        }
+                    Ellipse()
+                        .fill(Color.white.opacity(0.16 + glowExpansion * 0.04))
+                        .frame(width: 146 + glowExpansion * 14, height: 22 + glowExpansion * 4)
+                        .blur(radius: 18)
+                        .offset(y: 118)
+                        .zIndex(0)
 
-                    timerTextShape
-                        .foregroundStyle(Color.black.opacity(0.08))
-                        .blur(radius: 0.7)
-                        .offset(y: 1)
-                        .opacity(colorScheme == .dark ? 0.80 : 0.12)
-                        .mask(alignment: .bottom) {
-                            Rectangle()
-                                .frame(height: 14)
-                        }
+                    BubbleSphereBase(phase: phase)
+                        .equatable()
+                        .zIndex(1)
+
+                    BubbleLiquidLayer(
+                        phase: phase,
+                        progress: timer.progress(at: context.date),
+                        isFinalDisplayedSecond: timer.formattedTime(at: context.date) == "00:01",
+                        wavePhase: wavePhase,
+                        glowExpansion: glowExpansion
+                    )
+                    .mask(BubbleGlassShape())
+                    .zIndex(2)
+
+                    BubbleLiquidStaticHighlights(phase: phase, sphereSize: sphereSize)
+                        .equatable()
+                        .zIndex(3)
+
+                    BubbleSphereChrome(phase: phase, sphereSize: sphereSize)
+                        .equatable()
+                        .zIndex(4)
                 }
-                .compositingGroup()
+                .drawingGroup(opaque: false)
+            }
+
+            ZStack {
+                BubbleTimerDigitsView(phase: phase, timer: timer)
                 .offset(y: -10)
                 .zIndex(5)
 
@@ -852,11 +727,12 @@ struct BubbleTimerView: View {
         }
         .frame(width: sphereSize, height: sphereSize)
         .onAppear {
-            if isAnimating && waveAnimationStart == nil {
-                waveAnimationStart = now
+            if timer.isAnimating && waveAnimationStart == nil {
+                waveAnimationStart = .now
             }
         }
-        .onChange(of: isAnimating) { _, newValue in
+        .onChange(of: timer.isAnimating) { _, newValue in
+            let now = Date.now
             if newValue {
                 waveAnimationStart = now
             } else if let waveAnimationStart {
@@ -867,7 +743,7 @@ struct BubbleTimerView: View {
     }
 
     private var controlIconName: String {
-        switch actionTitle {
+        switch timer.actionTitle {
         case "Pause":
             return "pause.fill"
         case "Resume", "Start", "Start Again":
@@ -879,7 +755,7 @@ struct BubbleTimerView: View {
 
     private func currentWavePhase(now: Date) -> Double {
         let animatedDuration: TimeInterval
-        if isAnimating, let waveAnimationStart {
+        if timer.isAnimating, let waveAnimationStart {
             animatedDuration = now.timeIntervalSince(waveAnimationStart)
         } else {
             animatedDuration = 0
@@ -887,40 +763,279 @@ struct BubbleTimerView: View {
 
         return (accumulatedWaveTime + animatedDuration) * 1.15 * .pi
     }
+}
 
-    private var timerTextShape: some View {
-        Text(timeText)
-            .font(.system(size: 54, weight: .heavy, design: .default))
+private struct BubbleTimerDigitsView: View {
+    @Environment(\.colorScheme) private var colorScheme
+
+    let phase: SessionPhase
+    let timer: FocusTimerSnapshot
+
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: timer.textRefreshInterval)) { context in
+            let display = BubbleTimeDisplay(duration: timer.remainingDuration(at: context.date))
+
+            ZStack {
+                BubbleTimerTextLabel(display: display)
+                    .foregroundStyle(Color.black.opacity(colorScheme == .dark ? 0.16 : 0.08))
+                    .opacity(colorScheme == .dark ? 0.26 : 0.34)
+                    .blur(radius: colorScheme == .dark ? 14 : 12)
+                    .offset(y: colorScheme == .dark ? 7 : 5)
+
+                BubbleTimerTextLabel(display: display)
+                    .foregroundStyle(Color.black.opacity(colorScheme == .dark ? 0.12 : 0.035))
+                    .opacity(colorScheme == .dark ? 0.78 : 0.56)
+                    .blur(radius: colorScheme == .dark ? 12 : 7)
+                    .offset(y: colorScheme == .dark ? 8 : 3)
+
+                Rectangle()
+                    .fill(.ultraThinMaterial)
+                    .mask(BubbleTimerTextLabel(display: display))
+                    .opacity(colorScheme == .dark ? 0.93 : 0.88)
+
+                BubbleTimerTextLabel(display: display)
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: [
+                                Color.white.opacity(colorScheme == .dark ? 0.98 : 0.99),
+                                Color.white.opacity(colorScheme == .dark ? 0.84 : 0.92),
+                                phase.glassTint.opacity(colorScheme == .dark ? 0.38 : 0.12)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .overlay {
+                        BubbleTimerTextLabel(display: display)
+                            .foregroundStyle(
+                                LinearGradient(
+                                    colors: [
+                                        Color.white.opacity(colorScheme == .dark ? 0.34 : 0.22),
+                                        Color.white.opacity(colorScheme == .dark ? 0.10 : 0.04),
+                                        Color.clear
+                                    ],
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                )
+                            )
+                            .mask(BubbleTimerTextLabel(display: display))
+                    }
+                    .shadow(
+                        color: Color.black.opacity(colorScheme == .dark ? 0.050 : 0.025),
+                        radius: colorScheme == .dark ? 14 : 8,
+                        y: colorScheme == .dark ? 6 : 3
+                    )
+                    .shadow(color: Color.white.opacity(colorScheme == .dark ? 0.08 : 0.10), radius: 5, y: -1)
+
+                BubbleTimerTextLabel(display: display)
+                    .foregroundStyle(Color.white.opacity(colorScheme == .dark ? 0.15 : 0.10))
+                    .blur(radius: 0.45)
+                    .mask(alignment: .top) {
+                        Rectangle()
+                            .frame(height: 14)
+                    }
+            }
+            .compositingGroup()
+            .animation(.easeInOut(duration: 0.22), value: display.text)
+        }
+        .allowsHitTesting(false)
+    }
+}
+
+private struct BubbleTimeDisplay: Equatable {
+    let minutes: String
+    let seconds: String
+
+    init(duration: TimeInterval) {
+        let totalSeconds = max(0, Int(duration.rounded()))
+        let minuteValue = totalSeconds / 60
+        let secondValue = totalSeconds % 60
+
+        minutes = String(format: "%02d", minuteValue)
+        seconds = String(format: "%02d", secondValue)
+    }
+
+    var text: String {
+        "\(minutes):\(seconds)"
+    }
+}
+
+private struct BubbleTimerTextLabel: View {
+    let display: BubbleTimeDisplay
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 0) {
+            digitGroup(display.minutes)
+
+            Text(":")
+                .font(.system(size: 43, weight: .bold, design: .rounded))
+                .fontWidth(.expanded)
+                .baselineOffset(1)
+                .padding(.horizontal, 2)
+                .opacity(0.96)
+
+            digitGroup(display.seconds)
+        }
+        .monospacedDigit()
+        .tracking(-1.1)
+        .minimumScaleFactor(0.72)
+        .fixedSize(horizontal: true, vertical: false)
+    }
+
+    @ViewBuilder
+    private func digitGroup(_ text: String) -> some View {
+        Text(text)
+            .font(.system(size: 58, weight: .heavy, design: .rounded))
             .fontWidth(.expanded)
-            .tracking(-1.45)
-            .monospacedDigit()
-            .minimumScaleFactor(0.72)
+    }
+}
+
+private struct BubbleSphereBase: View, Equatable {
+    let phase: SessionPhase
+
+    var body: some View {
+        BubbleGlassShape()
+            .fill(.ultraThinMaterial)
+            .overlay {
+                BubbleGlassShape()
+                    .fill(phase.glassTint.opacity(0.24))
+            }
+    }
+}
+
+private struct BubbleLiquidStaticHighlights: View, Equatable {
+    let phase: SessionPhase
+    let sphereSize: CGFloat
+
+    var body: some View {
+        ZStack {
+            Ellipse()
+                .fill(
+                    RadialGradient(
+                        colors: [
+                            Color.white.opacity(0.34),
+                            Color.clear
+                        ],
+                        center: .center,
+                        startRadius: 0,
+                        endRadius: sphereSize * 0.24
+                    )
+                )
+                .frame(width: sphereSize * 0.44, height: sphereSize * 0.24)
+                .blur(radius: 18)
+                .offset(x: -sphereSize * 0.18, y: -sphereSize * 0.32)
+
+            Ellipse()
+                .fill(phase.shadowColor.opacity(0.18))
+                .frame(width: sphereSize * 0.36, height: sphereSize * 0.08)
+                .blur(radius: 16)
+                .offset(y: sphereSize * 0.42)
+        }
+        .mask(BubbleGlassShape())
+        .allowsHitTesting(false)
+    }
+}
+
+private struct BubbleSphereChrome: View, Equatable {
+    let phase: SessionPhase
+    let sphereSize: CGFloat
+
+    var body: some View {
+        ZStack {
+            BubbleGlassShape()
+                .stroke(Color.white.opacity(0.62), lineWidth: 1)
+
+            BubbleGlassShape()
+                .stroke(Color.black.opacity(0.06), lineWidth: 18)
+                .blur(radius: 18)
+                .mask {
+                    BubbleGlassShape()
+                        .fill(
+                            RadialGradient(
+                                colors: [Color.black, Color.clear],
+                                center: .top,
+                                startRadius: 20,
+                                endRadius: sphereSize * 0.62
+                            )
+                        )
+                }
+
+            BubbleGlassShape()
+                .stroke(
+                    LinearGradient(
+                        colors: [
+                            Color.white.opacity(0.72),
+                            Color.white.opacity(0.18),
+                            Color.white.opacity(0.04)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: 1.2
+                )
+                .blur(radius: 0.4)
+
+            BubbleGlassShape()
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            Color.white.opacity(0.24),
+                            Color.clear
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
+                .mask {
+                    BubbleGlassShape()
+                        .stroke(lineWidth: 12)
+                }
+
+            BubbleGlassShape()
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            Color.white.opacity(0.26),
+                            Color.white.opacity(0.08),
+                            Color.clear
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .blur(radius: 16)
+                .padding(12)
+                .offset(x: -20, y: -20)
+        }
+        .shadow(color: phase.shadowColor.opacity(0.08), radius: 28, y: 14)
+        .shadow(color: Color.white.opacity(0.16), radius: 14, y: -8)
+        .allowsHitTesting(false)
     }
 }
 
 private struct BubbleGlassShape: Shape {
     func path(in rect: CGRect) -> Path {
-        Path(ellipseIn: rect.insetBy(dx: 2, dy: 2))
+        Path(ellipseIn: rect.insetBy(dx: 0.9, dy: 0.9))
     }
 }
 
 private struct BubbleLiquidLayer: View {
     let phase: SessionPhase
     let progress: Double
+    let isFinalDisplayedSecond: Bool
     let wavePhase: Double
     let glowExpansion: Double
 
     var body: some View {
         GeometryReader { proxy in
-            let size = proxy.size
-            let visualFillRatio = min(0.92, 0.10 + max(0, min(progress, 1)) * 0.78)
+            let normalizedProgress = max(0, min(progress, 1))
+            let baseFillRatio = min(0.985, 0.10 + pow(normalizedProgress, 1.18) * 0.88)
+            let terminalBoost = isFinalDisplayedSecond ? 0.048 : 0
+            let visualFillRatio = min(1.035, baseFillRatio + terminalBoost)
             let amplitude = 4.2 + glowExpansion * 2.4
 
             Canvas(rendersAsynchronously: true) { context, canvasSize in
-                let sphereRect = CGRect(origin: .zero, size: canvasSize).insetBy(
-                    dx: 4,
-                    dy: 4
-                )
+                let sphereRect = CGRect(origin: .zero, size: canvasSize)
                 let spherePath = BubbleGlassShape().path(in: sphereRect)
                 let waterlineY = sphereRect.maxY - sphereRect.height * CGFloat(visualFillRatio)
 
@@ -990,36 +1105,6 @@ private struct BubbleLiquidLayer: View {
                     )
                 )
 
-                for index in 0..<5 {
-                    let x = sphereRect.midX + CGFloat(sin(wavePhase * 0.34 + Double(index) * 1.37)) * sphereRect.width * 0.18
-                    let y = max(
-                        waterlineY + sphereRect.height * 0.10,
-                        sphereRect.maxY - sphereRect.height * 0.30
-                    ) + CGFloat(cos(wavePhase * 0.28 + Double(index) * 1.7)) * 12 + CGFloat(index - 2) * 7
-                    let radius = sphereRect.width * (0.040 + CGFloat(index) * 0.003)
-                    let causticRect = CGRect(
-                        x: x - radius,
-                        y: y - radius * 0.7,
-                        width: radius * 2.1,
-                        height: radius * 1.4
-                    )
-
-                    var causticContext = context
-                    causticContext.addFilter(.blur(radius: 12))
-                    causticContext.fill(
-                        Path(ellipseIn: causticRect),
-                        with: .radialGradient(
-                            Gradient(colors: [
-                                Color.white.opacity(0.24),
-                                Color.clear
-                            ]),
-                            center: CGPoint(x: causticRect.midX, y: causticRect.midY),
-                            startRadius: 0,
-                            endRadius: radius * 1.6
-                        )
-                    )
-                }
-
                 var waterlineGlowContext = context
                 waterlineGlowContext.addFilter(.blur(radius: 10))
                 waterlineGlowContext.fill(
@@ -1034,46 +1119,8 @@ private struct BubbleLiquidLayer: View {
                     with: .color(Color.white.opacity(0.24))
                 )
 
-                var upperHighlightContext = context
-                upperHighlightContext.addFilter(.blur(radius: 18))
-                upperHighlightContext.fill(
-                    Path(
-                        ellipseIn: CGRect(
-                            x: sphereRect.minX + sphereRect.width * 0.10,
-                            y: sphereRect.minY + sphereRect.height * 0.06,
-                            width: sphereRect.width * 0.44,
-                            height: sphereRect.height * 0.24
-                        )
-                    ),
-                    with: .radialGradient(
-                        Gradient(colors: [
-                            Color.white.opacity(0.34),
-                            Color.clear
-                        ]),
-                        center: CGPoint(
-                            x: sphereRect.minX + sphereRect.width * 0.28,
-                            y: sphereRect.minY + sphereRect.height * 0.14
-                        ),
-                        startRadius: 0,
-                        endRadius: sphereRect.width * 0.24
-                    )
-                )
-
-                var bottomRefractionContext = context
-                bottomRefractionContext.addFilter(.blur(radius: 16))
-                bottomRefractionContext.fill(
-                    Path(
-                        ellipseIn: CGRect(
-                            x: sphereRect.midX - sphereRect.width * 0.18,
-                            y: sphereRect.maxY - sphereRect.height * 0.12,
-                            width: sphereRect.width * 0.36,
-                            height: sphereRect.height * 0.08
-                        )
-                    ),
-                    with: .color(phase.shadowColor.opacity(0.18))
-                )
             }
-            .frame(width: size.width, height: size.height)
+            .frame(width: proxy.size.width, height: proxy.size.height)
         }
     }
 }
@@ -1088,7 +1135,7 @@ private struct WaveLiquidShape: Shape {
         let baseY = rect.height * (1 - clampedFill)
         let mainAmplitude = min(rect.height * 0.06, amplitude)
         let width = rect.width
-        let step = max(4, width / 42)
+        let step = max(CGFloat(5.5), width / 34)
 
         var path = Path()
         path.move(to: CGPoint(x: 0, y: rect.height))

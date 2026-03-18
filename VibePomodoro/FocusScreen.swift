@@ -1,5 +1,48 @@
 import SwiftUI
 
+struct FocusTimerSnapshot: Equatable {
+    let runState: SessionRunState
+    let actionTitle: String
+    let targetEndDate: Date?
+    let remainingDuration: TimeInterval
+    let progress: Double
+    let plannedDuration: TimeInterval
+
+    var isAnimating: Bool {
+        runState == .running
+    }
+
+    var animationRefreshInterval: TimeInterval {
+        isAnimating ? 1.0 / 12.0 : 60.0
+    }
+
+    var textRefreshInterval: TimeInterval {
+        isAnimating ? 1.0 : 60.0
+    }
+
+    func remainingDuration(at now: Date) -> TimeInterval {
+        guard isAnimating, let targetEndDate else { return remainingDuration }
+        return max(0, targetEndDate.timeIntervalSince(now))
+    }
+
+    func progress(at now: Date) -> Double {
+        guard isAnimating, plannedDuration > 0 else { return progress }
+        let dynamicRemainingDuration = remainingDuration(at: now)
+        return min(1, max(0, 1 - (dynamicRemainingDuration / plannedDuration)))
+    }
+
+    func formattedTime(at now: Date) -> String {
+        Self.formattedTime(remainingDuration(at: now))
+    }
+
+    private static func formattedTime(_ duration: TimeInterval) -> String {
+        let totalSeconds = max(0, Int(duration.rounded()))
+        let minutes = totalSeconds / 60
+        let seconds = totalSeconds % 60
+        return String(format: "%02d:%02d", minutes, seconds)
+    }
+}
+
 struct FocusScreen: View {
     @EnvironmentObject private var store: PomodoroStore
 
@@ -8,29 +51,24 @@ struct FocusScreen: View {
             let size = proxy.size
             let compactLayout = size.height < 760
             let topSpacing = compactLayout ? max(56, size.height * 0.13) : max(74, size.height * 0.16)
+            let currentPhase = store.currentPhase
 
             VStack(spacing: compactLayout ? 18 : 24) {
                 Spacer(minLength: topSpacing)
 
-                PhaseStatusBadge(text: store.statusText, phase: store.currentPhase)
+                PhaseStatusBadge(text: store.statusText, phase: currentPhase)
                     .fixedSize(horizontal: true, vertical: false)
 
-                TimelineView(.animation) { context in
-                    BubbleTimerView(
-                        phase: store.currentPhase,
-                        timeText: Self.formattedTime(store.remainingDuration(now: context.date)),
-                        progress: store.elapsedRatio(now: context.date),
-                        actionTitle: store.primaryActionTitle,
-                        now: context.date,
-                        isAnimating: store.currentRunState == .running,
-                        action: store.togglePrimaryAction
-                    )
-                }
+                BubbleTimerView(
+                    phase: currentPhase,
+                    timer: timerSnapshot,
+                    action: store.togglePrimaryAction
+                )
                 .frame(width: 280, height: 280)
                 .padding(.top, compactLayout ? 10 : 18)
 
                 SessionProgressPill(
-                    phase: store.currentPhase,
+                    phase: currentPhase,
                     nodeStates: sessionNodeStates
                 )
                 .fixedSize(horizontal: true, vertical: false)
@@ -41,7 +79,7 @@ struct FocusScreen: View {
                         title: "Skip",
                         systemImage: "forward.end",
                         isEnabled: store.canSkip,
-                        glassTint: store.currentPhase.glassTint,
+                        glassTint: currentPhase.glassTint,
                         action: store.skipCurrentStep
                     )
                     .frame(width: 118.04)
@@ -50,7 +88,7 @@ struct FocusScreen: View {
                         title: "Reset",
                         systemImage: "arrow.counterclockwise",
                         isEnabled: store.canResetCurrentStep,
-                        glassTint: store.currentPhase.glassTint,
+                        glassTint: currentPhase.glassTint,
                         action: store.resetCurrentStep
                     )
                     .frame(width: 127.25)
@@ -73,6 +111,19 @@ struct FocusScreen: View {
             .padding(.horizontal, 24)
             .frame(width: size.width, height: size.height, alignment: .top)
         }
+    }
+
+    private var timerSnapshot: FocusTimerSnapshot {
+        let plannedDuration = store.activeSession?.currentStep?.plannedDuration ?? store.settings.focusDuration
+
+        return FocusTimerSnapshot(
+            runState: store.currentRunState,
+            actionTitle: store.primaryActionTitle,
+            targetEndDate: store.activeSession?.targetEndDate,
+            remainingDuration: store.remainingDuration(),
+            progress: store.elapsedRatio(),
+            plannedDuration: plannedDuration
+        )
     }
 
     private var sessionNodeStates: [SessionProgressNodeState] {
@@ -98,12 +149,5 @@ struct FocusScreen: View {
 
             return .inactive
         }
-    }
-
-    static func formattedTime(_ duration: TimeInterval) -> String {
-        let totalSeconds = max(0, Int(duration.rounded()))
-        let minutes = totalSeconds / 60
-        let seconds = totalSeconds % 60
-        return String(format: "%02d:%02d", minutes, seconds)
     }
 }
