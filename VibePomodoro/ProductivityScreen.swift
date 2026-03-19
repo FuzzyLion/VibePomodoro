@@ -3,9 +3,24 @@ import SwiftUI
 
 struct ProductivityScreen: View {
     @EnvironmentObject private var store: PomodoroStore
+    @Environment(\.scenePhase) private var scenePhase
     @State private var selectedRange: ProductivityRange = .week
 
     var body: some View {
+        if shouldTickLiveSnapshot {
+            TimelineView(.periodic(from: .now, by: 1)) { context in
+                content(renderState: store.productivitySnapshot(for: selectedRange, now: context.date))
+            }
+        } else {
+            content(renderState: store.productivitySnapshot(for: selectedRange))
+        }
+    }
+
+    private var shouldTickLiveSnapshot: Bool {
+        scenePhase == .active && store.selectedTab == .productivity && store.currentRunState == .running
+    }
+
+    private func content(renderState: ProductivityMetricsSnapshot) -> some View {
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: 24) {
                 Spacer(minLength: 10)
@@ -32,7 +47,7 @@ struct ProductivityScreen: View {
                             .tracking(2)
                             .foregroundStyle(.secondary)
 
-                        Chart(chartPoints) { point in
+                        Chart(renderState.chartPoints) { point in
                             BarMark(
                                 x: .value("Bucket", point.label),
                                 y: .value("Hours", point.focusTime / 3600)
@@ -75,7 +90,7 @@ struct ProductivityScreen: View {
                             }
                         }
 
-                        if chartPoints.allSatisfy({ $0.focusTime == 0 }) {
+                        if renderState.chartPoints.allSatisfy({ $0.focusTime == 0 }) {
                             Text("Your chart will fill in as completed sessions are recorded.")
                                 .font(.system(.subheadline, design: .rounded))
                                 .foregroundStyle(.secondary)
@@ -87,28 +102,28 @@ struct ProductivityScreen: View {
                     MetricCard(
                         icon: "flame",
                         title: "Streak",
-                        value: "\(store.streakLength()) days",
+                        value: "\(renderState.streakLength) days",
                         subtitle: "Consistency over intensity"
                     )
 
                     MetricCard(
                         icon: "target",
                         title: "Sessions",
-                        value: "\(store.completedSessionCount())",
+                        value: "\(renderState.completedSessionCount)",
                         subtitle: "Completed full cycles"
                     )
 
                     MetricCard(
                         icon: "clock",
                         title: "Focus Time",
-                        value: Self.hoursText(store.totalFocusTime()),
-                        subtitle: String(format: "Avg %.1fh/day", store.averageFocusHoursPerDay())
+                        value: Self.hoursText(renderState.totalFocusTime),
+                        subtitle: String(format: "Avg %.1fh/day", renderState.averageFocusHoursPerDay)
                     )
 
                     MetricCard(
                         icon: "cup.and.saucer",
                         title: "Break Time",
-                        value: Self.hoursText(store.totalBreakTime()),
+                        value: Self.hoursText(renderState.totalBreakTime),
                         subtitle: "Recovery is part of rhythm"
                     )
                 }
@@ -118,10 +133,6 @@ struct ProductivityScreen: View {
             .padding(.horizontal, 24)
             .padding(.top, 20)
         }
-    }
-
-    private var chartPoints: [ProductivityChartPoint] {
-        store.chartPoints(for: selectedRange)
     }
 
     private static func chartHours(_ hours: Double) -> String {
@@ -142,4 +153,3 @@ struct ProductivityScreen: View {
         return String(format: "%.1fh", hours)
     }
 }
-

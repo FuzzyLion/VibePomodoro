@@ -14,7 +14,8 @@ final class PomodoroStore: ObservableObject {
     private let defaults: UserDefaults
     private let encoder = JSONEncoder()
     private let decoder = JSONDecoder()
-    private var timer: Timer?
+    private var stepBoundaryTimer: Timer?
+    private var currentScenePhase: ScenePhase = .active
 
     private enum StorageKey {
         static let settings = "vibe.settings"
@@ -29,14 +30,14 @@ final class PomodoroStore: ObservableObject {
         self.completedSessions = Self.loadValue(for: StorageKey.completedSessions, using: defaults) ?? []
 
         reconcileNow()
-        startTicker()
         syncIdleTimer()
         requestNotificationPermissionsIfNeeded()
         syncNotifications()
+        syncStepBoundaryTimer()
     }
 
     deinit {
-        timer?.invalidate()
+        stepBoundaryTimer?.invalidate()
     }
 
     var currentPhase: SessionPhase {
@@ -157,16 +158,15 @@ final class PomodoroStore: ObservableObject {
             let events = PomodoroEngine.startOrResume(session: &session, now: .now)
             activeSession = session
             handle(events: events)
+            return
         case .running:
             PomodoroEngine.pause(session: &session, now: .now)
             activeSession = session
-            persist()
+            refreshRuntimeSideEffects()
         case .completed:
             startNewSession()
+            return
         }
-
-        syncIdleTimer()
-        syncNotifications()
     }
 
     func skipCurrentStep() {
@@ -251,6 +251,8 @@ final class PomodoroStore: ObservableObject {
     }
 
     func handleScenePhaseChange(_ phase: ScenePhase) {
+        currentScenePhase = phase
+
         switch phase {
         case .active:
             reconcileNow()
@@ -261,56 +263,41 @@ final class PomodoroStore: ObservableObject {
         @unknown default:
             break
         }
+
+        syncStepBoundaryTimer()
+    }
+
+    func productivitySnapshot(for range: ProductivityRange, now: Date = .now) -> ProductivityMetricsSnapshot {
+        let segments = allSegments(now: now)
+
+        return ProductivityMetricsSnapshot(
+            chartPoints: chartPoints(for: range, segments: segments, now: now),
+            streakLength: streakLength(from: segments, now: now),
+            completedSessionCount: completedSessions.count,
+            totalFocusTime: segments.reduce(0) { total, segment in
+                total + (segment.phase == .focus ? segment.duration : 0)
+            },
+            totalBreakTime: segments.reduce(0) { total, segment in
+                total + (segment.phase == .focus ? 0 : segment.duration)
+            },
+            averageFocusHoursPerDay: averageFocusHoursPerDay(from: segments, now: now)
+        )
     }
 
     func chartPoints(for range: ProductivityRange, now: Date = .now) -> [ProductivityChartPoint] {
-        let calendar = Calendar.autoupdatingCurrent
-        let config = bucketConfiguration(for: range, calendar: calendar, now: now)
-        var buckets: [Date: ProductivityChartPoint] = [:]
-
-        for bucketStart in config.bucketStarts {
-            buckets[bucketStart] = ProductivityChartPoint(
-                startDate: bucketStart,
-                label: config.label(bucketStart),
-                focusTime: 0,
-                breakTime: 0
-            )
-        }
-
-        for segment in allSegments(now: now) {
-            let boundedStart = max(segment.startDate, config.rangeStart)
-            let boundedEnd = min(segment.endDate, config.rangeEnd)
-            guard boundedEnd > boundedStart else { continue }
-
-            var cursor = boundedStart
-            while cursor < boundedEnd {
-                let bucketStart = config.floor(cursor)
-                guard let point = buckets[bucketStart] else { break }
-                let bucketEnd = config.next(bucketStart)
-                let sliceEnd = min(bucketEnd, boundedEnd)
-                let duration = sliceEnd.timeIntervalSince(cursor)
-
-                let updatedPoint: ProductivityChartPoint
-                if segment.phase == .focus {
-                    updatedPoint = point.updating(focusTime: point.focusTime + duration, breakTime: point.breakTime)
-                } else {
-                    updatedPoint = point.updating(focusTime: point.focusTime, breakTime: point.breakTime + duration)
-                }
-
-                buckets[bucketStart] = updatedPoint
-                cursor = sliceEnd
-            }
-        }
-
-        return config.bucketStarts.compactMap { buckets[$0] }
+        chartPoints(for: range, segments: allSegments(now: now), now: now)
     }
 
     func totalFocusTime(now: Date = .now) -> TimeInterval {
-        allSegments(now: now).filter { $0.phase == .focus }.reduce(0) { $0 + $1.duration }
+        allSegments(now: now).reduce(0) { total, segment in
+            total + (segment.phase == .focus ? segment.duration : 0)
+        }
     }
 
     func totalBreakTime(now: Date = .now) -> TimeInterval {
-        allSegments(now: now).filter { $0.phase != .focus }.reduce(0) { $0 + $1.duration }
+        allSegments(now: now).reduce(0) { total, segment in
+            total + (segment.phase == .focus ? 0 : segment.duration)
+        }
     }
 
     func totalSessionTime(now: Date = .now) -> TimeInterval {
@@ -322,35 +309,11 @@ final class PomodoroStore: ObservableObject {
     }
 
     func streakLength(now: Date = .now) -> Int {
-        let calendar = Calendar.autoupdatingCurrent
-        let dailyFocus = Dictionary(grouping: allSegments(now: now).filter { $0.phase == .focus }) {
-            calendar.startOfDay(for: $0.startDate)
-        }
-
-        var streak = 0
-        var day = calendar.startOfDay(for: now)
-
-        while let segments = dailyFocus[day], !segments.isEmpty {
-            let total = segments.reduce(0) { $0 + $1.duration }
-            guard total > 0 else { break }
-
-            streak += 1
-            guard let previous = calendar.date(byAdding: .day, value: -1, to: day) else { break }
-            day = previous
-        }
-
-        return streak
+        streakLength(from: allSegments(now: now), now: now)
     }
 
     func averageFocusHoursPerDay(now: Date = .now) -> Double {
-        let calendar = Calendar.autoupdatingCurrent
-        let grouped = Dictionary(grouping: allSegments(now: now).filter { $0.phase == .focus }) {
-            calendar.startOfDay(for: $0.startDate)
-        }
-
-        guard !grouped.isEmpty else { return 0 }
-        let total = grouped.values.flatMap { $0 }.reduce(0) { $0 + $1.duration }
-        return total / Double(grouped.count) / 3600
+        averageFocusHoursPerDay(from: allSegments(now: now), now: now)
     }
 
     private func startNewSession() {
@@ -360,16 +323,16 @@ final class PomodoroStore: ObservableObject {
 
     private func reconcileNow() {
         guard var session = activeSession else { return }
+        let previousSession = session
         let events = PomodoroEngine.reconcile(session: &session, now: .now)
+        guard session != previousSession || !events.isEmpty else { return }
         activeSession = session
         handle(events: events)
     }
 
     private func handle(events: [PomodoroEvent]) {
         guard !events.isEmpty else {
-            persist()
-            syncIdleTimer()
-            syncNotifications()
+            refreshRuntimeSideEffects()
             return
         }
 
@@ -385,9 +348,7 @@ final class PomodoroStore: ObservableObject {
             }
         }
 
-        persist()
-        syncIdleTimer()
-        syncNotifications()
+        refreshRuntimeSideEffects()
     }
 
     private func storeCompletedSessionIfNeeded() {
@@ -431,13 +392,33 @@ final class PomodoroStore: ObservableObject {
         Self.saveValue(completedSessions, for: StorageKey.completedSessions, using: defaults, encoder: encoder)
     }
 
-    private func startTicker() {
-        timer?.invalidate()
-        timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
+    private func refreshRuntimeSideEffects() {
+        persist()
+        syncIdleTimer()
+        syncNotifications()
+        syncStepBoundaryTimer()
+    }
+
+    private func syncStepBoundaryTimer() {
+        stepBoundaryTimer?.invalidate()
+        stepBoundaryTimer = nil
+
+        guard currentScenePhase == .active,
+              let session = activeSession,
+              session.runState == .running,
+              session.currentStep != nil,
+              let targetEndDate = session.targetEndDate else {
+            return
+        }
+
+        let interval = max(0.05, targetEndDate.timeIntervalSinceNow)
+        let timer = Timer.scheduledTimer(withTimeInterval: interval, repeats: false) { [weak self] _ in
             DispatchQueue.main.async {
                 self?.reconcileNow()
             }
         }
+        timer.tolerance = min(0.25, interval * 0.05)
+        stepBoundaryTimer = timer
     }
 
     private func allSegments(now: Date) -> [ActivitySegment] {
@@ -526,6 +507,84 @@ final class PomodoroStore: ObservableObject {
 
     private func notificationIdentifier(for sessionID: UUID, stepIndex: Int) -> String {
         "vibe.\(sessionID.uuidString).\(stepIndex)"
+    }
+
+    private func chartPoints(
+        for range: ProductivityRange,
+        segments: [ActivitySegment],
+        now: Date
+    ) -> [ProductivityChartPoint] {
+        let calendar = Calendar.autoupdatingCurrent
+        let config = bucketConfiguration(for: range, calendar: calendar, now: now)
+        var buckets: [Date: ProductivityChartPoint] = [:]
+
+        for bucketStart in config.bucketStarts {
+            buckets[bucketStart] = ProductivityChartPoint(
+                startDate: bucketStart,
+                label: config.label(bucketStart),
+                focusTime: 0,
+                breakTime: 0
+            )
+        }
+
+        for segment in segments {
+            let boundedStart = max(segment.startDate, config.rangeStart)
+            let boundedEnd = min(segment.endDate, config.rangeEnd)
+            guard boundedEnd > boundedStart else { continue }
+
+            var cursor = boundedStart
+            while cursor < boundedEnd {
+                let bucketStart = config.floor(cursor)
+                guard let point = buckets[bucketStart] else { break }
+                let bucketEnd = config.next(bucketStart)
+                let sliceEnd = min(bucketEnd, boundedEnd)
+                let duration = sliceEnd.timeIntervalSince(cursor)
+
+                let updatedPoint: ProductivityChartPoint
+                if segment.phase == .focus {
+                    updatedPoint = point.updating(focusTime: point.focusTime + duration, breakTime: point.breakTime)
+                } else {
+                    updatedPoint = point.updating(focusTime: point.focusTime, breakTime: point.breakTime + duration)
+                }
+
+                buckets[bucketStart] = updatedPoint
+                cursor = sliceEnd
+            }
+        }
+
+        return config.bucketStarts.compactMap { buckets[$0] }
+    }
+
+    private func streakLength(from segments: [ActivitySegment], now: Date) -> Int {
+        let calendar = Calendar.autoupdatingCurrent
+        let dailyFocus = Dictionary(grouping: segments.filter { $0.phase == .focus }) {
+            calendar.startOfDay(for: $0.startDate)
+        }
+
+        var streak = 0
+        var day = calendar.startOfDay(for: now)
+
+        while let segments = dailyFocus[day], !segments.isEmpty {
+            let total = segments.reduce(0) { $0 + $1.duration }
+            guard total > 0 else { break }
+
+            streak += 1
+            guard let previous = calendar.date(byAdding: .day, value: -1, to: day) else { break }
+            day = previous
+        }
+
+        return streak
+    }
+
+    private func averageFocusHoursPerDay(from segments: [ActivitySegment], now: Date) -> Double {
+        let calendar = Calendar.autoupdatingCurrent
+        let grouped = Dictionary(grouping: segments.filter { $0.phase == .focus }) {
+            calendar.startOfDay(for: $0.startDate)
+        }
+
+        guard !grouped.isEmpty else { return 0 }
+        let total = grouped.values.flatMap { $0 }.reduce(0) { $0 + $1.duration }
+        return total / Double(grouped.count) / 3600
     }
 
     private func bucketConfiguration(for range: ProductivityRange, calendar: Calendar, now: Date) -> BucketConfiguration {
@@ -618,6 +677,15 @@ struct ProductivityChartPoint: Identifiable, Equatable {
     func updating(focusTime: TimeInterval, breakTime: TimeInterval) -> ProductivityChartPoint {
         ProductivityChartPoint(startDate: startDate, label: label, focusTime: focusTime, breakTime: breakTime)
     }
+}
+
+struct ProductivityMetricsSnapshot: Equatable {
+    let chartPoints: [ProductivityChartPoint]
+    let streakLength: Int
+    let completedSessionCount: Int
+    let totalFocusTime: TimeInterval
+    let totalBreakTime: TimeInterval
+    let averageFocusHoursPerDay: Double
 }
 
 private struct BucketConfiguration {

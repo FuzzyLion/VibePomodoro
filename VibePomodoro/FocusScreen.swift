@@ -1,38 +1,40 @@
 import SwiftUI
 
-struct FocusTimerSnapshot: Equatable {
-    let runState: SessionRunState
+struct BubbleRenderState: Equatable {
+    let phase: SessionPhase
     let actionTitle: String
     let targetEndDate: Date?
     let remainingDuration: TimeInterval
     let progress: Double
     let plannedDuration: TimeInterval
-
-    var isAnimating: Bool {
-        runState == .running
-    }
+    let isAnimating: Bool
+    let shouldTickSeconds: Bool
 
     var animationRefreshInterval: TimeInterval {
         isAnimating ? 1.0 / 12.0 : 60.0
     }
 
     var textRefreshInterval: TimeInterval {
-        isAnimating ? 1.0 : 60.0
+        shouldTickSeconds ? 1.0 : 60.0
     }
 
     func remainingDuration(at now: Date) -> TimeInterval {
-        guard isAnimating, let targetEndDate else { return remainingDuration }
+        guard shouldTickSeconds, let targetEndDate else { return remainingDuration }
         return max(0, targetEndDate.timeIntervalSince(now))
     }
 
     func progress(at now: Date) -> Double {
-        guard isAnimating, plannedDuration > 0 else { return progress }
+        guard shouldTickSeconds, plannedDuration > 0 else { return progress }
         let dynamicRemainingDuration = remainingDuration(at: now)
         return min(1, max(0, 1 - (dynamicRemainingDuration / plannedDuration)))
     }
 
-    func formattedTime(at now: Date) -> String {
+    func timeText(at now: Date) -> String {
         Self.formattedTime(remainingDuration(at: now))
+    }
+
+    func isFinalDisplayedSecond(at now: Date) -> Bool {
+        timeText(at: now) == "00:01"
     }
 
     private static func formattedTime(_ duration: TimeInterval) -> String {
@@ -43,33 +45,172 @@ struct FocusTimerSnapshot: Equatable {
     }
 }
 
+struct FocusRenderState: Equatable {
+    let phase: SessionPhase
+    let statusText: String
+    let canSkip: Bool
+    let canReset: Bool
+    let canGoBack: Bool
+    let shouldShowBackAction: Bool
+    let nodeStates: [SessionProgressNodeState]
+    let bubble: BubbleRenderState
+
+    @MainActor
+    static func build(store: PomodoroStore, scenePhase: ScenePhase) -> FocusRenderState {
+        let session = store.activeSession
+        let phase = session?.currentPhase ?? .focus
+        let hasElapsedTime = session.map(Self.hasElapsedTime) ?? false
+        let canGoBack = session.map { $0.currentStepIndex > 0 || hasElapsedTime } ?? false
+        let shouldShowBackAction = session.map { session in
+            switch session.runState {
+            case .idle:
+                return hasElapsedTime
+            case .running, .paused, .completed:
+                return true
+            }
+        } ?? false
+        let canReset = session.map(Self.canResetCurrentStep) ?? false
+        let runState = session?.runState ?? .idle
+        let isFocusVisible = scenePhase == .active && store.selectedTab == .focus
+        let isAnimating = isFocusVisible && runState == .running
+        let shouldTickSeconds = isFocusVisible && runState == .running
+        let plannedDuration = session?.currentStep?.plannedDuration ?? store.settings.focusDuration
+
+        return FocusRenderState(
+            phase: phase,
+            statusText: statusText(for: session, phase: phase),
+            canSkip: session?.currentStep != nil,
+            canReset: canReset,
+            canGoBack: canGoBack,
+            shouldShowBackAction: shouldShowBackAction,
+            nodeStates: nodeStates(for: session, fallbackRounds: store.settings.targetRounds),
+            bubble: BubbleRenderState(
+                phase: phase,
+                actionTitle: primaryActionTitle(for: runState, hasSession: session != nil),
+                targetEndDate: session?.targetEndDate,
+                remainingDuration: store.remainingDuration(),
+                progress: store.elapsedRatio(),
+                plannedDuration: plannedDuration,
+                isAnimating: isAnimating,
+                shouldTickSeconds: shouldTickSeconds
+            )
+        )
+    }
+
+    @MainActor
+    private static func primaryActionTitle(for runState: SessionRunState, hasSession: Bool) -> String {
+        guard hasSession else { return "Start" }
+
+        switch runState {
+        case .idle:
+            return "Start"
+        case .running:
+            return "Pause"
+        case .paused:
+            return "Resume"
+        case .completed:
+            return "Start Again"
+        }
+    }
+
+    @MainActor
+    private static func statusText(for session: SessionSnapshot?, phase: SessionPhase) -> String {
+        guard let session else { return "READY" }
+        guard session.runState != .completed else { return "COMPLETE" }
+
+        switch phase {
+        case .focus:
+            return "FOCUS"
+        case .shortBreak:
+            return "SHORT BREAK"
+        case .longBreak:
+            return "LONG BREAK"
+        }
+    }
+
+    @MainActor
+    private static func canResetCurrentStep(for session: SessionSnapshot) -> Bool {
+        guard session.runState != .completed,
+              let step = session.currentStep else { return false }
+
+        return session.runState == .running
+            || session.runState == .paused
+            || session.accumulatedDuration(for: step) > 0
+    }
+
+    @MainActor
+    private static func hasElapsedTime(for session: SessionSnapshot) -> Bool {
+        if !session.segments.isEmpty {
+            return true
+        }
+
+        guard session.runState == .running,
+              let currentSegmentStartDate = session.currentSegmentStartDate else {
+            return false
+        }
+
+        return Date.now > currentSegmentStartDate
+    }
+
+    @MainActor
+    private static func nodeStates(
+        for session: SessionSnapshot?,
+        fallbackRounds: Int
+    ) -> [SessionProgressNodeState] {
+        let totalRounds = max(1, session?.targetRounds ?? fallbackRounds)
+
+        guard let session else {
+            return (1...totalRounds).map { $0 == 1 ? .half : .inactive }
+        }
+
+        if session.runState == .completed {
+            return Array(repeating: .filled, count: totalRounds)
+        }
+
+        let currentRound = session.currentStep?.roundNumber ?? 1
+        let currentPhase = session.currentPhase ?? .focus
+
+        return (1...totalRounds).map { round in
+            if round < currentRound {
+                return .filled
+            }
+
+            if round == currentRound {
+                return currentPhase == .focus ? .half : .filled
+            }
+
+            return .inactive
+        }
+    }
+}
+
 struct FocusScreen: View {
     @EnvironmentObject private var store: PomodoroStore
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         GeometryReader { proxy in
             let size = proxy.size
             let compactLayout = size.height < 760
             let topSpacing = compactLayout ? max(56, size.height * 0.13) : max(74, size.height * 0.16)
-            let currentPhase = store.currentPhase
+            let renderState = FocusRenderState.build(store: store, scenePhase: scenePhase)
 
             VStack(spacing: compactLayout ? 18 : 24) {
                 Spacer(minLength: topSpacing)
 
-                PhaseStatusBadge(text: store.statusText, phase: currentPhase)
+                PhaseStatusBadge(text: renderState.statusText, phase: renderState.phase)
                     .fixedSize(horizontal: true, vertical: false)
 
                 BubbleTimerView(
-                    phase: currentPhase,
-                    timer: timerSnapshot,
+                    renderState: renderState.bubble,
                     action: store.togglePrimaryAction
                 )
                 .frame(width: 280, height: 280)
                 .padding(.top, compactLayout ? 10 : 18)
 
                 SessionProgressPill(
-                    phase: currentPhase,
-                    nodeStates: sessionNodeStates
+                    phase: renderState.phase,
+                    nodeStates: renderState.nodeStates
                 )
                 .fixedSize(horizontal: true, vertical: false)
                 .padding(.top, compactLayout ? 0 : 6)
@@ -78,29 +219,29 @@ struct FocusScreen: View {
                     SecondaryActionButton(
                         title: "Skip",
                         systemImage: "forward.end",
-                        isEnabled: store.canSkip,
-                        glassTint: currentPhase.glassTint,
+                        isEnabled: renderState.canSkip,
+                        glassTint: renderState.phase.glassTint,
                         action: store.skipCurrentStep
                     )
-                    .frame(width: 118.04)
+                    .frame(maxWidth: .infinity)
 
                     SecondaryActionButton(
                         title: "Reset",
                         systemImage: "arrow.counterclockwise",
-                        isEnabled: store.canResetCurrentStep,
-                        glassTint: currentPhase.glassTint,
+                        isEnabled: renderState.canReset,
+                        glassTint: renderState.phase.glassTint,
                         action: store.resetCurrentStep
                     )
-                    .frame(width: 127.25)
+                    .frame(maxWidth: .infinity)
                 }
                 .frame(width: 261.29)
                 .padding(.top, compactLayout ? 6 : 12)
 
-                if store.shouldShowBackAction {
+                if renderState.shouldShowBackAction {
                     TertiaryActionButton(
                         title: "Back to last step",
                         systemImage: "chevron.left",
-                        isEnabled: store.canGoBack,
+                        isEnabled: renderState.canGoBack,
                         action: store.goBackOneStep
                     )
                     .padding(.top, compactLayout ? -2 : 0)
@@ -110,44 +251,6 @@ struct FocusScreen: View {
             }
             .padding(.horizontal, 24)
             .frame(width: size.width, height: size.height, alignment: .top)
-        }
-    }
-
-    private var timerSnapshot: FocusTimerSnapshot {
-        let plannedDuration = store.activeSession?.currentStep?.plannedDuration ?? store.settings.focusDuration
-
-        return FocusTimerSnapshot(
-            runState: store.currentRunState,
-            actionTitle: store.primaryActionTitle,
-            targetEndDate: store.activeSession?.targetEndDate,
-            remainingDuration: store.remainingDuration(),
-            progress: store.elapsedRatio(),
-            plannedDuration: plannedDuration
-        )
-    }
-
-    private var sessionNodeStates: [SessionProgressNodeState] {
-        let totalRounds = max(1, store.activeSession?.targetRounds ?? store.settings.targetRounds)
-        guard let session = store.activeSession else {
-            return (1...totalRounds).map { $0 == 1 ? .half : .inactive }
-        }
-
-        let safeStepIndex = min(session.currentStepIndex, session.steps.count)
-
-        return (1...totalRounds).map { round in
-            guard let focusIndex = session.steps.firstIndex(where: { $0.phase == .focus && $0.roundNumber == round }) else {
-                return .inactive
-            }
-
-            if session.runState == .completed || safeStepIndex > focusIndex {
-                return .filled
-            }
-
-            if safeStepIndex == focusIndex && session.currentPhase == .focus {
-                return .half
-            }
-
-            return .inactive
         }
     }
 }
