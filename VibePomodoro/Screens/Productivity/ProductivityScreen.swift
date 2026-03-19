@@ -153,3 +153,42 @@ struct ProductivityScreen: View {
         return String(format: "%.1fh", hours)
     }
 }
+
+struct MetricCard: View {
+    let icon: String
+    let title: String
+    let value: String
+    let subtitle: String
+
+    var body: some View {
+        GlassPanel {
+            VStack(alignment: .leading, spacing: 16) {
+                Image(systemName: icon)
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(VibePalette.focusTint)
+                    .frame(width: 38, height: 38)
+                    .background(
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .fill(VibePalette.focusTint.opacity(0.10))
+                    )
+
+                Spacer(minLength: 12)
+
+                Text(title.uppercased())
+                    .font(.system(.subheadline, design: .rounded, weight: .semibold))
+                    .tracking(2)
+                    .foregroundStyle(.secondary)
+
+                Text(value)
+                    .font(.system(size: 34, weight: .bold, design: .rounded))
+                    .foregroundStyle(.primary)
+                    .minimumScaleFactor(0.72)
+
+                Text(subtitle)
+                    .font(.system(.body, design: .rounded))
+                    .foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: .infinity, minHeight: 170, alignment: .leading)
+        }
+    }
+}

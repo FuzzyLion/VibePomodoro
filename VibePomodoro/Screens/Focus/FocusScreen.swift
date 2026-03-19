@@ -1,273 +1,257 @@
 import SwiftUI
 
-enum VibePalette {
-    static let amberGold = Color(red: 0.85, green: 0.70, blue: 0.40)
-    static let amberGoldDeep = Color(red: 0.76, green: 0.58, blue: 0.25)
-    static let warmAmberAccent = Color(red: 0.70, green: 0.55, blue: 0.31)
-    static let warmAmberAccentDeep = Color(red: 0.58, green: 0.44, blue: 0.24)
-    static let softMist = Color(red: 0.71, green: 0.82, blue: 0.90)
-    static let softMistDeep = Color(red: 0.52, green: 0.65, blue: 0.75)
-    static let softJade = Color(red: 0.66, green: 0.80, blue: 0.74)
-    static let softJadeDeep = Color(red: 0.48, green: 0.66, blue: 0.60)
+struct BubbleRenderState: Equatable {
+    let phase: SessionPhase
+    let actionTitle: String
+    let targetEndDate: Date?
+    let remainingDuration: TimeInterval
+    let progress: Double
+    let plannedDuration: TimeInterval
+    let isAnimating: Bool
+    let shouldTickSeconds: Bool
 
-    static let warmBackground = Color(red: 0.96, green: 0.96, blue: 0.97)
-    static let mistBackground = Color(red: 0.93, green: 0.93, blue: 0.95)
-    static let darkBackground = Color(red: 0.08, green: 0.09, blue: 0.11)
-    static let darkSurface = Color(red: 0.13, green: 0.14, blue: 0.17)
-
-    static let focusTint = amberGold
-    static let labelPrimary = Color(red: 0.24, green: 0.24, blue: 0.27)
-    static let labelSecondary = Color(red: 0.46, green: 0.46, blue: 0.50)
-
-    static func glassTextStrong(for colorScheme: ColorScheme) -> Color {
-        colorScheme == .dark ? warmBackground.opacity(0.96) : Color.black.opacity(0.50)
+    var animationRefreshInterval: TimeInterval {
+        isAnimating ? 1.0 / 12.0 : 60.0
     }
 
-    static func glassTextMedium(for colorScheme: ColorScheme) -> Color {
-        colorScheme == .dark ? warmBackground.opacity(0.92) : Color.black.opacity(0.45)
+    var textRefreshInterval: TimeInterval {
+        shouldTickSeconds ? 1.0 : 60.0
     }
 
-    static func glassTextSoft(for colorScheme: ColorScheme) -> Color {
-        colorScheme == .dark ? warmBackground.opacity(0.88) : Color.black.opacity(0.40)
+    func remainingDuration(at now: Date) -> TimeInterval {
+        guard shouldTickSeconds, let targetEndDate else { return remainingDuration }
+        return max(0, targetEndDate.timeIntervalSince(now))
     }
 
-    static func inactiveGlassDot(for colorScheme: ColorScheme) -> Color {
-        colorScheme == .dark ? warmBackground.opacity(0.22) : Color.black.opacity(0.10)
-    }
-}
-
-extension SessionPhase {
-    var tintColor: Color {
-        switch self {
-        case .focus:
-            return VibePalette.amberGold
-        case .shortBreak:
-            return VibePalette.softMist
-        case .longBreak:
-            return VibePalette.softJade
-        }
+    func progress(at now: Date) -> Double {
+        guard shouldTickSeconds, plannedDuration > 0 else { return progress }
+        let dynamicRemainingDuration = remainingDuration(at: now)
+        return min(1, max(0, 1 - (dynamicRemainingDuration / plannedDuration)))
     }
 
-    var glassTint: Color {
-        switch self {
-        case .focus:
-            return VibePalette.amberGold.opacity(0.14)
-        case .shortBreak:
-            return VibePalette.softMist.opacity(0.16)
-        case .longBreak:
-            return VibePalette.softJade.opacity(0.14)
-        }
+    func timeText(at now: Date) -> String {
+        Self.formattedTime(remainingDuration(at: now))
     }
 
-    var shadowColor: Color {
-        switch self {
-        case .focus:
-            return VibePalette.amberGoldDeep
-        case .shortBreak:
-            return VibePalette.softMistDeep
-        case .longBreak:
-            return VibePalette.softJadeDeep
-        }
+    func isFinalDisplayedSecond(at now: Date) -> Bool {
+        timeText(at: now) == "00:01"
     }
 
-    var liquidGradientColors: [Color] {
-        switch self {
-        case .focus:
-            return [
-                VibePalette.amberGold.opacity(0.08),
-                VibePalette.amberGold.opacity(0.12),
-                VibePalette.amberGoldDeep.opacity(0.17)
-            ]
-        case .shortBreak:
-            return [
-                VibePalette.softMist.opacity(0.10),
-                VibePalette.softMist.opacity(0.16),
-                VibePalette.softMistDeep.opacity(0.20)
-            ]
-        case .longBreak:
-            return [
-                VibePalette.softJade.opacity(0.08),
-                VibePalette.softJade.opacity(0.13),
-                VibePalette.softJadeDeep.opacity(0.18)
-            ]
-        }
+    private static func formattedTime(_ duration: TimeInterval) -> String {
+        let totalSeconds = max(0, Int(duration.rounded()))
+        let minutes = totalSeconds / 60
+        let seconds = totalSeconds % 60
+        return String(format: "%02d:%02d", minutes, seconds)
     }
 }
 
-struct VibeBackground: View {
-    @Environment(\.colorScheme) private var colorScheme
+struct FocusRenderState: Equatable {
+    let phase: SessionPhase
+    let statusText: String
+    let canSkip: Bool
+    let canReset: Bool
+    let canGoBack: Bool
+    let shouldShowBackAction: Bool
+    let nodeStates: [SessionProgressNodeState]
+    let bubble: BubbleRenderState
 
-    var body: some View {
-        ZStack {
-            LinearGradient(
-                colors: backgroundColors,
-                startPoint: .top,
-                endPoint: .bottom
-            )
-
-            RadialGradient(
-                colors: [
-                    VibePalette.amberGold.opacity(colorScheme == .dark ? 0.12 : 0.09),
-                    Color.clear
-                ],
-                center: .top,
-                startRadius: 16,
-                endRadius: colorScheme == .dark ? 260 : 320
-            )
-            .offset(y: -120)
-
-            RadialGradient(
-                colors: [
-                    Color.white.opacity(colorScheme == .dark ? 0.08 : 0.72),
-                    Color.clear
-                ],
-                center: .center,
-                startRadius: 40,
-                endRadius: 360
-            )
-
-            RadialGradient(
-                colors: [
-                    VibePalette.softJade.opacity(colorScheme == .dark ? 0.06 : 0.035),
-                    Color.clear
-                ],
-                center: .bottomTrailing,
-                startRadius: 30,
-                endRadius: 280
-            )
-            .offset(x: 80, y: 80)
-        }
-        .ignoresSafeArea()
-    }
-
-    private var backgroundColors: [Color] {
-        if colorScheme == .dark {
-            return [
-                VibePalette.darkBackground,
-                VibePalette.darkSurface,
-                Color(red: 0.10, green: 0.11, blue: 0.14)
-            ]
-        }
-
-        return [
-            VibePalette.warmBackground,
-            Color(red: 0.97, green: 0.97, blue: 0.98),
-            VibePalette.mistBackground
-        ]
-    }
-}
-
-struct GlassPanel<Content: View>: View {
-    let content: Content
-
-    init(@ViewBuilder content: () -> Content) {
-        self.content = content()
-    }
-
-    var body: some View {
-        content
-            .padding(22)
-            .liquidGlassSurface(
-                .regular.tint(Color.white.opacity(0.08)),
-                in: RoundedRectangle(cornerRadius: 28, style: .continuous),
-                stroke: Color.white.opacity(0.38)
-            )
-            .shadow(color: Color.black.opacity(0.07), radius: 28, y: 12)
-    }
-}
-
-struct FloatingTabBar: View {
-    @Binding var selection: AppTab
-
-    var body: some View {
-        HStack(spacing: 4) {
-            ForEach(AppTab.allCases) { tab in
-                tabButton(for: tab)
+    @MainActor
+    static func build(store: PomodoroStore, scenePhase: ScenePhase) -> FocusRenderState {
+        let session = store.activeSession
+        let phase = session?.currentPhase ?? .focus
+        let hasElapsedTime = session.map(Self.hasElapsedTime) ?? false
+        let canGoBack = session.map { $0.currentStepIndex > 0 || hasElapsedTime } ?? false
+        let shouldShowBackAction = session.map { session in
+            switch session.runState {
+            case .idle:
+                return hasElapsedTime
+            case .running, .paused, .completed:
+                return true
             }
+        } ?? false
+        let canReset = session.map(Self.canResetCurrentStep) ?? false
+        let runState = session?.runState ?? .idle
+        let isFocusVisible = scenePhase == .active && store.selectedTab == .focus
+        let isAnimating = isFocusVisible && runState == .running
+        let shouldTickSeconds = isFocusVisible && runState == .running
+        let plannedDuration = session?.currentStep?.plannedDuration ?? store.settings.focusDuration
+
+        return FocusRenderState(
+            phase: phase,
+            statusText: statusText(for: session, phase: phase),
+            canSkip: session?.currentStep != nil,
+            canReset: canReset,
+            canGoBack: canGoBack,
+            shouldShowBackAction: shouldShowBackAction,
+            nodeStates: nodeStates(for: session, fallbackRounds: store.settings.targetRounds),
+            bubble: BubbleRenderState(
+                phase: phase,
+                actionTitle: primaryActionTitle(for: runState, hasSession: session != nil),
+                targetEndDate: session?.targetEndDate,
+                remainingDuration: store.remainingDuration(),
+                progress: store.elapsedRatio(),
+                plannedDuration: plannedDuration,
+                isAnimating: isAnimating,
+                shouldTickSeconds: shouldTickSeconds
+            )
+        )
+    }
+
+    @MainActor
+    private static func primaryActionTitle(for runState: SessionRunState, hasSession: Bool) -> String {
+        guard hasSession else { return "Start" }
+
+        switch runState {
+        case .idle:
+            return "Start"
+        case .running:
+            return "Pause"
+        case .paused:
+            return "Resume"
+        case .completed:
+            return "Start Again"
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
-        .frame(width: 188, height: 64)
-        .background(
-            Capsule(style: .continuous)
-                .fill(.ultraThinMaterial)
-        )
-        .overlay(
-            Capsule(style: .continuous)
-                .strokeBorder(Color.white.opacity(0.34), lineWidth: 1)
-        )
-        .overlay(alignment: .top) {
-            Capsule(style: .continuous)
-                .fill(
-                    LinearGradient(
-                        colors: [Color.white.opacity(0.86), Color.white.opacity(0.0)],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
+    }
+
+    @MainActor
+    private static func statusText(for session: SessionSnapshot?, phase: SessionPhase) -> String {
+        guard let session else { return "READY" }
+        guard session.runState != .completed else { return "COMPLETE" }
+
+        switch phase {
+        case .focus:
+            return "FOCUS"
+        case .shortBreak:
+            return "SHORT BREAK"
+        case .longBreak:
+            return "LONG BREAK"
+        }
+    }
+
+    @MainActor
+    private static func canResetCurrentStep(for session: SessionSnapshot) -> Bool {
+        guard session.runState != .completed,
+              let step = session.currentStep else { return false }
+
+        return session.runState == .running
+            || session.runState == .paused
+            || session.accumulatedDuration(for: step) > 0
+    }
+
+    @MainActor
+    private static func hasElapsedTime(for session: SessionSnapshot) -> Bool {
+        if !session.segments.isEmpty {
+            return true
+        }
+
+        guard session.runState == .running,
+              let currentSegmentStartDate = session.currentSegmentStartDate else {
+            return false
+        }
+
+        return Date.now > currentSegmentStartDate
+    }
+
+    @MainActor
+    private static func nodeStates(
+        for session: SessionSnapshot?,
+        fallbackRounds: Int
+    ) -> [SessionProgressNodeState] {
+        let totalRounds = max(1, session?.targetRounds ?? fallbackRounds)
+
+        guard let session else {
+            return (1...totalRounds).map { $0 == 1 ? .half : .inactive }
+        }
+
+        if session.runState == .completed {
+            return Array(repeating: .filled, count: totalRounds)
+        }
+
+        let currentRound = session.currentStep?.roundNumber ?? 1
+        let currentPhase = session.currentPhase ?? .focus
+
+        return (1...totalRounds).map { round in
+            if round < currentRound {
+                return .filled
+            }
+
+            if round == currentRound {
+                return currentPhase == .focus ? .half : .filled
+            }
+
+            return .inactive
+        }
+    }
+}
+
+struct FocusScreen: View {
+    @EnvironmentObject private var store: PomodoroStore
+    @Environment(\.scenePhase) private var scenePhase
+
+    var body: some View {
+        GeometryReader { proxy in
+            let size = proxy.size
+            let compactLayout = size.height < 760
+            let topSpacing = compactLayout ? max(56, size.height * 0.13) : max(74, size.height * 0.16)
+            let renderState = FocusRenderState.build(store: store, scenePhase: scenePhase)
+
+            VStack(spacing: compactLayout ? 18 : 24) {
+                Spacer(minLength: topSpacing)
+
+                PhaseStatusBadge(text: renderState.statusText, phase: renderState.phase)
+                    .fixedSize(horizontal: true, vertical: false)
+
+                BubbleTimerView(
+                    renderState: renderState.bubble,
+                    action: store.togglePrimaryAction
                 )
-                .frame(height: 1)
-                .padding(.horizontal, 16)
-        }
-        .shadow(color: Color.black.opacity(0.10), radius: 22, y: 10)
-    }
+                .frame(width: 280, height: 280)
+                .padding(.top, compactLayout ? 10 : 18)
 
-    private func iconName(for tab: AppTab) -> String {
-        switch tab {
-        case .focus:
-            return "timer"
-        case .productivity:
-            return "chart.bar"
-        case .settings:
-            return "gearshape"
-        }
-    }
+                SessionProgressPill(
+                    phase: renderState.phase,
+                    nodeStates: renderState.nodeStates
+                )
+                .fixedSize(horizontal: true, vertical: false)
+                .padding(.top, compactLayout ? 0 : 6)
 
-    @ViewBuilder
-    private func tabButton(for tab: AppTab) -> some View {
-        let isSelected = selection == tab
-
-        Button {
-            withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
-                selection = tab
-            }
-        } label: {
-            VStack(spacing: 0) {
-                Image(systemName: iconName(for: tab))
-                    .font(.system(size: 22, weight: .regular))
-                    .foregroundStyle(isSelected ? VibePalette.focusTint : Color.primary.opacity(0.38))
-                    .frame(width: 52, height: 44)
-                    .background(
-                        RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            .fill(isSelected ? selectedTabBackground : AnyShapeStyle(Color.clear))
-                            .overlay {
-                                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                    .strokeBorder(isSelected ? Color.white.opacity(0.35) : Color.clear, lineWidth: 1)
-                            }
+                HStack(spacing: 16) {
+                    SecondaryActionButton(
+                        title: "Skip",
+                        systemImage: "forward.end",
+                        isEnabled: renderState.canSkip,
+                        glassTint: renderState.phase.glassTint,
+                        action: store.skipCurrentStep
                     )
+                    .frame(maxWidth: .infinity)
 
-                Circle()
-                    .fill(isSelected ? VibePalette.focusTint : Color.clear)
-                    .frame(width: 4, height: 4)
-                    .offset(y: 4)
+                    SecondaryActionButton(
+                        title: "Reset",
+                        systemImage: "arrow.counterclockwise",
+                        isEnabled: renderState.canReset,
+                        glassTint: renderState.phase.glassTint,
+                        action: store.resetCurrentStep
+                    )
+                    .frame(maxWidth: .infinity)
+                }
+                .frame(width: 261.29)
+                .padding(.top, compactLayout ? 6 : 12)
+
+                if renderState.shouldShowBackAction {
+                    TertiaryActionButton(
+                        title: "Back to last step",
+                        systemImage: "chevron.left",
+                        isEnabled: renderState.canGoBack,
+                        action: store.goBackOneStep
+                    )
+                    .padding(.top, compactLayout ? -2 : 0)
+                }
+
+                Spacer(minLength: max(72, size.height * 0.18))
             }
-            .frame(width: 56, height: 48)
+            .padding(.horizontal, 24)
+            .frame(width: size.width, height: size.height, alignment: .top)
         }
-        .buttonStyle(.plain)
-    }
-
-    private var selectedTabBackground: AnyShapeStyle {
-        AnyShapeStyle(
-            RadialGradient(
-                colors: [
-                    VibePalette.focusTint.opacity(0.24),
-                    VibePalette.focusTint.opacity(0.08),
-                    Color.clear
-                ],
-                center: .center,
-                startRadius: 4,
-                endRadius: 36
-            )
-        )
     }
 }
 
@@ -1305,211 +1289,5 @@ private struct WaveLiquidShape: Shape {
         path.addLine(to: CGPoint(x: endX, y: rect.height))
         path.closeSubpath()
         return path
-    }
-}
-
-private extension View {
-    func liquidGlassSurface<S: Shape>(
-        _ glass: Glass = .regular,
-        in shape: S,
-        stroke: Color = Color.white.opacity(0.36)
-    ) -> some View {
-        background {
-            Color.clear
-                .glassEffect(glass, in: shape)
-        }
-        .overlay {
-            shape
-                .stroke(stroke, lineWidth: 1)
-        }
-    }
-}
-
-struct MetricCard: View {
-    let icon: String
-    let title: String
-    let value: String
-    let subtitle: String
-
-    var body: some View {
-        GlassPanel {
-            VStack(alignment: .leading, spacing: 16) {
-                Image(systemName: icon)
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(VibePalette.focusTint)
-                    .frame(width: 38, height: 38)
-                    .background(
-                        RoundedRectangle(cornerRadius: 14, style: .continuous)
-                            .fill(VibePalette.focusTint.opacity(0.10))
-                    )
-
-                Spacer(minLength: 12)
-
-                Text(title.uppercased())
-                    .font(.system(.subheadline, design: .rounded, weight: .semibold))
-                    .tracking(2)
-                    .foregroundStyle(.secondary)
-
-                Text(value)
-                    .font(.system(size: 34, weight: .bold, design: .rounded))
-                    .foregroundStyle(.primary)
-                    .minimumScaleFactor(0.72)
-
-                Text(subtitle)
-                    .font(.system(.body, design: .rounded))
-                    .foregroundStyle(.secondary)
-            }
-            .frame(maxWidth: .infinity, minHeight: 170, alignment: .leading)
-        }
-    }
-}
-
-struct SectionTitle: View {
-    let title: String
-    let subtitle: String
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(title)
-                .font(.system(size: 42, weight: .heavy, design: .rounded))
-                .foregroundStyle(.primary)
-            Text(subtitle)
-                .font(.system(.title3, design: .rounded, weight: .medium))
-                .foregroundStyle(.secondary)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-}
-
-struct SettingStepperRow: View {
-    let icon: String
-    let title: String
-    let subtitle: String
-    let valueText: String
-    let onDecrement: () -> Void
-    let onIncrement: () -> Void
-
-    var body: some View {
-        HStack(spacing: 16) {
-            settingIcon
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text(title)
-                    .font(.system(.title3, design: .rounded, weight: .semibold))
-                Text(subtitle)
-                    .font(.system(.subheadline, design: .rounded))
-                    .foregroundStyle(.secondary)
-            }
-
-            Spacer()
-
-            HStack(spacing: 12) {
-                Button(action: onDecrement) {
-                    Image(systemName: "minus")
-                        .font(.system(size: 14, weight: .bold))
-                        .frame(width: 30, height: 30)
-                }
-
-                Text(valueText)
-                    .font(.system(.headline, design: .rounded, weight: .semibold))
-                    .monospacedDigit()
-
-                Button(action: onIncrement) {
-                    Image(systemName: "plus")
-                        .font(.system(size: 14, weight: .bold))
-                        .frame(width: 30, height: 30)
-                }
-            }
-            .foregroundStyle(.primary)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 8)
-            .background(
-                Capsule(style: .continuous)
-                    .fill(Color.white.opacity(0.18))
-            )
-        }
-    }
-
-    private var settingIcon: some View {
-        Image(systemName: icon)
-            .font(.system(size: 18, weight: .semibold))
-            .foregroundStyle(.secondary)
-            .frame(width: 42, height: 42)
-            .background(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(Color.white.opacity(0.14))
-            )
-    }
-}
-
-struct SettingToggleRow: View {
-    let icon: String
-    let title: String
-    let subtitle: String
-    @Binding var isOn: Bool
-
-    var body: some View {
-        HStack(spacing: 16) {
-            Image(systemName: icon)
-                .font(.system(size: 18, weight: .semibold))
-                .foregroundStyle(isOn ? VibePalette.focusTint : .secondary)
-                .frame(width: 42, height: 42)
-                .background(
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .fill((isOn ? VibePalette.focusTint : .white).opacity(0.12))
-                )
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text(title)
-                    .font(.system(.title3, design: .rounded, weight: .semibold))
-                Text(subtitle)
-                    .font(.system(.subheadline, design: .rounded))
-                    .foregroundStyle(.secondary)
-            }
-
-            Spacer()
-
-            Toggle("", isOn: $isOn)
-                .labelsHidden()
-                .tint(VibePalette.focusTint)
-        }
-    }
-}
-
-struct SettingPickerRow: View {
-    let icon: String
-    let title: String
-    let subtitle: String
-    @Binding var selection: SoundOption
-
-    var body: some View {
-        HStack(spacing: 16) {
-            Image(systemName: icon)
-                .font(.system(size: 18, weight: .semibold))
-                .foregroundStyle(.secondary)
-                .frame(width: 42, height: 42)
-                .background(
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .fill(Color.white.opacity(0.12))
-                )
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text(title)
-                    .font(.system(.title3, design: .rounded, weight: .semibold))
-                Text(subtitle)
-                    .font(.system(.subheadline, design: .rounded))
-                    .foregroundStyle(.secondary)
-            }
-
-            Spacer()
-
-            Picker(title, selection: $selection) {
-                ForEach(SoundOption.allCases) { option in
-                    Text(option.title).tag(option)
-                }
-            }
-            .pickerStyle(.menu)
-            .tint(VibePalette.focusTint)
-        }
     }
 }

@@ -1,5 +1,38 @@
 # VibePomodoro
 
+## 0. 项目结构
+
+以下结构作为当前 thread 与后续 threads 的统一颗粒度对齐基准；后续讨论默认以这一级别描述页面、共享 UI 和逻辑边界。
+
+```text
+VibePomodoro/
+├── VibePomodoroApp.swift
+├── ContentView.swift
+├── PomodoroModels.swift
+├── PomodoroStore.swift
+├── Screens/
+│   ├── Focus/
+│   │   └── FocusScreen.swift
+│   ├── Productivity/
+│   │   └── ProductivityScreen.swift
+│   └── Settings/
+│       └── SettingsScreen.swift
+├── Shared/
+│   ├── Theme/
+│   │   └── VibeTheme.swift
+│   └── UI/
+│       ├── SharedShell.swift
+│       └── SectionTitle.swift
+└── Assets.xcassets/
+```
+
+结构约定：
+
+- 每个页面的 UI 设计只归属于自己的页面文件。
+- 页面专属子视图默认与页面文件同驻，不放进共享层。
+- 共享层只放跨页面复用的主题、背景、面板、标题等通用 UI。
+- `Focus` 的 hierarchy 为保护区；后续线程若改设计，必须在不打散当前层级、不改变现有刷新边界的前提下进行。
+
 `VibePomodoro` 是一款以“精准计时”和“安静陪伴”为核心的番茄钟 App。
 
 它不是一个强调打卡、刺激和游戏化反馈的效率面板，而是一个在专注前、专注中、专注后都尽量保持平静、可信赖、有温度的工具。
@@ -485,14 +518,18 @@ MVP 不需要额外寻找开源 PNG 照片素材。
   - 核心模型、状态机、事件定义
 - [VibePomodoro/PomodoroStore.swift](./VibePomodoro/PomodoroStore.swift)
   - 状态管理、持久化、通知调度、聚合统计
-- [VibePomodoro/FocusScreen.swift](./VibePomodoro/FocusScreen.swift)
-  - Focus 页
-- [VibePomodoro/ProductivityScreen.swift](./VibePomodoro/ProductivityScreen.swift)
-  - Productivity 页
-- [VibePomodoro/SettingsScreen.swift](./VibePomodoro/SettingsScreen.swift)
-  - Settings 页
-- [VibePomodoro/UIComponents.swift](./VibePomodoro/UIComponents.swift)
-  - 玻璃材质组件、气泡组件、底部导航等
+- [VibePomodoro/Screens/Focus/FocusScreen.swift](./VibePomodoro/Screens/Focus/FocusScreen.swift)
+  - Focus 页与专属气泡/控制组件
+- [VibePomodoro/Screens/Productivity/ProductivityScreen.swift](./VibePomodoro/Screens/Productivity/ProductivityScreen.swift)
+  - Productivity 页与专属指标卡组件
+- [VibePomodoro/Screens/Settings/SettingsScreen.swift](./VibePomodoro/Screens/Settings/SettingsScreen.swift)
+  - Settings 页与专属设置行组件
+- [VibePomodoro/Shared/Theme/VibeTheme.swift](./VibePomodoro/Shared/Theme/VibeTheme.swift)
+  - 共享主题色板与 phase UI 扩展
+- [VibePomodoro/Shared/UI/SharedShell.swift](./VibePomodoro/Shared/UI/SharedShell.swift)
+  - 共享背景、玻璃容器与底部导航外壳
+- [VibePomodoro/Shared/UI/SectionTitle.swift](./VibePomodoro/Shared/UI/SectionTitle.swift)
+  - `Productivity` / `Settings` 共用标题组件
 
 ---
 

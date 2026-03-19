@@ -151,3 +151,135 @@ struct SettingsScreen: View {
     }
 }
 
+struct SettingStepperRow: View {
+    let icon: String
+    let title: String
+    let subtitle: String
+    let valueText: String
+    let onDecrement: () -> Void
+    let onIncrement: () -> Void
+
+    var body: some View {
+        HStack(spacing: 16) {
+            settingIcon
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.system(.title3, design: .rounded, weight: .semibold))
+                Text(subtitle)
+                    .font(.system(.subheadline, design: .rounded))
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer()
+
+            HStack(spacing: 12) {
+                Button(action: onDecrement) {
+                    Image(systemName: "minus")
+                        .font(.system(size: 14, weight: .bold))
+                        .frame(width: 30, height: 30)
+                }
+
+                Text(valueText)
+                    .font(.system(.headline, design: .rounded, weight: .semibold))
+                    .monospacedDigit()
+
+                Button(action: onIncrement) {
+                    Image(systemName: "plus")
+                        .font(.system(size: 14, weight: .bold))
+                        .frame(width: 30, height: 30)
+                }
+            }
+            .foregroundStyle(.primary)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .background(
+                Capsule(style: .continuous)
+                    .fill(Color.white.opacity(0.18))
+            )
+        }
+    }
+
+    private var settingIcon: some View {
+        Image(systemName: icon)
+            .font(.system(size: 18, weight: .semibold))
+            .foregroundStyle(.secondary)
+            .frame(width: 42, height: 42)
+            .background(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(Color.white.opacity(0.14))
+            )
+    }
+}
+
+struct SettingToggleRow: View {
+    let icon: String
+    let title: String
+    let subtitle: String
+    @Binding var isOn: Bool
+
+    var body: some View {
+        HStack(spacing: 16) {
+            Image(systemName: icon)
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(isOn ? VibePalette.focusTint : .secondary)
+                .frame(width: 42, height: 42)
+                .background(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .fill((isOn ? VibePalette.focusTint : .white).opacity(0.12))
+                )
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.system(.title3, design: .rounded, weight: .semibold))
+                Text(subtitle)
+                    .font(.system(.subheadline, design: .rounded))
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer()
+
+            Toggle("", isOn: $isOn)
+                .labelsHidden()
+                .tint(VibePalette.focusTint)
+        }
+    }
+}
+
+struct SettingPickerRow: View {
+    let icon: String
+    let title: String
+    let subtitle: String
+    @Binding var selection: SoundOption
+
+    var body: some View {
+        HStack(spacing: 16) {
+            Image(systemName: icon)
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(.secondary)
+                .frame(width: 42, height: 42)
+                .background(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .fill(Color.white.opacity(0.12))
+                )
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.system(.title3, design: .rounded, weight: .semibold))
+                Text(subtitle)
+                    .font(.system(.subheadline, design: .rounded))
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer()
+
+            Picker(title, selection: $selection) {
+                ForEach(SoundOption.allCases) { option in
+                    Text(option.title).tag(option)
+                }
+            }
+            .pickerStyle(.menu)
+            .tint(VibePalette.focusTint)
+        }
+    }
+}
