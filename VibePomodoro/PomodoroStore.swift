@@ -10,6 +10,7 @@ final class PomodoroStore: ObservableObject {
     @Published private(set) var settings: PomodoroSettings
     @Published private(set) var activeSession: SessionSnapshot?
     @Published private(set) var completedSessions: [CompletedSession]
+    @Published private(set) var productivityCache: ProductivityAggregateCache
 
     private let defaults: UserDefaults
     private let encoder = JSONEncoder()
@@ -21,6 +22,7 @@ final class PomodoroStore: ObservableObject {
         static let settings = "vibe.settings"
         static let activeSession = "vibe.activeSession"
         static let completedSessions = "vibe.completedSessions"
+        static let productivityCache = "vibe.productivityCache"
     }
 
     init(defaults: UserDefaults = .standard) {
@@ -28,8 +30,10 @@ final class PomodoroStore: ObservableObject {
         self.settings = Self.loadValue(for: StorageKey.settings, using: defaults) ?? .default
         self.activeSession = Self.loadValue(for: StorageKey.activeSession, using: defaults)
         self.completedSessions = Self.loadValue(for: StorageKey.completedSessions, using: defaults) ?? []
+        self.productivityCache = Self.loadValue(for: StorageKey.productivityCache, using: defaults) ?? .empty
 
         reconcileNow()
+        repairProductivityCacheIfNeeded()
         syncIdleTimer()
         requestNotificationPermissionsIfNeeded()
         syncNotifications()
@@ -268,52 +272,47 @@ final class PomodoroStore: ObservableObject {
     }
 
     func productivitySnapshot(for range: ProductivityRange, now: Date = .now) -> ProductivityMetricsSnapshot {
-        let segments = allSegments(now: now)
-
         return ProductivityMetricsSnapshot(
-            chartPoints: chartPoints(for: range, segments: segments, now: now),
-            streakLength: streakLength(from: segments, now: now),
-            completedSessionCount: completedSessions.count,
-            totalFocusTime: segments.reduce(0) { total, segment in
-                total + (segment.phase == .focus ? segment.duration : 0)
-            },
-            totalBreakTime: segments.reduce(0) { total, segment in
-                total + (segment.phase == .focus ? 0 : segment.duration)
-            },
-            averageFocusHoursPerDay: averageFocusHoursPerDay(from: segments, now: now)
+            chartPoints: chartPoints(for: range, cache: productivityCache, now: now),
+            streakLength: streakLength(from: productivityCache.dailySummaries, now: now),
+            completedSessionCount: productivityCache.completedSessionCount,
+            completedFocusCount: productivityCache.completedFocusCount,
+            totalFocusTime: productivityCache.totalFocusTime,
+            totalBreakTime: productivityCache.totalBreakTime,
+            averageFocusHoursPerDay: productivityCache.averageFocusHoursPerDay
         )
     }
 
     func chartPoints(for range: ProductivityRange, now: Date = .now) -> [ProductivityChartPoint] {
-        chartPoints(for: range, segments: allSegments(now: now), now: now)
+        chartPoints(for: range, cache: productivityCache, now: now)
     }
 
     func totalFocusTime(now: Date = .now) -> TimeInterval {
-        allSegments(now: now).reduce(0) { total, segment in
-            total + (segment.phase == .focus ? segment.duration : 0)
-        }
+        productivityCache.totalFocusTime
     }
 
     func totalBreakTime(now: Date = .now) -> TimeInterval {
-        allSegments(now: now).reduce(0) { total, segment in
-            total + (segment.phase == .focus ? 0 : segment.duration)
-        }
+        productivityCache.totalBreakTime
     }
 
     func totalSessionTime(now: Date = .now) -> TimeInterval {
-        allSegments(now: now).reduce(0) { $0 + $1.duration }
+        productivityCache.totalFocusTime + productivityCache.totalBreakTime
     }
 
     func completedSessionCount() -> Int {
-        completedSessions.count
+        productivityCache.completedSessionCount
+    }
+
+    func completedFocusCount() -> Int {
+        productivityCache.completedFocusCount
     }
 
     func streakLength(now: Date = .now) -> Int {
-        streakLength(from: allSegments(now: now), now: now)
+        streakLength(from: productivityCache.dailySummaries, now: now)
     }
 
     func averageFocusHoursPerDay(now: Date = .now) -> Double {
-        averageFocusHoursPerDay(from: allSegments(now: now), now: now)
+        productivityCache.averageFocusHoursPerDay
     }
 
     private func startNewSession() {
@@ -353,18 +352,22 @@ final class PomodoroStore: ObservableObject {
 
     private func storeCompletedSessionIfNeeded() {
         guard let session = activeSession, session.runState == .completed else { return }
-        guard !completedSessions.contains(where: { $0.id == session.id }) else { return }
+        let completedSession: CompletedSession
 
-        completedSessions.insert(
-            CompletedSession(
+        if let existing = completedSessions.first(where: { $0.id == session.id }) {
+            completedSession = existing
+        } else {
+            completedSession = CompletedSession(
                 id: session.id,
                 createdAt: session.createdAt,
                 completedAt: .now,
                 settingsSnapshot: session.settingsSnapshot,
                 segments: session.segments
-            ),
-            at: 0
-        )
+            )
+            completedSessions.insert(completedSession, at: 0)
+        }
+
+        productivityCache.apply(completedSession)
     }
 
     private func fireForegroundFeedback(type: UINotificationFeedbackGenerator.FeedbackType) {
@@ -390,6 +393,7 @@ final class PomodoroStore: ObservableObject {
         Self.saveValue(settings, for: StorageKey.settings, using: defaults, encoder: encoder)
         Self.saveValue(activeSession, for: StorageKey.activeSession, using: defaults, encoder: encoder)
         Self.saveValue(completedSessions, for: StorageKey.completedSessions, using: defaults, encoder: encoder)
+        Self.saveValue(productivityCache, for: StorageKey.productivityCache, using: defaults, encoder: encoder)
     }
 
     private func refreshRuntimeSideEffects() {
@@ -421,32 +425,15 @@ final class PomodoroStore: ObservableObject {
         stepBoundaryTimer = timer
     }
 
-    private func allSegments(now: Date) -> [ActivitySegment] {
-        var segments = completedSessions.flatMap(\.segments)
+    private func repairProductivityCacheIfNeeded() {
+        let completedSessionIDs = Set(completedSessions.map(\.id))
+        let needsRebuild = productivityCache.schemaVersion != ProductivityAggregateCache.currentSchemaVersion
+            || productivityCache.accountedSessionIDs != completedSessionIDs
 
-        if let session = activeSession {
-            segments.append(contentsOf: session.segments)
+        guard needsRebuild else { return }
 
-            if session.runState == .running,
-               let step = session.currentStep,
-               let startDate = session.currentSegmentStartDate {
-                let endDate = min(now, session.targetEndDate ?? now)
-                if endDate > startDate {
-                    segments.append(
-                        ActivitySegment(
-                            id: UUID(),
-                            stepID: step.id,
-                            phase: step.phase,
-                            roundNumber: step.roundNumber,
-                            startDate: startDate,
-                            endDate: endDate
-                        )
-                    )
-                }
-            }
-        }
-
-        return segments
+        productivityCache = ProductivityAggregateCache.rebuild(from: completedSessions)
+        persist()
     }
 
     private func requestNotificationPermissionsIfNeeded() {
@@ -509,11 +496,7 @@ final class PomodoroStore: ObservableObject {
         "vibe.\(sessionID.uuidString).\(stepIndex)"
     }
 
-    private func chartPoints(
-        for range: ProductivityRange,
-        segments: [ActivitySegment],
-        now: Date
-    ) -> [ProductivityChartPoint] {
+    private func chartPoints(for range: ProductivityRange, cache: ProductivityAggregateCache, now: Date) -> [ProductivityChartPoint] {
         let calendar = Calendar.autoupdatingCurrent
         let config = bucketConfiguration(for: range, calendar: calendar, now: now)
         var buckets: [Date: ProductivityChartPoint] = [:]
@@ -523,51 +506,39 @@ final class PomodoroStore: ObservableObject {
                 startDate: bucketStart,
                 label: config.label(bucketStart),
                 focusTime: 0,
-                breakTime: 0
+                breakTime: 0,
+                completedFocusCount: 0
             )
         }
 
-        for segment in segments {
-            let boundedStart = max(segment.startDate, config.rangeStart)
-            let boundedEnd = min(segment.endDate, config.rangeEnd)
-            guard boundedEnd > boundedStart else { continue }
+        for summary in cache.dailySummaries {
+            guard summary.date >= config.rangeStart, summary.date < config.rangeEnd else { continue }
 
-            var cursor = boundedStart
-            while cursor < boundedEnd {
-                let bucketStart = config.floor(cursor)
-                guard let point = buckets[bucketStart] else { break }
-                let bucketEnd = config.next(bucketStart)
-                let sliceEnd = min(bucketEnd, boundedEnd)
-                let duration = sliceEnd.timeIntervalSince(cursor)
+            let bucketStart = config.floor(summary.date)
+            guard let point = buckets[bucketStart] else { continue }
 
-                let updatedPoint: ProductivityChartPoint
-                if segment.phase == .focus {
-                    updatedPoint = point.updating(focusTime: point.focusTime + duration, breakTime: point.breakTime)
-                } else {
-                    updatedPoint = point.updating(focusTime: point.focusTime, breakTime: point.breakTime + duration)
-                }
-
-                buckets[bucketStart] = updatedPoint
-                cursor = sliceEnd
-            }
+            buckets[bucketStart] = point.updating(
+                focusTime: point.focusTime + summary.focusTime,
+                breakTime: point.breakTime + summary.breakTime,
+                completedFocusCount: point.completedFocusCount + summary.completedFocusCount
+            )
         }
 
         return config.bucketStarts.compactMap { buckets[$0] }
     }
 
-    private func streakLength(from segments: [ActivitySegment], now: Date) -> Int {
+    private func streakLength(from dailySummaries: [ProductivityDailySummary], now: Date) -> Int {
         let calendar = Calendar.autoupdatingCurrent
-        let dailyFocus = Dictionary(grouping: segments.filter { $0.phase == .focus }) {
-            calendar.startOfDay(for: $0.startDate)
-        }
+        let dailyFocus: [Date: TimeInterval] = Dictionary(uniqueKeysWithValues: dailySummaries.map {
+            (calendar.startOfDay(for: $0.date), $0.focusTime)
+        })
+
+        guard !dailyFocus.isEmpty else { return 0 }
 
         var streak = 0
         var day = calendar.startOfDay(for: now)
 
-        while let segments = dailyFocus[day], !segments.isEmpty {
-            let total = segments.reduce(0) { $0 + $1.duration }
-            guard total > 0 else { break }
-
+        while let focusTime = dailyFocus[day], focusTime > 0 {
             streak += 1
             guard let previous = calendar.date(byAdding: .day, value: -1, to: day) else { break }
             day = previous
@@ -576,33 +547,8 @@ final class PomodoroStore: ObservableObject {
         return streak
     }
 
-    private func averageFocusHoursPerDay(from segments: [ActivitySegment], now: Date) -> Double {
-        let calendar = Calendar.autoupdatingCurrent
-        let grouped = Dictionary(grouping: segments.filter { $0.phase == .focus }) {
-            calendar.startOfDay(for: $0.startDate)
-        }
-
-        guard !grouped.isEmpty else { return 0 }
-        let total = grouped.values.flatMap { $0 }.reduce(0) { $0 + $1.duration }
-        return total / Double(grouped.count) / 3600
-    }
-
     private func bucketConfiguration(for range: ProductivityRange, calendar: Calendar, now: Date) -> BucketConfiguration {
         switch range {
-        case .day:
-            let hour = calendar.dateInterval(of: .hour, for: now)?.start ?? now
-            let starts = (0..<8).compactMap { calendar.date(byAdding: .hour, value: -7 + $0, to: hour) }
-
-            return BucketConfiguration(
-                rangeStart: starts.first ?? hour,
-                rangeEnd: calendar.date(byAdding: .hour, value: 1, to: starts.last ?? hour) ?? now,
-                bucketStarts: starts,
-                floor: { date in calendar.dateInterval(of: .hour, for: date)?.start ?? date },
-                next: { date in calendar.date(byAdding: .hour, value: 1, to: date) ?? date },
-                label: { date in
-                    date.formatted(.dateTime.hour(.defaultDigits(amPM: .omitted)))
-                }
-            )
         case .week:
             let today = calendar.startOfDay(for: now)
             let starts = (0..<7).compactMap { calendar.date(byAdding: .day, value: -6 + $0, to: today) }
@@ -671,11 +617,26 @@ struct ProductivityChartPoint: Identifiable, Equatable {
     let label: String
     let focusTime: TimeInterval
     let breakTime: TimeInterval
+    let completedFocusCount: Int
 
     var id: Date { startDate }
 
-    func updating(focusTime: TimeInterval, breakTime: TimeInterval) -> ProductivityChartPoint {
-        ProductivityChartPoint(startDate: startDate, label: label, focusTime: focusTime, breakTime: breakTime)
+    var sessionTime: TimeInterval {
+        focusTime + breakTime
+    }
+
+    func updating(
+        focusTime: TimeInterval,
+        breakTime: TimeInterval,
+        completedFocusCount: Int
+    ) -> ProductivityChartPoint {
+        ProductivityChartPoint(
+            startDate: startDate,
+            label: label,
+            focusTime: focusTime,
+            breakTime: breakTime,
+            completedFocusCount: completedFocusCount
+        )
     }
 }
 
@@ -683,9 +644,14 @@ struct ProductivityMetricsSnapshot: Equatable {
     let chartPoints: [ProductivityChartPoint]
     let streakLength: Int
     let completedSessionCount: Int
+    let completedFocusCount: Int
     let totalFocusTime: TimeInterval
     let totalBreakTime: TimeInterval
     let averageFocusHoursPerDay: Double
+
+    var totalSessionTime: TimeInterval {
+        totalFocusTime + totalBreakTime
+    }
 }
 
 private struct BucketConfiguration {

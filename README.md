@@ -58,6 +58,7 @@ VibePomodoro/
   - `settings`
   - `activeSession`
   - `completedSessions`
+  - `productivityCache`
 - `SessionSnapshot` 是当前 session 的完整快照：
   - step 列表
   - 当前 step index
@@ -66,6 +67,10 @@ VibePomodoro/
   - `targetEndDate`
   - 已结算 `segments`
 - `CompletedSession` 只表示已完成 session 的归档数据，不反向驱动当前计时状态。
+- `ProductivityAggregateCache` 是由已完成 session 派生出的本地聚合缓存：
+  - 指标卡总量
+  - 按自然日切分的统计汇总
+  - 已入账 `sessionID` 集合
 
 ### 0.1.3 数据流方向
 
@@ -83,6 +88,11 @@ VibePomodoro/
   - app 启动时 `PomodoroStore.init()` 先从 `UserDefaults` 读取
   - 然后 `reconcileNow()` 恢复 session
   - `scenePhase` 变回 `.active` 时再次补算并同步副作用
+- 统计入账流：
+  - `activeSession` 在运行期间只维护自己的 `segments`
+  - `Productivity` 正式统计不读取进行中的 session
+  - 只有在 `.sessionCompleted` 时，才把该 session 写入 `completedSessions` 并增量更新 `productivityCache`
+  - cache 缺失、版本不匹配或 session 集合不一致时，从 `completedSessions` 全量重建
 
 ### 0.1.4 页面与状态边界
 
@@ -93,6 +103,8 @@ VibePomodoro/
   - 计时数字按 `1Hz` 刷新，气泡动画按低帧率刷新，仅在 `Focus` tab 可见且 session 运行时激活
 - `ProductivityScreen`：
   - 通过 `store.productivitySnapshot(...)` 读取聚合后的统计快照
+  - 正式统计只反映已完成 session
+  - 范围选择只保留 `Week / Month / Year`
   - 页面本身不持有统计真值，只持有本地 UI 选择态 `selectedRange`
 - `SettingsScreen`：
   - 直接绑定 `store.settings`
@@ -225,6 +237,7 @@ MVP 需要支持的配置项：
 ### 2.6 统计口径
 
 统计只记录“有效运行时长”，不包含暂停时间。
+`Productivity` 页的正式统计只在整个 session 完成后统一入账；进行中的 `activeSession` 不参与正式图表和指标卡统计。
 
 统计维度包括：
 
@@ -240,6 +253,9 @@ MVP 需要支持的配置项：
 - `Break Time = Short Break Time + Long Break Time`
 - `Session Time = Focus Time + Break Time`
 - 跨天时按真实时间切分到自然日
+- `Productivity` 的指标卡总量基于已完成 session 的聚合缓存读取
+- `Productivity` 只保留 `W / M / Y`
+- `Productivity` 的 `W / M` 图按日缓存读取，`Y` 由日缓存卷到月
 - `Skip` 记录当前阶段已发生时长，但不计入额外完成轮次
 - `Reset` 会清空当前 step 已结算时长
 - `Back to last step` 会回滚相关已结算统计
@@ -602,13 +618,13 @@ MVP 不需要额外寻找开源 PNG 照片素材。
 当前代码已经开始落地以上方案，主要结构如下：
 
 - [VibePomodoro/PomodoroModels.swift](./VibePomodoro/PomodoroModels.swift)
-  - 核心模型、状态机、事件定义
+  - 核心模型、状态机、事件定义、Productivity 日聚合缓存模型
 - [VibePomodoro/PomodoroStore.swift](./VibePomodoro/PomodoroStore.swift)
-  - 状态管理、持久化、通知调度、聚合统计
+  - 状态管理、持久化、通知调度、session 完成后的统计入账与缓存重建
 - [VibePomodoro/Screens/Focus/FocusScreen.swift](./VibePomodoro/Screens/Focus/FocusScreen.swift)
   - Focus 页与专属气泡/控制组件
 - [VibePomodoro/Screens/Productivity/ProductivityScreen.swift](./VibePomodoro/Screens/Productivity/ProductivityScreen.swift)
-  - Productivity 页与专属指标卡组件
+  - Productivity 页与专属指标卡组件；只读取已完成 session 的聚合快照，不做实时统计
 - [VibePomodoro/Screens/Settings/SettingsScreen.swift](./VibePomodoro/Screens/Settings/SettingsScreen.swift)
   - Settings 页与专属设置行组件
 - [VibePomodoro/Shared/Theme/VibeTheme.swift](./VibePomodoro/Shared/Theme/VibeTheme.swift)
