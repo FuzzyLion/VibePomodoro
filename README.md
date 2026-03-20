@@ -1,5 +1,10 @@
 # VibePomodoro
 
+Before coding:
+1. Summarize current architecture
+2. Explain where this feature should live
+3. Then implement
+
 ## 0. 项目结构
 
 以下结构作为当前 thread 与后续 threads 的统一颗粒度对齐基准；后续讨论默认以这一级别描述页面、共享 UI 和逻辑边界。
@@ -32,6 +37,88 @@ VibePomodoro/
 - 页面专属子视图默认与页面文件同驻，不放进共享层。
 - 共享层只放跨页面复用的主题、背景、面板、标题等通用 UI。
 - `Focus` 的 hierarchy 为保护区；后续线程若改设计，必须在不打散当前层级、不改变现有刷新边界的前提下进行。
+
+## 0.1 State & Data Flow
+
+这部分定义当前工程的状态归属、数据流方向与功能落点，后续 threads 默认以此为准，不重新发明一套状态结构。
+
+### 0.1.1 当前架构摘要
+
+- `VibePomodoroApp.swift` 创建单一 `@StateObject PomodoroStore`，并把它注入整个 app。
+- `ContentView.swift` 只负责全局背景与 `TabView`，不承载业务状态机。
+- `PomodoroModels.swift` 定义核心数据模型、统计结构和 `PomodoroEngine` 状态推进规则。
+- `PomodoroStore.swift` 是运行时唯一 source of truth，负责状态持有、持久化、通知、scene phase 协调和副作用触发。
+- `Screens/*` 负责页面级 UI 和页面专属子视图，不新增第二套全局状态源。
+- `Shared/*` 只承载跨页面复用的主题与通用 UI 外壳。
+
+### 0.1.2 单一状态来源
+
+- 全局状态入口只有 `PomodoroStore`：
+  - `selectedTab`
+  - `settings`
+  - `activeSession`
+  - `completedSessions`
+- `SessionSnapshot` 是当前 session 的完整快照：
+  - step 列表
+  - 当前 step index
+  - run state
+  - `currentSegmentStartDate`
+  - `targetEndDate`
+  - 已结算 `segments`
+- `CompletedSession` 只表示已完成 session 的归档数据，不反向驱动当前计时状态。
+
+### 0.1.3 数据流方向
+
+- 用户交互流：
+  - View 按钮点击
+  - 调用 `PomodoroStore`
+  - `PomodoroStore` 调用 `PomodoroEngine` 或直接更新设置
+  - `PomodoroStore` 触发 `persist()` / `syncNotifications()` / `syncIdleTimer()` / `syncStepBoundaryTimer()`
+  - `@Published` 状态变化回流到 SwiftUI View
+- 时间推进流：
+  - 真值来自 `Date` + `targetEndDate`
+  - `PomodoroEngine.reconcile` 负责跨 step 补算
+  - `TimelineView` 只负责显示刷新，不是状态真值来源
+- 恢复流：
+  - app 启动时 `PomodoroStore.init()` 先从 `UserDefaults` 读取
+  - 然后 `reconcileNow()` 恢复 session
+  - `scenePhase` 变回 `.active` 时再次补算并同步副作用
+
+### 0.1.4 页面与状态边界
+
+- `FocusScreen`：
+  - 读取 `PomodoroStore`
+  - 生成 `FocusRenderState`
+  - 页面内只做显示层拆分，不能自建 session 状态机
+  - 计时数字按 `1Hz` 刷新，气泡动画按低帧率刷新，仅在 `Focus` tab 可见且 session 运行时激活
+- `ProductivityScreen`：
+  - 通过 `store.productivitySnapshot(...)` 读取聚合后的统计快照
+  - 页面本身不持有统计真值，只持有本地 UI 选择态 `selectedRange`
+- `SettingsScreen`：
+  - 直接绑定 `store.settings`
+  - 设置修改只走 store 的 update/set 接口，不直接改 model 副本
+
+### 0.1.5 功能应该放在哪里
+
+- 改页面布局、视觉组件、页面专属子视图：
+  - 放对应 `Screens/<Page>/...`
+- 改跨页面主题、背景、玻璃容器、共用标题：
+  - 放 `Shared/Theme` 或 `Shared/UI`
+- 改 session 规则、统计口径、step 推进、时间真值：
+  - 放 `PomodoroModels.swift` 内的 model / engine
+- 改持久化、通知、scene 恢复、idle timer、副作用协调：
+  - 放 `PomodoroStore.swift`
+- 新功能开始前，默认先回答三件事：
+  - 当前架构是什么
+  - 这个功能应该落在哪一层
+  - 再开始实现
+
+### 0.1.6 当前禁止项
+
+- 不在页面层复制一份 store 状态。
+- 不在 `Shared/*` 中塞只被单页使用的组件。
+- 不让 `TimelineView` 成为计时真值。
+- 不在未说明原因的情况下打散 `Focus` 现有 hierarchy。
 
 `VibePomodoro` 是一款以“精准计时”和“安静陪伴”为核心的番茄钟 App。
 
