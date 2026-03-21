@@ -480,6 +480,106 @@ struct VibePomodoroTests {
         #expect(store.productivityCache.completedFocusCount == 1)
     }
 
+    @Test func productivityMonthDisplayBucketsRollUpThirtyDailyPointsWithoutChangingTotals() async throws {
+        let calendar = Calendar(identifier: .gregorian)
+        let start = try #require(calendar.date(from: DateComponents(year: 2026, month: 2, day: 20)))
+        let points = (0..<30).map { offset in
+            ProductivityChartPoint(
+                startDate: calendar.date(byAdding: .day, value: offset, to: start)!,
+                label: "",
+                focusTime: Double(offset + 1) * 60,
+                breakTime: Double(offset % 2) * 60,
+                completedFocusCount: offset.isMultiple(of: 3) ? 1 : 0
+            )
+        }
+        let buckets = ProductivityChartDisplay.displayBuckets(from: points, range: .month)
+        let marks = ProductivityChartFormatting.xAxisMarkDates(for: buckets)
+        let expectedLastBucketStart = try #require(calendar.date(from: DateComponents(year: 2026, month: 3, day: 20)))
+
+        #expect(buckets.count == 5)
+        #expect(buckets.reduce(0) { $0 + $1.focusTime } == points.reduce(0) { $0 + $1.focusTime })
+        #expect(buckets.reduce(0) { $0 + $1.breakTime } == points.reduce(0) { $0 + $1.breakTime })
+        #expect(buckets.reduce(0) { $0 + $1.completedFocusCount } == points.reduce(0) { $0 + $1.completedFocusCount })
+        #expect(marks.count == 5)
+        #expect(buckets.first?.labelDate == points.first?.startDate)
+        #expect(buckets.last?.labelDate == expectedLastBucketStart)
+    }
+
+    @Test func productivityMonthAxisLabelsUseBucketStartsWithoutOverflowingToNextDate() async throws {
+        let calendar = Calendar(identifier: .gregorian)
+        let start = try #require(calendar.date(from: DateComponents(year: 2026, month: 2, day: 20)))
+        let points = (0..<30).map { offset in
+            ProductivityChartPoint(
+                startDate: calendar.date(byAdding: .day, value: offset, to: start)!,
+                label: "",
+                focusTime: 0,
+                breakTime: 0,
+                completedFocusCount: 0
+            )
+        }
+        let buckets = ProductivityChartDisplay.displayBuckets(from: points, range: .month)
+        let marks = ProductivityChartFormatting.xAxisMarkDates(for: buckets)
+        let labels = marks.map { ProductivityChartFormatting.xAxisLabel(for: $0, buckets: buckets, range: .month) }
+
+        #expect(labels == ["20. Feb", "27. Feb", "6. Mar", "13. Mar", "20. Mar"])
+    }
+
+    @Test func productivityYearAxisUsesSingleLetterEnglishMonths() async throws {
+        let calendar = Calendar(identifier: .gregorian)
+        let january = try #require(calendar.date(from: DateComponents(year: 2026, month: 1, day: 1)))
+        let september = try #require(calendar.date(from: DateComponents(year: 2026, month: 9, day: 1)))
+        let november = try #require(calendar.date(from: DateComponents(year: 2026, month: 11, day: 1)))
+
+        let buckets = [
+            ProductivityDisplayBucket(
+                startDate: january,
+                endDate: calendar.date(byAdding: .month, value: 1, to: january)!,
+                xDate: january.addingTimeInterval(15 * 24 * 3600),
+                labelDate: january,
+                focusTime: 0,
+                breakTime: 0,
+                completedFocusCount: 0
+            ),
+            ProductivityDisplayBucket(
+                startDate: september,
+                endDate: calendar.date(byAdding: .month, value: 1, to: september)!,
+                xDate: september.addingTimeInterval(15 * 24 * 3600),
+                labelDate: september,
+                focusTime: 0,
+                breakTime: 0,
+                completedFocusCount: 0
+            ),
+            ProductivityDisplayBucket(
+                startDate: november,
+                endDate: calendar.date(byAdding: .month, value: 1, to: november)!,
+                xDate: november.addingTimeInterval(15 * 24 * 3600),
+                labelDate: november,
+                focusTime: 0,
+                breakTime: 0,
+                completedFocusCount: 0
+            )
+        ]
+
+        #expect(ProductivityChartFormatting.xAxisLabel(for: buckets[0].xDate, buckets: buckets, range: .year) == "J")
+        #expect(ProductivityChartFormatting.xAxisLabel(for: buckets[1].xDate, buckets: buckets, range: .year) == "S")
+        #expect(ProductivityChartFormatting.xAxisLabel(for: buckets[2].xDate, buckets: buckets, range: .year) == "N")
+    }
+
+    @Test func productivityTimeAxisUsesRequestedStepRules() async throws {
+        let underHour = ProductivityChartFormatting.timeAxisStyle(for: 59 * 60)
+        let underTwoHours = ProductivityChartFormatting.timeAxisStyle(for: 90 * 60)
+        let overTwoHours = ProductivityChartFormatting.timeAxisStyle(for: 2 * 3600)
+
+        #expect(underHour.step == 20 * 60)
+        #expect(underHour.values == [0, 1_200, 2_400, 3_600])
+
+        #expect(underTwoHours.step == 40 * 60)
+        #expect(underTwoHours.values == [0, 2_400, 4_800, 7_200])
+
+        #expect(overTwoHours.step == 3_600)
+        #expect(overTwoHours.values == [0, 3_600, 7_200, 10_800])
+    }
+
     private func makeDefaults() -> (UserDefaults, String) {
         let suiteName = "VibePomodoroTests.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!

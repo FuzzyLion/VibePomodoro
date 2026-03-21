@@ -12,7 +12,7 @@ struct ProductivityScreen: View {
     var body: some View {
         NavigationStack {
             ScrollView(showsIndicators: false) {
-                VStack(alignment: .leading, spacing: 18) {
+                VStack(alignment: .leading, spacing: 16) {
                     ForEach(ProductivityMetricKind.allCases) { metric in
                         ProductivityMetricCard(
                             metric: metric,
@@ -23,30 +23,31 @@ struct ProductivityScreen: View {
 
                     if renderState.completedSessionCount == 0 {
                         Text("Complete a full session to start filling these charts. Productivity only reflects finished sessions.")
-                            .font(.system(.footnote, design: .rounded, weight: .medium))
+                            .font(.system(size: 13, weight: .medium))
                             .foregroundStyle(.secondary)
                             .padding(.horizontal, 6)
                             .padding(.top, 4)
                     }
                 }
-                .padding(.horizontal, 20)
-                .padding(.top, 10)
-                .padding(.bottom, 30)
+                .padding(.horizontal, 18)
+                .padding(.top, 12)
+                .padding(.bottom, 28)
             }
             .navigationTitle("Productivity")
             .navigationBarTitleDisplayMode(.large)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    ProductivityRangeMenu(selectedRange: $selectedRange)
+                    ProductivityRangeToolbarMenu(selectedRange: $selectedRange)
                 }
             }
         }
     }
 }
 
-private struct ProductivityRangeMenu: View {
-    @Binding var selectedRange: ProductivityRange
+private struct ProductivityRangeToolbarMenu: View {
     @Environment(\.colorScheme) private var colorScheme
+
+    @Binding var selectedRange: ProductivityRange
 
     var body: some View {
         Menu {
@@ -56,44 +57,16 @@ private struct ProductivityRangeMenu: View {
                 }
             }
         } label: {
-            HStack(spacing: 10) {
-                Image(systemName: "line.3.horizontal.decrease.circle")
-                    .font(.system(size: 15, weight: .semibold))
-
-                Text(selectedRange.displayTitle)
-                    .font(.system(.subheadline, design: .rounded, weight: .semibold))
-
-                Image(systemName: "chevron.down")
-                    .font(.system(size: 11, weight: .bold))
-                    .opacity(0.72)
-            }
-            .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.92) : Color.black.opacity(0.74))
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
-            .background(.ultraThinMaterial, in: Capsule(style: .continuous))
-            .overlay {
-                Capsule(style: .continuous)
-                    .strokeBorder(
-                        colorScheme == .dark ? Color.white.opacity(0.22) : Color.white.opacity(0.68),
-                        lineWidth: 0.75
-                    )
-            }
-            .overlay(alignment: .top) {
-                Capsule(style: .continuous)
-                    .fill(
-                        LinearGradient(
-                            colors: [
-                                Color.white.opacity(colorScheme == .dark ? 0.18 : 0.58),
-                                Color.white.opacity(0.0)
-                            ],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                    )
-                    .frame(height: 1)
-                    .padding(.horizontal, 14)
-            }
+            Label(selectedRange.toolbarLabel, systemImage: "line.3.horizontal")
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(toolbarLabelColor)
         }
+        .accessibilityLabel("Time Range")
+        .accessibilityValue(selectedRange.displayTitle)
+    }
+
+    private var toolbarLabelColor: Color {
+        colorScheme == .dark ? VibePalette.warmBackground.opacity(0.96) : Color.black.opacity(0.80)
     }
 }
 
@@ -104,54 +77,70 @@ private struct ProductivityMetricCard: View {
     let snapshot: ProductivityMetricsSnapshot
     let range: ProductivityRange
 
+    private var displayBuckets: [ProductivityDisplayBucket] {
+        ProductivityChartDisplay.displayBuckets(from: snapshot.chartPoints, range: range)
+    }
+
+    private var axisStyle: ProductivityNumericAxisStyle {
+        metric.axisStyle(for: displayBuckets)
+    }
+
+    private var xDomain: ClosedRange<Date> {
+        ProductivityChartDisplay.xDomain(for: displayBuckets) ?? {
+            let now = Date.now
+            return now...now.addingTimeInterval(24 * 3600)
+        }()
+    }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            HStack(spacing: 12) {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(spacing: 10) {
                 Image(systemName: metric.systemImage)
-                    .font(.system(size: 18, weight: .semibold))
+                    .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(metric.accentColor(for: colorScheme))
-                    .frame(width: 42, height: 42)
+                    .frame(width: 36, height: 36)
                     .background(
-                        RoundedRectangle(cornerRadius: 14, style: .continuous)
-                            .fill(metric.accentColor(for: colorScheme).opacity(colorScheme == .dark ? 0.13 : 0.10))
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .fill(metric.accentColor(for: colorScheme).opacity(colorScheme == .dark ? 0.11 : 0.08))
                     )
 
                 Text(metric.title)
-                    .font(.system(.title3, design: .rounded, weight: .bold))
+                    .font(.system(size: 19, weight: .semibold))
                     .foregroundStyle(metric.accentColor(for: colorScheme))
 
                 Spacer()
             }
 
             Text(metric.totalValueText(from: snapshot))
-                .font(.system(size: 34, weight: .bold, design: .rounded))
+                .font(.system(size: 26, weight: .semibold))
                 .foregroundStyle(primaryTextColor)
-                .minimumScaleFactor(0.72)
+                .minimumScaleFactor(0.76)
                 .lineLimit(1)
                 .monospacedDigit()
 
-            Chart(snapshot.chartPoints) { point in
-                let value = metric.bucketValue(for: point)
+            Chart(displayBuckets) { bucket in
+                let value = metric.bucketValue(for: bucket)
 
                 BarMark(
-                    x: .value("Bucket", point.startDate, unit: range.chartUnit),
-                    y: .value(metric.title, value)
+                    x: .value("Bucket", bucket.xDate),
+                    y: .value(metric.title, value),
+                    width: .fixed(range.barWidth)
                 )
                 .clipShape(RoundedRectangle(cornerRadius: range.barCornerRadius, style: .continuous))
                 .foregroundStyle(metric.barFill(for: colorScheme))
-                .opacity(value > 0 ? 1 : 0.18)
+                .opacity(value > 0 ? 1 : 0.10)
                 .annotation(position: .overlay, alignment: .top) {
                     if value > 0 {
                         RoundedRectangle(cornerRadius: 999, style: .continuous)
-                            .fill(Color.white.opacity(colorScheme == .dark ? 0.24 : 0.18))
-                            .frame(width: range.highlightWidth, height: 1.5)
+                            .fill(Color.white.opacity(colorScheme == .dark ? 0.22 : 0.16))
+                            .frame(width: range.highlightWidth, height: 1.25)
                             .padding(.top, 4)
                     }
                 }
                 .annotation(position: .top, alignment: .center) {
                     if shouldShowAnnotation(for: value) {
                         Text(metric.annotationText(for: value))
-                            .font(.system(size: 11, weight: .semibold, design: .rounded))
+                            .font(.system(size: 10, weight: .semibold))
                             .foregroundStyle(metric.accentColor(for: colorScheme))
                             .lineLimit(1)
                             .minimumScaleFactor(0.65)
@@ -159,64 +148,51 @@ private struct ProductivityMetricCard: View {
                     }
                 }
             }
-            .frame(height: 230)
+            .frame(height: 194)
             .chartLegend(.hidden)
-            .chartYScale(domain: 0...metric.chartUpperBound(for: snapshot.chartPoints))
+            .chartYScale(domain: 0...axisStyle.upperBound)
+            .chartXScale(domain: xDomain)
             .chartXAxis {
-                AxisMarks(values: xAxisMarkDates) { value in
+                AxisMarks(values: ProductivityChartFormatting.xAxisMarkDates(for: displayBuckets)) { value in
                     AxisGridLine().foregroundStyle(.clear)
                     AxisTick().foregroundStyle(.clear)
                     AxisValueLabel {
                         if let date = value.as(Date.self) {
-                            Text(xAxisLabel(for: date))
-                                .font(.system(size: 12, weight: .medium, design: .rounded))
+                            Text(ProductivityChartFormatting.xAxisLabel(for: date, buckets: displayBuckets, range: range))
+                                .font(.system(size: 11, weight: .medium))
                                 .foregroundStyle(secondaryTextColor)
                         }
                     }
                 }
             }
             .chartYAxis {
-                AxisMarks(position: .trailing, values: .automatic(desiredCount: 4)) { value in
+                AxisMarks(position: .trailing, values: axisStyle.values) { value in
                     AxisGridLine(stroke: StrokeStyle(lineWidth: 1))
                         .foregroundStyle(gridColor)
                     AxisTick().foregroundStyle(.clear)
                     AxisValueLabel {
                         if let axisValue = value.as(Double.self) {
                             Text(metric.axisLabelText(for: axisValue))
-                                .font(.system(size: 12, weight: .medium, design: .rounded))
+                                .font(.system(size: 11, weight: .medium))
                                 .foregroundStyle(secondaryTextColor)
                         }
                     }
                 }
             }
-            .chartPlotStyle { plotArea in
-                plotArea
-                    .background {
-                        RoundedRectangle(cornerRadius: 22, style: .continuous)
-                            .fill(plotAreaBackground)
-                            .overlay {
-                                RoundedRectangle(cornerRadius: 22, style: .continuous)
-                                    .strokeBorder(
-                                        colorScheme == .dark ? Color.white.opacity(0.06) : Color.white.opacity(0.48),
-                                        lineWidth: 0.75
-                                    )
-                            }
-                    }
-            }
         }
-        .padding(.horizontal, 22)
-        .padding(.vertical, 22)
+        .padding(.horizontal, 18)
+        .padding(.vertical, 18)
         .background(cardBackground)
         .overlay {
-            RoundedRectangle(cornerRadius: 30, style: .continuous)
-                .strokeBorder(cardBorderColor, lineWidth: 0.8)
+            RoundedRectangle(cornerRadius: 26, style: .continuous)
+                .strokeBorder(cardBorderColor, lineWidth: 0.75)
         }
         .overlay(alignment: .top) {
-            RoundedRectangle(cornerRadius: 30, style: .continuous)
+            RoundedRectangle(cornerRadius: 26, style: .continuous)
                 .fill(
                     LinearGradient(
                         colors: [
-                            Color.white.opacity(colorScheme == .dark ? 0.16 : 0.60),
+                            Color.white.opacity(colorScheme == .dark ? 0.12 : 0.52),
                             Color.white.opacity(0.0)
                         ],
                         startPoint: .top,
@@ -224,74 +200,38 @@ private struct ProductivityMetricCard: View {
                     )
                 )
                 .frame(height: 1)
-                .padding(.horizontal, 22)
+                .padding(.horizontal, 18)
         }
         .shadow(
-            color: Color.black.opacity(colorScheme == .dark ? 0.16 : 0.08),
-            radius: colorScheme == .dark ? 22 : 16,
-            y: colorScheme == .dark ? 12 : 8
+            color: Color.black.opacity(colorScheme == .dark ? 0.14 : 0.06),
+            radius: colorScheme == .dark ? 18 : 12,
+            y: colorScheme == .dark ? 10 : 6
         )
     }
 
     private var primaryTextColor: Color {
-        colorScheme == .dark ? VibePalette.warmBackground.opacity(0.96) : Color.black.opacity(0.80)
+        colorScheme == .dark ? VibePalette.warmBackground.opacity(0.94) : Color.black.opacity(0.80)
     }
 
     private var secondaryTextColor: Color {
-        colorScheme == .dark ? VibePalette.warmBackground.opacity(0.56) : Color.black.opacity(0.46)
+        colorScheme == .dark ? VibePalette.warmBackground.opacity(0.54) : Color.black.opacity(0.48)
     }
 
     private var gridColor: Color {
-        colorScheme == .dark ? Color.white.opacity(0.11) : Color.black.opacity(0.08)
-    }
-
-    private var plotAreaBackground: some ShapeStyle {
-        LinearGradient(
-            colors: [
-                Color.white.opacity(colorScheme == .dark ? 0.04 : 0.40),
-                metric.accentColor(for: colorScheme).opacity(colorScheme == .dark ? 0.035 : 0.025)
-            ],
-            startPoint: .top,
-            endPoint: .bottom
-        )
+        colorScheme == .dark ? Color.white.opacity(0.10) : Color.black.opacity(0.08)
     }
 
     private var cardBackground: some View {
-        RoundedRectangle(cornerRadius: 30, style: .continuous)
+        RoundedRectangle(cornerRadius: 26, style: .continuous)
             .fill(.ultraThinMaterial)
             .overlay {
-                RoundedRectangle(cornerRadius: 30, style: .continuous)
-                    .fill(metric.accentColor(for: colorScheme).opacity(colorScheme == .dark ? 0.05 : 0.028))
+                RoundedRectangle(cornerRadius: 26, style: .continuous)
+                    .fill(metric.accentColor(for: colorScheme).opacity(colorScheme == .dark ? 0.035 : 0.016))
             }
     }
 
     private var cardBorderColor: Color {
-        colorScheme == .dark ? Color.white.opacity(0.17) : Color.white.opacity(0.72)
-    }
-
-    private var xAxisMarkDates: [Date] {
-        let dates = snapshot.chartPoints.map(\.startDate)
-
-        switch range {
-        case .week, .year:
-            return dates
-        case .month:
-            return snapshot.chartPoints.enumerated().compactMap { index, point in
-                let shouldShow = index == 0 || index == snapshot.chartPoints.count - 1 || index % 5 == 0
-                return shouldShow ? point.startDate : nil
-            }
-        }
-    }
-
-    private func xAxisLabel(for date: Date) -> String {
-        switch range {
-        case .week:
-            return date.formatted(.dateTime.weekday(.abbreviated))
-        case .month:
-            return date.formatted(.dateTime.day())
-        case .year:
-            return date.formatted(.dateTime.month(.abbreviated))
-        }
+        colorScheme == .dark ? Color.white.opacity(0.16) : Color.white.opacity(0.66)
     }
 
     private func shouldShowAnnotation(for value: Double) -> Bool {
@@ -336,33 +276,20 @@ private enum ProductivityMetricKind: CaseIterable, Identifiable {
     func accentColor(for colorScheme: ColorScheme) -> Color {
         switch self {
         case .focusSessions:
-            return colorScheme == .dark
-                ? Color(red: 0.28, green: 0.60, blue: 0.98)
-                : Color(red: 0.18, green: 0.45, blue: 0.84)
+            return colorScheme == .dark ? VibePalette.softMist : VibePalette.softMistDeep
         case .sessionTime:
-            return colorScheme == .dark
-                ? Color(red: 0.66, green: 0.42, blue: 0.96)
-                : Color(red: 0.51, green: 0.34, blue: 0.80)
+            return colorScheme == .dark ? VibePalette.warmAmberAccent : VibePalette.warmAmberAccentDeep
         case .focusTime:
-            return colorScheme == .dark
-                ? Color(red: 0.17, green: 0.78, blue: 0.35)
-                : Color(red: 0.17, green: 0.60, blue: 0.31)
+            return colorScheme == .dark ? VibePalette.amberGold : VibePalette.amberGoldDeep
         case .breakTime:
-            return colorScheme == .dark
-                ? Color(red: 1.0, green: 0.64, blue: 0.23)
-                : Color(red: 0.90, green: 0.56, blue: 0.18)
+            return colorScheme == .dark ? VibePalette.softJade : VibePalette.softJadeDeep
         }
     }
 
     func barFill(for colorScheme: ColorScheme) -> AnyShapeStyle {
-        let accent = accentColor(for: colorScheme)
-
-        return AnyShapeStyle(
+        AnyShapeStyle(
             LinearGradient(
-                colors: [
-                    accent.opacity(colorScheme == .dark ? 0.92 : 0.74),
-                    accent.opacity(colorScheme == .dark ? 0.68 : 0.52)
-                ],
+                colors: barGradientColors(for: colorScheme),
                 startPoint: .top,
                 endPoint: .bottom
             )
@@ -382,16 +309,16 @@ private enum ProductivityMetricKind: CaseIterable, Identifiable {
         }
     }
 
-    func bucketValue(for point: ProductivityChartPoint) -> Double {
+    func bucketValue(for bucket: ProductivityDisplayBucket) -> Double {
         switch self {
         case .focusSessions:
-            return Double(point.completedFocusCount)
+            return Double(bucket.completedFocusCount)
         case .sessionTime:
-            return point.sessionTime
+            return bucket.sessionTime
         case .focusTime:
-            return point.focusTime
+            return bucket.focusTime
         case .breakTime:
-            return point.breakTime
+            return bucket.breakTime
         }
     }
 
@@ -400,7 +327,7 @@ private enum ProductivityMetricKind: CaseIterable, Identifiable {
         case .focusSessions:
             return "\(Int(value.rounded()))"
         case .sessionTime, .focusTime, .breakTime:
-            return Self.axisDurationText(value)
+            return ProductivityChartFormatting.axisDurationText(value)
         }
     }
 
@@ -409,18 +336,43 @@ private enum ProductivityMetricKind: CaseIterable, Identifiable {
         case .focusSessions:
             return "\(Int(value.rounded()))"
         case .sessionTime, .focusTime, .breakTime:
-            return Self.annotationDurationText(value)
+            return ProductivityChartFormatting.annotationDurationText(value)
         }
     }
 
-    func chartUpperBound(for points: [ProductivityChartPoint]) -> Double {
-        let maxValue = points.map(bucketValue(for:)).max() ?? 0
+    func axisStyle(for buckets: [ProductivityDisplayBucket]) -> ProductivityNumericAxisStyle {
+        let maxValue = buckets.map(bucketValue(for:)).max() ?? 0
 
         switch self {
         case .focusSessions:
-            return Self.niceCountUpperBound(for: maxValue)
+            return Self.countAxisStyle(for: maxValue)
         case .sessionTime, .focusTime, .breakTime:
-            return Self.niceDurationUpperBound(for: maxValue)
+            return ProductivityChartFormatting.timeAxisStyle(for: maxValue)
+        }
+    }
+
+    private func barGradientColors(for colorScheme: ColorScheme) -> [Color] {
+        switch self {
+        case .focusSessions:
+            return [
+                VibePalette.softMist.opacity(colorScheme == .dark ? 0.88 : 0.78),
+                VibePalette.softMistDeep.opacity(colorScheme == .dark ? 0.66 : 0.54)
+            ]
+        case .sessionTime:
+            return [
+                VibePalette.warmAmberAccent.opacity(colorScheme == .dark ? 0.88 : 0.76),
+                VibePalette.warmAmberAccentDeep.opacity(colorScheme == .dark ? 0.66 : 0.54)
+            ]
+        case .focusTime:
+            return [
+                VibePalette.amberGold.opacity(colorScheme == .dark ? 0.90 : 0.80),
+                VibePalette.amberGoldDeep.opacity(colorScheme == .dark ? 0.68 : 0.56)
+            ]
+        case .breakTime:
+            return [
+                VibePalette.softJade.opacity(colorScheme == .dark ? 0.88 : 0.78),
+                VibePalette.softJadeDeep.opacity(colorScheme == .dark ? 0.66 : 0.54)
+            ]
         }
     }
 
@@ -439,37 +391,10 @@ private enum ProductivityMetricKind: CaseIterable, Identifiable {
         return "\(seconds)s"
     }
 
-    private static func axisDurationText(_ value: Double) -> String {
-        let duration = max(0, value)
-        if duration < 3600 {
-            return "\(Int((duration / 60).rounded()))m"
+    private static func countAxisStyle(for maxValue: Double) -> ProductivityNumericAxisStyle {
+        guard maxValue > 0 else {
+            return ProductivityNumericAxisStyle(step: 1, upperBound: 4)
         }
-
-        let hours = duration / 3600
-        if hours < 10 {
-            return String(format: "%.1fh", hours)
-        }
-
-        return "\(Int(hours.rounded()))h"
-    }
-
-    private static func annotationDurationText(_ value: Double) -> String {
-        let totalSeconds = max(0, Int(value.rounded()))
-        let hours = totalSeconds / 3600
-        let minutes = (totalSeconds % 3600) / 60
-        let seconds = totalSeconds % 60
-
-        if hours > 0 {
-            return "\(hours)h \(minutes)m"
-        }
-        if minutes > 0 {
-            return "\(minutes)m"
-        }
-        return "\(seconds)s"
-    }
-
-    private static func niceCountUpperBound(for maxValue: Double) -> Double {
-        guard maxValue > 0 else { return 4 }
 
         let padded = maxValue * 1.18
         let step: Double
@@ -485,29 +410,198 @@ private enum ProductivityMetricKind: CaseIterable, Identifiable {
             step = 10
         }
 
-        return ceil(padded / step) * step
+        let upperBound = max(step * 4, ceil(padded / step) * step)
+        return ProductivityNumericAxisStyle(step: step, upperBound: upperBound)
+    }
+}
+
+struct ProductivityDisplayBucket: Identifiable, Equatable {
+    let startDate: Date
+    let endDate: Date
+    let xDate: Date
+    let labelDate: Date
+    let focusTime: TimeInterval
+    let breakTime: TimeInterval
+    let completedFocusCount: Int
+
+    var id: Date { xDate }
+
+    var sessionTime: TimeInterval {
+        focusTime + breakTime
+    }
+}
+
+struct ProductivityNumericAxisStyle: Equatable {
+    let step: Double
+    let upperBound: Double
+
+    var values: [Double] {
+        let count = max(1, Int((upperBound / step).rounded()))
+        return (0...count).map { Double($0) * step }
+    }
+}
+
+enum ProductivityChartDisplay {
+    private static let calendar = Calendar.autoupdatingCurrent
+
+    static func displayBuckets(from points: [ProductivityChartPoint], range: ProductivityRange) -> [ProductivityDisplayBucket] {
+        let sortedPoints = points.sorted { $0.startDate < $1.startDate }
+
+        switch range {
+        case .week:
+            return sortedPoints.compactMap { point in
+                makeBucket(
+                    startDate: point.startDate,
+                    endDate: calendar.date(byAdding: .day, value: 1, to: point.startDate),
+                    labelDate: point.startDate,
+                    focusTime: point.focusTime,
+                    breakTime: point.breakTime,
+                    completedFocusCount: point.completedFocusCount
+                )
+            }
+        case .month:
+            return stride(from: 0, to: sortedPoints.count, by: 7).compactMap { startIndex in
+                let endIndex = min(startIndex + 7, sortedPoints.count)
+                let chunk = Array(sortedPoints[startIndex..<endIndex])
+                guard let first = chunk.first else { return nil }
+                let endDate = calendar.date(byAdding: .day, value: chunk.count, to: first.startDate)
+
+                return makeBucket(
+                    startDate: first.startDate,
+                    endDate: endDate,
+                    labelDate: first.startDate,
+                    focusTime: chunk.reduce(0) { $0 + $1.focusTime },
+                    breakTime: chunk.reduce(0) { $0 + $1.breakTime },
+                    completedFocusCount: chunk.reduce(0) { $0 + $1.completedFocusCount }
+                )
+            }
+        case .year:
+            return sortedPoints.compactMap { point in
+                makeBucket(
+                    startDate: point.startDate,
+                    endDate: calendar.date(byAdding: .month, value: 1, to: point.startDate),
+                    labelDate: point.startDate,
+                    focusTime: point.focusTime,
+                    breakTime: point.breakTime,
+                    completedFocusCount: point.completedFocusCount
+                )
+            }
+        }
     }
 
-    private static func niceDurationUpperBound(for maxValue: Double) -> Double {
-        guard maxValue > 0 else { return 3600 }
+    static func xDomain(for buckets: [ProductivityDisplayBucket]) -> ClosedRange<Date>? {
+        guard let first = buckets.first, let last = buckets.last else { return nil }
+        return first.startDate...last.endDate
+    }
 
-        let padded = maxValue * 1.18
+    private static func makeBucket(
+        startDate: Date,
+        endDate: Date?,
+        labelDate: Date,
+        focusTime: TimeInterval,
+        breakTime: TimeInterval,
+        completedFocusCount: Int
+    ) -> ProductivityDisplayBucket? {
+        guard let endDate else { return nil }
+        let midpoint = startDate.addingTimeInterval(endDate.timeIntervalSince(startDate) / 2)
+
+        return ProductivityDisplayBucket(
+            startDate: startDate,
+            endDate: endDate,
+            xDate: midpoint,
+            labelDate: labelDate,
+            focusTime: focusTime,
+            breakTime: breakTime,
+            completedFocusCount: completedFocusCount
+        )
+    }
+}
+
+enum ProductivityChartFormatting {
+    private static let englishLocale = Locale(identifier: "en_US_POSIX")
+    private static let englishMonthSymbols: [String] = {
+        let formatter = DateFormatter()
+        formatter.locale = englishLocale
+        return formatter.shortMonthSymbols
+    }()
+
+    static func xAxisMarkDates(for buckets: [ProductivityDisplayBucket]) -> [Date] {
+        buckets.map(\.xDate)
+    }
+
+    static func xAxisLabel(
+        for markDate: Date,
+        buckets: [ProductivityDisplayBucket],
+        range: ProductivityRange
+    ) -> String {
+        guard let bucket = buckets.first(where: { $0.xDate == markDate }) else { return "" }
+
+        switch range {
+        case .week:
+            return bucket.labelDate.formatted(.dateTime.weekday(.abbreviated))
+        case .month:
+            return monthAxisLabel(for: bucket.labelDate)
+        case .year:
+            return yearAxisLabel(for: bucket.labelDate)
+        }
+    }
+
+    static func monthAxisLabel(for date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = englishLocale
+        formatter.dateFormat = "d. MMM"
+        return formatter.string(from: date)
+    }
+
+    static func yearAxisLabel(for date: Date, calendar: Calendar = .autoupdatingCurrent) -> String {
+        let month = calendar.component(.month, from: date)
+        guard month > 0, month <= englishMonthSymbols.count else { return "" }
+        return String(englishMonthSymbols[month - 1].prefix(1))
+    }
+
+    static func axisDurationText(_ value: Double) -> String {
+        let totalMinutes = Int((max(0, value) / 60).rounded())
+        let hours = totalMinutes / 60
+        let minutes = totalMinutes % 60
+
+        if hours > 0 && minutes > 0 {
+            return "\(hours)h \(minutes)m"
+        }
+        if hours > 0 {
+            return "\(hours)h"
+        }
+        return "\(totalMinutes)m"
+    }
+
+    static func annotationDurationText(_ value: Double) -> String {
+        let totalSeconds = max(0, Int(value.rounded()))
+        let hours = totalSeconds / 3600
+        let minutes = (totalSeconds % 3600) / 60
+        let seconds = totalSeconds % 60
+
+        if hours > 0 {
+            return "\(hours)h \(minutes)m"
+        }
+        if minutes > 0 {
+            return "\(minutes)m"
+        }
+        return "\(seconds)s"
+    }
+
+    static func timeAxisStyle(for maxValue: Double) -> ProductivityNumericAxisStyle {
         let step: Double
 
-        switch padded {
-        case ..<3600.0:
-            step = 15 * 60
-        case ..<(4 * 3600.0):
-            step = 30 * 60
-        case ..<(12 * 3600.0):
-            step = 60 * 60
-        case ..<(36 * 3600.0):
-            step = 2 * 3600
+        switch maxValue {
+        case ..<3600:
+            step = 20 * 60
+        case ..<7200:
+            step = 40 * 60
         default:
-            step = 4 * 3600
+            step = 60 * 60
         }
 
-        return ceil(padded / step) * step
+        let upperBound = max(step * 3, ceil(maxValue / step) * step)
+        return ProductivityNumericAxisStyle(step: step, upperBound: upperBound)
     }
 }
 
@@ -523,34 +617,47 @@ private extension ProductivityRange {
         }
     }
 
-    var chartUnit: Calendar.Component {
+    var toolbarLabel: String {
         switch self {
-        case .week, .month:
-            return .day
+        case .week:
+            return "Week"
+        case .month:
+            return "Month"
         case .year:
-            return .month
+            return "Year"
+        }
+    }
+
+    var barWidth: CGFloat {
+        switch self {
+        case .week:
+            return 18
+        case .month:
+            return 26
+        case .year:
+            return 15
         }
     }
 
     var highlightWidth: CGFloat {
         switch self {
         case .week:
-            return 18
+            return 16
         case .month:
-            return 8
+            return 18
         case .year:
-            return 14
+            return 12
         }
     }
 
     var barCornerRadius: CGFloat {
         switch self {
         case .week:
-            return 8
-        case .month:
-            return 5
-        case .year:
             return 7
+        case .month:
+            return 6
+        case .year:
+            return 6
         }
     }
 }

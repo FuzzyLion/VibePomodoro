@@ -6,6 +6,8 @@ import UserNotifications
 
 @MainActor
 final class PomodoroStore: ObservableObject {
+    private static let openProductivityArgument = "--open-productivity"
+
     @Published var selectedTab: AppTab = .focus
     @Published private(set) var settings: PomodoroSettings
     @Published private(set) var activeSession: SessionSnapshot?
@@ -31,6 +33,7 @@ final class PomodoroStore: ObservableObject {
         self.activeSession = Self.loadValue(for: StorageKey.activeSession, using: defaults)
         self.completedSessions = Self.loadValue(for: StorageKey.completedSessions, using: defaults) ?? []
         self.productivityCache = Self.loadValue(for: StorageKey.productivityCache, using: defaults) ?? .empty
+        self.selectedTab = Self.initialSelectedTab()
 
         reconcileNow()
         repairProductivityCacheIfNeeded()
@@ -42,6 +45,14 @@ final class PomodoroStore: ObservableObject {
 
     deinit {
         stepBoundaryTimer?.invalidate()
+    }
+
+    private static func initialSelectedTab() -> AppTab {
+        if ProcessInfo.processInfo.arguments.contains(openProductivityArgument) {
+            return .productivity
+        }
+
+        return .focus
     }
 
     var currentPhase: SessionPhase {
