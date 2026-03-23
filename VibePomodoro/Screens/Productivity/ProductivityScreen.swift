@@ -12,21 +12,19 @@ struct ProductivityScreen: View {
     var body: some View {
         NavigationStack {
             ScrollView(showsIndicators: false) {
-                VStack(alignment: .leading, spacing: 16) {
-                    ForEach(ProductivityMetricKind.allCases) { metric in
-                        ProductivityMetricCard(
+                VStack(alignment: .leading, spacing: 14) {
+                    ProductivitySummaryStrip(snapshot: renderState)
+
+                    if renderState.completedSessionCount == 0 {
+                        ProductivityEmptyStateNote()
+                    }
+
+                    ForEach(ProductivityMetricKind.chartMetrics) { metric in
+                        ProductivityTrendCard(
                             metric: metric,
                             snapshot: renderState,
                             range: selectedRange
                         )
-                    }
-
-                    if renderState.completedSessionCount == 0 {
-                        Text("Complete a full session to start filling these charts. Productivity only reflects finished sessions.")
-                            .font(.system(size: 13, weight: .medium))
-                            .foregroundStyle(.secondary)
-                            .padding(.horizontal, 6)
-                            .padding(.top, 4)
                     }
                 }
                 .padding(.horizontal, 18)
@@ -57,20 +55,198 @@ private struct ProductivityRangeToolbarMenu: View {
                 }
             }
         } label: {
-            Label(selectedRange.toolbarLabel, systemImage: "line.3.horizontal")
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundStyle(toolbarLabelColor)
+            Image(systemName: "line.3.horizontal.decrease")
+                .font(.system(size: 17, weight: .medium))
+                .foregroundStyle(toolbarIconColor)
         }
         .accessibilityLabel("Time Range")
         .accessibilityValue(selectedRange.displayTitle)
     }
 
-    private var toolbarLabelColor: Color {
+    private var toolbarIconColor: Color {
+        colorScheme == .dark ? VibePalette.warmBackground.opacity(0.92) : Color.black.opacity(0.66)
+    }
+}
+
+private struct ProductivitySummaryStrip: View {
+    @Environment(\.colorScheme) private var colorScheme
+
+    let snapshot: ProductivityMetricsSnapshot
+    private let contentInset: CGFloat = 18
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("All Time")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(secondaryTextColor)
+                .textCase(.uppercase)
+                .tracking(0.8)
+
+            ProductivitySummaryMetricsRow(snapshot: snapshot, colorScheme: colorScheme)
+        }
+        .padding(.horizontal, contentInset)
+        .padding(.vertical, 15)
+        .background(background)
+        .overlay {
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .strokeBorder(borderColor, lineWidth: 0.75)
+        }
+        .overlay(alignment: .top) {
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            Color.white.opacity(colorScheme == .dark ? 0.10 : 0.48),
+                            Color.white.opacity(0.0)
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                        )
+                )
+                .frame(height: 1)
+                .padding(.horizontal, contentInset)
+        }
+        .shadow(
+            color: Color.black.opacity(colorScheme == .dark ? 0.12 : 0.05),
+            radius: colorScheme == .dark ? 16 : 10,
+            y: colorScheme == .dark ? 8 : 5
+        )
+    }
+
+    private var secondaryTextColor: Color {
+        colorScheme == .dark ? VibePalette.warmBackground.opacity(0.54) : Color.black.opacity(0.45)
+    }
+
+    private var borderColor: Color {
+        colorScheme == .dark ? Color.white.opacity(0.14) : Color.white.opacity(0.64)
+    }
+
+    private var background: some View {
+        RoundedRectangle(cornerRadius: 24, style: .continuous)
+            .fill(.ultraThinMaterial)
+            .overlay {
+                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                    .fill(Color.white.opacity(colorScheme == .dark ? 0.015 : 0.18))
+            }
+    }
+}
+
+private struct ProductivitySummaryMetricsRow: View {
+    let snapshot: ProductivityMetricsSnapshot
+    let colorScheme: ColorScheme
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 0) {
+            ProductivitySummaryItem(
+                title: "Session Time",
+                value: ProductivityValueFormatting.summarySessionTimeText(snapshot.totalSessionTime),
+                accessibilityValue: ProductivityValueFormatting.summarySessionTimeAccessibilityValue(snapshot.totalSessionTime),
+                titleColor: sessionTitleColor,
+                colorScheme: colorScheme,
+                alignment: .leading
+            )
+
+            divider
+
+            ProductivitySummaryItem(
+                title: "Avg / Day",
+                value: ProductivityValueFormatting.summaryAverageFocusText(snapshot.averageFocusHoursPerDay),
+                accessibilityValue: ProductivityValueFormatting.summaryAverageFocusAccessibilityValue(snapshot.averageFocusHoursPerDay),
+                titleColor: averageTitleColor,
+                colorScheme: colorScheme,
+                alignment: .center
+            )
+
+            divider
+
+            ProductivitySummaryItem(
+                title: "Streak",
+                value: ProductivityValueFormatting.summaryStreakText(snapshot.streakLength),
+                accessibilityValue: ProductivityValueFormatting.summaryStreakAccessibilityValue(snapshot.streakLength),
+                titleColor: streakTitleColor,
+                colorScheme: colorScheme,
+                alignment: .center
+            )
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var divider: some View {
+        Rectangle()
+            .fill(dividerColor)
+            .frame(width: 1, height: 34)
+            .frame(maxHeight: .infinity, alignment: .center)
+    }
+
+    private var dividerColor: Color {
+        colorScheme == .dark ? Color.white.opacity(0.12) : Color.black.opacity(0.08)
+    }
+
+    private var sessionTitleColor: Color {
+        colorScheme == .dark
+            ? VibePalette.warmAmberAccent.opacity(0.92)
+            : VibePalette.warmAmberAccentDeep.opacity(0.92)
+    }
+
+    private var averageTitleColor: Color {
+        colorScheme == .dark
+            ? VibePalette.softJade.opacity(0.92)
+            : VibePalette.softJadeDeep.opacity(0.92)
+    }
+
+    private var streakTitleColor: Color {
+        colorScheme == .dark
+            ? VibePalette.softMist.opacity(0.92)
+            : VibePalette.softMistDeep.opacity(0.92)
+    }
+}
+
+private struct ProductivitySummaryItem: View {
+    let title: String
+    let value: String
+    let accessibilityValue: String
+    let titleColor: Color
+    let colorScheme: ColorScheme
+    let alignment: Alignment
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(titleColor)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+
+            Text(value)
+                .font(.system(size: 22, weight: .semibold))
+                .foregroundStyle(valueColor)
+                .minimumScaleFactor(0.7)
+                .lineLimit(1)
+                .monospacedDigit()
+        }
+        .frame(maxWidth: .infinity, alignment: alignment)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(title)
+        .accessibilityValue(accessibilityValue)
+    }
+
+    private var valueColor: Color {
         colorScheme == .dark ? VibePalette.warmBackground.opacity(0.96) : Color.black.opacity(0.80)
     }
 }
 
-private struct ProductivityMetricCard: View {
+private struct ProductivityEmptyStateNote: View {
+    var body: some View {
+        Text("Complete a full session to start filling these charts. Productivity only reflects finished sessions.")
+            .font(.system(size: 13, weight: .medium))
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, 6)
+            .padding(.top, 2)
+            .padding(.bottom, 4)
+    }
+}
+
+private struct ProductivityTrendCard: View {
     @Environment(\.colorScheme) private var colorScheme
 
     let metric: ProductivityMetricKind
@@ -85,15 +261,13 @@ private struct ProductivityMetricCard: View {
         metric.axisStyle(for: displayBuckets)
     }
 
-    private var xDomain: ClosedRange<Date> {
-        ProductivityChartDisplay.xDomain(for: displayBuckets) ?? {
-            let now = Date.now
-            return now...now.addingTimeInterval(24 * 3600)
-        }()
+    private var slotDomain: ClosedRange<Double> {
+        let bucketCount = max(displayBuckets.count, 1)
+        return -0.5...(Double(bucketCount) - 0.5)
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: 14) {
             HStack(spacing: 10) {
                 Image(systemName: metric.systemImage)
                     .font(.system(size: 15, weight: .semibold))
@@ -109,10 +283,16 @@ private struct ProductivityMetricCard: View {
                     .foregroundStyle(metric.accentColor(for: colorScheme))
 
                 Spacer()
+
+                ProductivityRangeBadge(
+                    title: range.displayTitle,
+                    tint: metric.accentColor(for: colorScheme),
+                    colorScheme: colorScheme
+                )
             }
 
-            Text(metric.totalValueText(from: snapshot))
-                .font(.system(size: 26, weight: .semibold))
+            Text(metric.rangeValueText(from: displayBuckets))
+                .font(.system(size: 28, weight: .semibold))
                 .foregroundStyle(primaryTextColor)
                 .minimumScaleFactor(0.76)
                 .lineLimit(1)
@@ -122,49 +302,30 @@ private struct ProductivityMetricCard: View {
                 let value = metric.bucketValue(for: bucket)
 
                 BarMark(
-                    x: .value("Bucket", bucket.xDate),
+                    x: .value("Bucket", bucket.slotValue),
                     y: .value(metric.title, value),
                     width: .fixed(range.barWidth)
                 )
-                .clipShape(RoundedRectangle(cornerRadius: range.barCornerRadius, style: .continuous))
+                .clipShape(TopRoundedBarShape(radius: range.barTopCornerRadius))
                 .foregroundStyle(metric.barFill(for: colorScheme))
                 .opacity(value > 0 ? 1 : 0.10)
-                .annotation(position: .overlay, alignment: .top) {
-                    if value > 0 {
-                        RoundedRectangle(cornerRadius: 999, style: .continuous)
-                            .fill(Color.white.opacity(colorScheme == .dark ? 0.22 : 0.16))
-                            .frame(width: range.highlightWidth, height: 1.25)
-                            .padding(.top, 4)
-                    }
-                }
                 .annotation(position: .top, alignment: .center) {
                     if shouldShowAnnotation(for: value) {
                         Text(metric.annotationText(for: value))
-                            .font(.system(size: 10, weight: .semibold))
+                            .font(.system(size: range.annotationFontSize, weight: .semibold))
                             .foregroundStyle(metric.accentColor(for: colorScheme))
                             .lineLimit(1)
                             .minimumScaleFactor(0.65)
-                            .padding(.bottom, 2)
+                            .padding(.bottom, range.annotationBottomPadding)
                     }
                 }
             }
-            .frame(height: 194)
+            .frame(height: 186)
+            .padding(.bottom, 22)
             .chartLegend(.hidden)
             .chartYScale(domain: 0...axisStyle.upperBound)
-            .chartXScale(domain: xDomain)
-            .chartXAxis {
-                AxisMarks(values: ProductivityChartFormatting.xAxisMarkDates(for: displayBuckets)) { value in
-                    AxisGridLine().foregroundStyle(.clear)
-                    AxisTick().foregroundStyle(.clear)
-                    AxisValueLabel {
-                        if let date = value.as(Date.self) {
-                            Text(ProductivityChartFormatting.xAxisLabel(for: date, buckets: displayBuckets, range: range))
-                                .font(.system(size: 11, weight: .medium))
-                                .foregroundStyle(secondaryTextColor)
-                        }
-                    }
-                }
-            }
+            .chartXScale(domain: slotDomain)
+            .chartXAxis(.hidden)
             .chartYAxis {
                 AxisMarks(position: .trailing, values: axisStyle.values) { value in
                     AxisGridLine(stroke: StrokeStyle(lineWidth: 1))
@@ -176,6 +337,19 @@ private struct ProductivityMetricCard: View {
                                 .font(.system(size: 11, weight: .medium))
                                 .foregroundStyle(secondaryTextColor)
                         }
+                    }
+                }
+            }
+            .chartOverlay { proxy in
+                GeometryReader { geometry in
+                    if let plotFrame = proxy.plotFrame {
+                        ProductivityCustomXAxis(
+                            buckets: displayBuckets,
+                            range: range,
+                            plotFrame: geometry[plotFrame],
+                            textColor: secondaryTextColor
+                        )
+                        .offset(y: geometry[plotFrame].maxY + 8)
                     }
                 }
             }
@@ -192,7 +366,7 @@ private struct ProductivityMetricCard: View {
                 .fill(
                     LinearGradient(
                         colors: [
-                            Color.white.opacity(colorScheme == .dark ? 0.12 : 0.52),
+                            Color.white.opacity(colorScheme == .dark ? 0.10 : 0.50),
                             Color.white.opacity(0.0)
                         ],
                         startPoint: .top,
@@ -203,9 +377,9 @@ private struct ProductivityMetricCard: View {
                 .padding(.horizontal, 18)
         }
         .shadow(
-            color: Color.black.opacity(colorScheme == .dark ? 0.14 : 0.06),
-            radius: colorScheme == .dark ? 18 : 12,
-            y: colorScheme == .dark ? 10 : 6
+            color: Color.black.opacity(colorScheme == .dark ? 0.13 : 0.05),
+            radius: colorScheme == .dark ? 16 : 10,
+            y: colorScheme == .dark ? 8 : 5
         )
     }
 
@@ -223,19 +397,102 @@ private struct ProductivityMetricCard: View {
 
     private var cardBackground: some View {
         RoundedRectangle(cornerRadius: 26, style: .continuous)
-            .fill(.ultraThinMaterial)
+            .fill(.thinMaterial)
             .overlay {
                 RoundedRectangle(cornerRadius: 26, style: .continuous)
-                    .fill(metric.accentColor(for: colorScheme).opacity(colorScheme == .dark ? 0.035 : 0.016))
+                    .fill(metric.accentColor(for: colorScheme).opacity(colorScheme == .dark ? 0.030 : 0.014))
             }
     }
 
     private var cardBorderColor: Color {
-        colorScheme == .dark ? Color.white.opacity(0.16) : Color.white.opacity(0.66)
+        colorScheme == .dark ? Color.white.opacity(0.15) : Color.white.opacity(0.66)
     }
 
     private func shouldShowAnnotation(for value: Double) -> Bool {
-        value > 0 && range != .month
+        value > 0
+    }
+}
+
+private struct ProductivityRangeBadge: View {
+    let title: String
+    let tint: Color
+    let colorScheme: ColorScheme
+
+    var body: some View {
+        Text(title.uppercased())
+            .font(.system(size: 10, weight: .semibold))
+            .foregroundStyle(badgeTextColor)
+            .tracking(0.45)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(
+                Capsule(style: .continuous)
+                    .fill(tint.opacity(colorScheme == .dark ? 0.16 : 0.10))
+            )
+            .overlay {
+                Capsule(style: .continuous)
+                    .strokeBorder(tint.opacity(colorScheme == .dark ? 0.18 : 0.10), lineWidth: 0.8)
+            }
+    }
+
+    private var badgeTextColor: Color {
+        colorScheme == .dark ? tint.opacity(0.95) : tint.opacity(0.88)
+    }
+}
+
+private struct ProductivityCustomXAxis: View {
+    let buckets: [ProductivityDisplayBucket]
+    let range: ProductivityRange
+    let plotFrame: CGRect
+    let textColor: Color
+
+    var body: some View {
+        let slotWidth = plotFrame.width / CGFloat(max(buckets.count, 1))
+
+        ZStack(alignment: .topLeading) {
+            ForEach(Array(buckets.enumerated()), id: \.element.id) { index, bucket in
+                Text(ProductivityChartFormatting.xAxisLabel(for: bucket.labelDate, range: range))
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(textColor)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.72)
+                    .frame(width: slotWidth, alignment: .center)
+                    .position(
+                        x: plotFrame.minX + slotWidth * (CGFloat(index) + 0.5),
+                        y: 8
+                    )
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+}
+
+private struct TopRoundedBarShape: Shape {
+    let radius: CGFloat
+
+    func path(in rect: CGRect) -> Path {
+        let clampedRadius = min(radius, rect.width / 2, rect.height)
+        guard clampedRadius > 0 else {
+            return Path(CGRect(origin: rect.origin, size: rect.size))
+        }
+
+        var path = Path()
+        path.move(to: CGPoint(x: rect.minX, y: rect.maxY))
+        path.addLine(to: CGPoint(x: rect.minX, y: rect.minY + clampedRadius))
+        path.addQuadCurve(
+            to: CGPoint(x: rect.minX + clampedRadius, y: rect.minY),
+            control: CGPoint(x: rect.minX, y: rect.minY)
+        )
+        path.addLine(to: CGPoint(x: rect.maxX - clampedRadius, y: rect.minY))
+        path.addQuadCurve(
+            to: CGPoint(x: rect.maxX, y: rect.minY + clampedRadius),
+            control: CGPoint(x: rect.maxX, y: rect.minY)
+        )
+        path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
+        path.closeSubpath()
+        return path
     }
 }
 
@@ -244,6 +501,12 @@ private enum ProductivityMetricKind: CaseIterable, Identifiable {
     case sessionTime
     case focusTime
     case breakTime
+
+    static let chartMetrics: [ProductivityMetricKind] = [
+        .focusSessions,
+        .focusTime,
+        .breakTime
+    ]
 
     var id: String { title }
 
@@ -296,16 +559,18 @@ private enum ProductivityMetricKind: CaseIterable, Identifiable {
         )
     }
 
-    func totalValueText(from snapshot: ProductivityMetricsSnapshot) -> String {
+    func rangeValueText(from buckets: [ProductivityDisplayBucket]) -> String {
         switch self {
         case .focusSessions:
-            return "\(snapshot.completedFocusCount)"
-        case .sessionTime:
-            return Self.longDurationText(snapshot.totalSessionTime)
-        case .focusTime:
-            return Self.longDurationText(snapshot.totalFocusTime)
-        case .breakTime:
-            return Self.longDurationText(snapshot.totalBreakTime)
+            return "\(Int(rangeTotal(from: buckets).rounded()))"
+        case .sessionTime, .focusTime, .breakTime:
+            return ProductivityValueFormatting.compactDurationText(rangeTotal(from: buckets))
+        }
+    }
+
+    func rangeTotal(from buckets: [ProductivityDisplayBucket]) -> Double {
+        buckets.reduce(0) { partialResult, bucket in
+            partialResult + bucketValue(for: bucket)
         }
     }
 
@@ -376,21 +641,6 @@ private enum ProductivityMetricKind: CaseIterable, Identifiable {
         }
     }
 
-    private static func longDurationText(_ duration: TimeInterval) -> String {
-        let totalSeconds = max(0, Int(duration.rounded()))
-        let hours = totalSeconds / 3600
-        let minutes = (totalSeconds % 3600) / 60
-        let seconds = totalSeconds % 60
-
-        if hours > 0 {
-            return "\(hours)h \(minutes)m \(seconds)s"
-        }
-        if minutes > 0 {
-            return "\(minutes)m \(seconds)s"
-        }
-        return "\(seconds)s"
-    }
-
     private static func countAxisStyle(for maxValue: Double) -> ProductivityNumericAxisStyle {
         guard maxValue > 0 else {
             return ProductivityNumericAxisStyle(step: 1, upperBound: 4)
@@ -415,7 +665,118 @@ private enum ProductivityMetricKind: CaseIterable, Identifiable {
     }
 }
 
+private enum ProductivityValueFormatting {
+    static func compactDurationText(_ duration: TimeInterval) -> String {
+        let totalSeconds = max(0, Int(duration.rounded()))
+        let hours = totalSeconds / 3600
+        let minutes = (totalSeconds % 3600) / 60
+        let seconds = totalSeconds % 60
+
+        if hours > 0 {
+            return minutes > 0 ? "\(hours)h \(minutes)m" : "\(hours)h"
+        }
+        if minutes > 0 {
+            return "\(minutes)m"
+        }
+        return "\(seconds)s"
+    }
+
+    static func averageFocusText(_ hoursPerDay: Double) -> String {
+        compactDurationText(hoursPerDay * 3600)
+    }
+
+    static func streakText(_ streakLength: Int) -> String {
+        if streakLength == 1 {
+            return "1 day"
+        }
+        return "\(streakLength) days"
+    }
+
+    static func summarySessionTimeText(_ duration: TimeInterval) -> String {
+        let totalSeconds = max(0, Int(duration.rounded()))
+        let totalHours = totalSeconds / 3600
+        let totalMinutes = totalSeconds / 60
+        let days = totalHours / 24
+        let hours = totalHours % 24
+        let minutes = totalMinutes % 60
+
+        if days >= 100 {
+            return "\(days)d"
+        }
+        if days > 0 {
+            return hours > 0 ? "\(days)d \(hours)h" : "\(days)d"
+        }
+        if totalHours > 0 {
+            return minutes > 0 ? "\(totalHours)h \(minutes)m" : "\(totalHours)h"
+        }
+        return "\(totalMinutes)m"
+    }
+
+    static func summarySessionTimeAccessibilityValue(_ duration: TimeInterval) -> String {
+        let totalSeconds = max(0, Int(duration.rounded()))
+        let totalHours = totalSeconds / 3600
+        let totalMinutes = totalSeconds / 60
+        let days = totalHours / 24
+        let hours = totalHours % 24
+        let minutes = totalMinutes % 60
+
+        if days >= 100 {
+            return dayUnitText(days)
+        }
+        if days > 0 {
+            return hours > 0 ? "\(dayUnitText(days)) \(hourUnitText(hours))" : dayUnitText(days)
+        }
+        if totalHours > 0 {
+            return minutes > 0 ? "\(hourUnitText(totalHours)) \(minuteUnitText(minutes))" : hourUnitText(totalHours)
+        }
+        return minuteUnitText(totalMinutes)
+    }
+
+    static func summaryAverageFocusText(_ hoursPerDay: Double) -> String {
+        let totalMinutes = max(0, Int((hoursPerDay * 60).rounded()))
+        let hours = totalMinutes / 60
+        let minutes = totalMinutes % 60
+
+        if hours > 0 {
+            return minutes > 0 ? "\(hours)h \(minutes)m" : "\(hours)h"
+        }
+        return "\(totalMinutes)m"
+    }
+
+    static func summaryAverageFocusAccessibilityValue(_ hoursPerDay: Double) -> String {
+        let totalMinutes = max(0, Int((hoursPerDay * 60).rounded()))
+        let hours = totalMinutes / 60
+        let minutes = totalMinutes % 60
+
+        if hours > 0 {
+            return minutes > 0 ? "\(hourUnitText(hours)) \(minuteUnitText(minutes))" : hourUnitText(hours)
+        }
+        return minuteUnitText(totalMinutes)
+    }
+
+    static func summaryStreakText(_ streakLength: Int) -> String {
+        "\(max(0, streakLength))d"
+    }
+
+    static func summaryStreakAccessibilityValue(_ streakLength: Int) -> String {
+        dayUnitText(max(0, streakLength))
+    }
+
+    private static func dayUnitText(_ count: Int) -> String {
+        count == 1 ? "1 day" : "\(count) days"
+    }
+
+    private static func hourUnitText(_ count: Int) -> String {
+        count == 1 ? "1 hour" : "\(count) hours"
+    }
+
+    private static func minuteUnitText(_ count: Int) -> String {
+        count == 1 ? "1 minute" : "\(count) minutes"
+    }
+}
+
 struct ProductivityDisplayBucket: Identifiable, Equatable {
+    let slotIndex: Int
     let startDate: Date
     let endDate: Date
     let xDate: Date
@@ -425,6 +786,7 @@ struct ProductivityDisplayBucket: Identifiable, Equatable {
     let completedFocusCount: Int
 
     var id: Date { xDate }
+    var slotValue: Double { Double(slotIndex) }
 
     var sessionTime: TimeInterval {
         focusTime + breakTime
@@ -446,10 +808,11 @@ enum ProductivityChartDisplay {
 
     static func displayBuckets(from points: [ProductivityChartPoint], range: ProductivityRange) -> [ProductivityDisplayBucket] {
         let sortedPoints = points.sorted { $0.startDate < $1.startDate }
+        let unslottedBuckets: [ProductivityDisplayBucket]
 
         switch range {
         case .week:
-            return sortedPoints.compactMap { point in
+            unslottedBuckets = sortedPoints.compactMap { point in
                 makeBucket(
                     startDate: point.startDate,
                     endDate: calendar.date(byAdding: .day, value: 1, to: point.startDate),
@@ -460,7 +823,7 @@ enum ProductivityChartDisplay {
                 )
             }
         case .month:
-            return stride(from: 0, to: sortedPoints.count, by: 7).compactMap { startIndex in
+            unslottedBuckets = stride(from: 0, to: sortedPoints.count, by: 7).compactMap { startIndex in
                 let endIndex = min(startIndex + 7, sortedPoints.count)
                 let chunk = Array(sortedPoints[startIndex..<endIndex])
                 guard let first = chunk.first else { return nil }
@@ -476,7 +839,7 @@ enum ProductivityChartDisplay {
                 )
             }
         case .year:
-            return sortedPoints.compactMap { point in
+            unslottedBuckets = sortedPoints.compactMap { point in
                 makeBucket(
                     startDate: point.startDate,
                     endDate: calendar.date(byAdding: .month, value: 1, to: point.startDate),
@@ -487,11 +850,19 @@ enum ProductivityChartDisplay {
                 )
             }
         }
-    }
 
-    static func xDomain(for buckets: [ProductivityDisplayBucket]) -> ClosedRange<Date>? {
-        guard let first = buckets.first, let last = buckets.last else { return nil }
-        return first.startDate...last.endDate
+        return unslottedBuckets.enumerated().map { index, bucket in
+            ProductivityDisplayBucket(
+                slotIndex: index,
+                startDate: bucket.startDate,
+                endDate: bucket.endDate,
+                xDate: bucket.xDate,
+                labelDate: bucket.labelDate,
+                focusTime: bucket.focusTime,
+                breakTime: bucket.breakTime,
+                completedFocusCount: bucket.completedFocusCount
+            )
+        }
     }
 
     private static func makeBucket(
@@ -506,6 +877,7 @@ enum ProductivityChartDisplay {
         let midpoint = startDate.addingTimeInterval(endDate.timeIntervalSince(startDate) / 2)
 
         return ProductivityDisplayBucket(
+            slotIndex: 0,
             startDate: startDate,
             endDate: endDate,
             xDate: midpoint,
@@ -525,31 +897,21 @@ enum ProductivityChartFormatting {
         return formatter.shortMonthSymbols
     }()
 
-    static func xAxisMarkDates(for buckets: [ProductivityDisplayBucket]) -> [Date] {
-        buckets.map(\.xDate)
-    }
-
-    static func xAxisLabel(
-        for markDate: Date,
-        buckets: [ProductivityDisplayBucket],
-        range: ProductivityRange
-    ) -> String {
-        guard let bucket = buckets.first(where: { $0.xDate == markDate }) else { return "" }
-
+    static func xAxisLabel(for date: Date, range: ProductivityRange) -> String {
         switch range {
         case .week:
-            return bucket.labelDate.formatted(.dateTime.weekday(.abbreviated))
+            return date.formatted(.dateTime.weekday(.abbreviated))
         case .month:
-            return monthAxisLabel(for: bucket.labelDate)
+            return monthAxisLabel(for: date)
         case .year:
-            return yearAxisLabel(for: bucket.labelDate)
+            return yearAxisLabel(for: date)
         }
     }
 
     static func monthAxisLabel(for date: Date) -> String {
         let formatter = DateFormatter()
         formatter.locale = englishLocale
-        formatter.dateFormat = "d. MMM"
+        formatter.dateFormat = "d MMM"
         return formatter.string(from: date)
     }
 
@@ -617,17 +979,6 @@ private extension ProductivityRange {
         }
     }
 
-    var toolbarLabel: String {
-        switch self {
-        case .week:
-            return "Week"
-        case .month:
-            return "Month"
-        case .year:
-            return "Year"
-        }
-    }
-
     var barWidth: CGFloat {
         switch self {
         case .week:
@@ -639,25 +990,36 @@ private extension ProductivityRange {
         }
     }
 
-    var highlightWidth: CGFloat {
+    var barTopCornerRadius: CGFloat {
         switch self {
         case .week:
-            return 16
+            return 4
         case .month:
-            return 18
+            return 3
         case .year:
-            return 12
+            return 2
         }
     }
 
-    var barCornerRadius: CGFloat {
+    var annotationFontSize: CGFloat {
         switch self {
         case .week:
-            return 7
+            return 10
         case .month:
-            return 6
+            return 9
         case .year:
-            return 6
+            return 10
+        }
+    }
+
+    var annotationBottomPadding: CGFloat {
+        switch self {
+        case .week:
+            return 2
+        case .month:
+            return 1
+        case .year:
+            return 2
         }
     }
 }

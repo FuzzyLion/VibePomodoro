@@ -390,6 +390,19 @@ MVP 需要支持的配置项：
 - 主统计图优先选择柱状图
 - 先展示可解释的数据，而不是抽象指标
 - 避免为了好看而牺牲数据表达
+- 顶部导航保持系统 `large title + topBarTrailing` 结构，不为了迁就右上角控件而上提标题
+- 右上角范围选择保持 icon-only 的系统 toolbar 行为，弱化存在感，但不自造一层伪 toolbar glass
+- 标题下方保留一条轻量 summary strip，文案为 `All Time`
+- summary strip 只展示全量累计的 `Session Time / Avg / Day / Streak`，不展示当前 range 内临时总量
+- `Session Time` 不再单独占一张图表卡；图表主区只保留 `Focus Sessions / Focus Time / Break Time`
+- 三张图表卡顶部主数值展示当前 `Week / Month / Year` 范围内的合计，而不是全量累计
+- summary strip 内三组信息必须采用硬栅格：
+  - 第一组 `Session Time` 的左边界，要与下方图表卡左上角的小方块图标左边界落在同一条垂直线上
+  - 三组信息之间的横向空隙必须完全一致，不能出现左右宽、中间窄的视觉误差
+  - divider 只允许落在组间空隙的中点，不能贴字，也不能参与“挤压文字”来凑布局
+- 图表 `x` 轴必须使用等宽 bucket 轴，label 与柱体共用同一组 slot 中心；不允许出现右端省略、错位或视觉不等距
+- 浅色模式下，summary strip 的三项小标题可以保持语义色，但必须使用更深的同系色保证可读性；不能为了玻璃感把对比度降到发虚
+- 这一页的重点是诚实、清楚、可信，而不是把统计做成装饰性面板
 
 #### Settings
 
@@ -624,7 +637,7 @@ MVP 不需要额外寻找开源 PNG 照片素材。
 - [VibePomodoro/Screens/Focus/FocusScreen.swift](./VibePomodoro/Screens/Focus/FocusScreen.swift)
   - Focus 页与专属气泡/控制组件
 - [VibePomodoro/Screens/Productivity/ProductivityScreen.swift](./VibePomodoro/Screens/Productivity/ProductivityScreen.swift)
-  - Productivity 页与专属指标卡组件；只读取已完成 session 的聚合快照，不做实时统计
+  - Productivity 页、summary strip、range toolbar、专属图表卡与自定义等宽 `x` 轴；只读取已完成 session 的聚合快照，不做实时统计
 - [VibePomodoro/Screens/Settings/SettingsScreen.swift](./VibePomodoro/Screens/Settings/SettingsScreen.swift)
   - Settings 页与专属设置行组件
 - [VibePomodoro/Shared/Theme/VibeTheme.swift](./VibePomodoro/Shared/Theme/VibeTheme.swift)
