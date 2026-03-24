@@ -205,32 +205,40 @@ final class PomodoroStore: ObservableObject {
         handle(events: events)
     }
 
-    func updateFocusMinutes(_ minutes: Int) {
+    func updateFocusMinutes(_ minutes: Int, fireFeedback: Bool = true) {
         guard settings.focusMinutes != minutes else { return }
         settings.focusMinutes = minutes
         persist()
-        fireAdjustmentFeedback()
+        if fireFeedback {
+            fireAdjustmentFeedback()
+        }
     }
 
-    func updateShortBreakMinutes(_ minutes: Int) {
+    func updateShortBreakMinutes(_ minutes: Int, fireFeedback: Bool = true) {
         guard settings.shortBreakMinutes != minutes else { return }
         settings.shortBreakMinutes = minutes
         persist()
-        fireAdjustmentFeedback()
+        if fireFeedback {
+            fireAdjustmentFeedback()
+        }
     }
 
-    func updateLongBreakMinutes(_ minutes: Int) {
+    func updateLongBreakMinutes(_ minutes: Int, fireFeedback: Bool = true) {
         guard settings.longBreakMinutes != minutes else { return }
         settings.longBreakMinutes = minutes
         persist()
-        fireAdjustmentFeedback()
+        if fireFeedback {
+            fireAdjustmentFeedback()
+        }
     }
 
-    func updateTargetRounds(_ rounds: Int) {
+    func updateTargetRounds(_ rounds: Int, fireFeedback: Bool = true) {
         guard settings.targetRounds != rounds else { return }
         settings.targetRounds = rounds
         persist()
-        fireAdjustmentFeedback()
+        if fireFeedback {
+            fireAdjustmentFeedback()
+        }
     }
 
     func setKeepScreenOn(_ enabled: Bool) {
