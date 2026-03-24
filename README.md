@@ -21,7 +21,11 @@ VibePomodoro/
 │   │   ├── FocusControls.swift
 │   │   └── FocusBubbleTimer.swift
 │   ├── Productivity/
-│   │   └── ProductivityScreen.swift
+│   │   ├── ProductivityScreen.swift
+│   │   ├── ProductivityCardChrome.swift
+│   │   ├── ProductivitySummarySection.swift
+│   │   ├── ProductivityTrendSection.swift
+│   │   └── ProductivityChartSupport.swift
 │   └── Settings/
 │       └── SettingsScreen.swift
 ├── Shared/
@@ -53,6 +57,7 @@ VibePomodoro/
 - `PomodoroStore.swift` 是运行时唯一 source of truth，负责状态持有、持久化、通知、scene phase 协调和副作用触发。
 - `Screens/*` 负责页面级 UI 和页面专属子视图，不新增第二套全局状态源。
 - `Screens/Focus/*` 当前按 `页面骨架 / 页面专属控件 / 气泡计时器实现` 拆分，但仍属于同一页面边界。
+- `Screens/Productivity/*` 当前按 `页面骨架 / 卡片玻璃壳 / 摘要区 / 趋势图区 / 图表支持逻辑` 拆分，但仍属于同一页面边界。
 - `Shared/*` 只承载跨页面复用的主题与通用 UI 外壳。
 
 ### 0.1.2 单一状态来源
@@ -114,6 +119,12 @@ VibePomodoro/
   - 正式统计只反映已完成 session
   - 范围选择只保留 `Week / Month / Year`
   - 页面本身不持有统计真值，只持有本地 UI 选择态 `selectedRange`
+  - 当前目录内拆分为：
+    - `ProductivityScreen.swift`：页面骨架、布局常量、range toolbar 与页面 render state
+    - `ProductivityCardChrome.swift`：Productivity 专属玻璃卡片壳
+    - `ProductivitySummarySection.swift`：顶部摘要卡与 empty note
+    - `ProductivityTrendSection.swift`：趋势卡、指标枚举与自定义 `x` 轴
+    - `ProductivityChartSupport.swift`：格式化、桶映射与图表轴计算
 - `SettingsScreen`：
   - 直接绑定 `store.settings`
   - 设置修改只走 store 的 update/set 接口，不直接改 model 副本
@@ -668,7 +679,15 @@ MVP 不需要额外寻找开源 PNG 照片素材。
 - [VibePomodoro/Screens/Focus/FocusBubbleTimer.swift](./VibePomodoro/Screens/Focus/FocusBubbleTimer.swift)
   - Focus 气泡、液面动画、倒计时数字刷新与玻璃球绘制
 - [VibePomodoro/Screens/Productivity/ProductivityScreen.swift](./VibePomodoro/Screens/Productivity/ProductivityScreen.swift)
-  - Productivity 页、summary strip、range toolbar、专属图表卡与自定义等宽 `x` 轴；只读取已完成 session 的聚合快照，不做实时统计
+  - Productivity 页页面骨架、布局常量、本地 range 选择态与 render state
+- [VibePomodoro/Screens/Productivity/ProductivityCardChrome.swift](./VibePomodoro/Screens/Productivity/ProductivityCardChrome.swift)
+  - Productivity 专属玻璃卡片壳与卡片 chrome modifier
+- [VibePomodoro/Screens/Productivity/ProductivitySummarySection.swift](./VibePomodoro/Screens/Productivity/ProductivitySummarySection.swift)
+  - Productivity 顶部摘要卡、辅助指标排布与 empty note
+- [VibePomodoro/Screens/Productivity/ProductivityTrendSection.swift](./VibePomodoro/Screens/Productivity/ProductivityTrendSection.swift)
+  - Productivity 趋势卡、指标枚举与自定义等宽 `x` 轴
+- [VibePomodoro/Screens/Productivity/ProductivityChartSupport.swift](./VibePomodoro/Screens/Productivity/ProductivityChartSupport.swift)
+  - Productivity 图表格式化、桶映射与数值轴计算
 - [VibePomodoro/Screens/Settings/SettingsScreen.swift](./VibePomodoro/Screens/Settings/SettingsScreen.swift)
   - Settings 页与专属设置行组件
 - [VibePomodoro/Shared/Theme/VibeTheme.swift](./VibePomodoro/Shared/Theme/VibeTheme.swift)
