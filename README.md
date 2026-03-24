@@ -17,7 +17,9 @@ VibePomodoro/
 ├── PomodoroStore.swift
 ├── Screens/
 │   ├── Focus/
-│   │   └── FocusScreen.swift
+│   │   ├── FocusScreen.swift
+│   │   ├── FocusControls.swift
+│   │   └── FocusBubbleTimer.swift
 │   ├── Productivity/
 │   │   └── ProductivityScreen.swift
 │   └── Settings/
@@ -33,10 +35,11 @@ VibePomodoro/
 
 结构约定：
 
-- 每个页面的 UI 设计只归属于自己的页面文件。
-- 页面专属子视图默认与页面文件同驻，不放进共享层。
+- 每个页面的 UI 设计只归属于自己的页面目录。
+- 页面专属子视图默认与页面目录同驻，不放进共享层。
 - 共享层只放跨页面复用的主题、背景、面板、标题等通用 UI。
 - `Focus` 的 hierarchy 为保护区；后续线程若改设计，必须在不打散当前层级、不改变现有刷新边界的前提下进行。
+- `Focus` 页当前允许在 `Screens/Focus/` 内按职责拆文件，但这只属于页面内整理，不代表可以把其专属组件上提到 `Shared/*`。
 
 ## 0.1 State & Data Flow
 
@@ -49,6 +52,7 @@ VibePomodoro/
 - `PomodoroModels.swift` 定义核心数据模型、统计结构和 `PomodoroEngine` 状态推进规则。
 - `PomodoroStore.swift` 是运行时唯一 source of truth，负责状态持有、持久化、通知、scene phase 协调和副作用触发。
 - `Screens/*` 负责页面级 UI 和页面专属子视图，不新增第二套全局状态源。
+- `Screens/Focus/*` 当前按 `页面骨架 / 页面专属控件 / 气泡计时器实现` 拆分，但仍属于同一页面边界。
 - `Shared/*` 只承载跨页面复用的主题与通用 UI 外壳。
 
 ### 0.1.2 单一状态来源
@@ -99,6 +103,10 @@ VibePomodoro/
 - `FocusScreen`：
   - 读取 `PomodoroStore`
   - 生成 `FocusRenderState`
+  - 当前目录内拆分为：
+    - `FocusScreen.swift`：render state、页面骨架、布局常量
+    - `FocusControls.swift`：状态条、session 条、次级按钮与胶囊玻璃壳
+    - `FocusBubbleTimer.swift`：气泡、液面动画、时间数字与玻璃球绘制
   - 页面内只做显示层拆分，不能自建 session 状态机
   - 计时数字按 `1Hz` 刷新，气泡动画按低帧率刷新，仅在 `Focus` tab 可见且 session 运行时激活
 - `ProductivityScreen`：
@@ -654,7 +662,11 @@ MVP 不需要额外寻找开源 PNG 照片素材。
 - [VibePomodoro/PomodoroStore.swift](./VibePomodoro/PomodoroStore.swift)
   - 状态管理、持久化、通知调度、session 完成后的统计入账与缓存重建
 - [VibePomodoro/Screens/Focus/FocusScreen.swift](./VibePomodoro/Screens/Focus/FocusScreen.swift)
-  - Focus 页与专属气泡/控制组件
+  - Focus 页 render state、页面骨架与布局常量
+- [VibePomodoro/Screens/Focus/FocusControls.swift](./VibePomodoro/Screens/Focus/FocusControls.swift)
+  - Focus 页状态条、session 条、次级按钮与胶囊玻璃控件
+- [VibePomodoro/Screens/Focus/FocusBubbleTimer.swift](./VibePomodoro/Screens/Focus/FocusBubbleTimer.swift)
+  - Focus 气泡、液面动画、倒计时数字刷新与玻璃球绘制
 - [VibePomodoro/Screens/Productivity/ProductivityScreen.swift](./VibePomodoro/Screens/Productivity/ProductivityScreen.swift)
   - Productivity 页、summary strip、range toolbar、专属图表卡与自定义等宽 `x` 轴；只读取已完成 session 的聚合快照，不做实时统计
 - [VibePomodoro/Screens/Settings/SettingsScreen.swift](./VibePomodoro/Screens/Settings/SettingsScreen.swift)
