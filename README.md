@@ -110,6 +110,25 @@ VibePomodoro/
   - 直接绑定 `store.settings`
   - 设置修改只走 store 的 update/set 接口，不直接改 model 副本
 
+### 0.1.4.1 Productivity 当前 UI 对齐备注
+
+- `Productivity` 顶部摘要区当前已对齐为单独主卡，不再按旧版三等分摘要条作为后续设计基线。
+- 该主卡当前确认的标题文案为 `ALL TIME COMPLETED SESSIONS`。
+- 当前确认版本不使用 `Finished sessions only` 解释型副标题。
+- 主卡信息层级固定为：
+  - 主指标：`Session Time`
+  - 辅助指标：`Daily Focus Avg`
+  - 辅助指标：`Streak`
+  - 底部元信息：已完成 session 数与 focus block 数
+- 主卡与下方 3 张趋势卡采用“同语法、微区分”的玻璃语言：
+  - 主卡是页面第一视觉锚点
+  - 趋势卡应更低调，属于分析层
+  - 但四张卡仍需保持同一家族感，不能做成两套独立视觉系统
+- 如果后续 thread 继续打磨 `Productivity`：
+  - 以上述主卡版本为当前基线
+  - 默认不要回到 `Finished sessions only` 副标题方案
+  - 默认不要采用“更紧上半区 + 手动两行标题断句 + 明显收窄主卡与趋势卡间距”的那一版试验稿，除非线程内重新确认
+
 ### 0.1.5 功能应该放在哪里
 
 - 改页面布局、视觉组件、页面专属子视图：

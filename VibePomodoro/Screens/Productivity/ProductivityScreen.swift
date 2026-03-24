@@ -1,6 +1,114 @@
 import Charts
 import SwiftUI
 
+private enum ProductivityLayout {
+    static let sectionSpacing: CGFloat = 14
+    static let pageHorizontalInset: CGFloat = 18
+    static let pageTopInset: CGFloat = 12
+    static let pageBottomInset: CGFloat = 28
+
+    enum TrendGroup {
+        static let populatedTopInset: CGFloat = 8
+        static let emptyTopInset: CGFloat = 4
+    }
+
+    enum SummaryCard {
+        static let contentInset: CGFloat = 20
+        static let cornerRadius: CGFloat = 28
+        static let stackSpacing: CGFloat = 17
+        static let verticalPadding: CGFloat = 20
+        static let titleTracking: CGFloat = 0.72
+        static let titleDarkOpacity: Double = 0.54
+        static let titleLightOpacity: Double = 0.45
+        static let valueDarkOpacity: Double = 0.98
+        static let valueLightOpacity: Double = 0.84
+        static let metaDarkOpacity: Double = 0.64
+        static let metaLightOpacity: Double = 0.52
+        static let dividerDarkOpacity: Double = 0.10
+        static let dividerLightOpacity: Double = 0.08
+        static let accentDarkOpacity: Double = 0.94
+        static let accentLightOpacity: Double = 0.94
+        static let accentGlowDarkPrimaryOpacity: Double = 0.12
+        static let accentGlowLightPrimaryOpacity: Double = 0.07
+        static let accentGlowDarkSecondaryOpacity: Double = 0.05
+        static let accentGlowLightSecondaryOpacity: Double = 0.025
+        static let accentGlowStartRadius: CGFloat = 10
+        static let accentGlowEndRadius: CGFloat = 220
+    }
+
+    enum PrimaryMetric {
+        static let spacing: CGFloat = 10
+        static let titleTracking: CGFloat = 0.65
+        static let accessibilityValueFontSize: CGFloat = 36
+        static let defaultValueFontSize: CGFloat = 44
+        static let accessibilityMinimumScaleFactor: CGFloat = 0.9
+        static let defaultMinimumScaleFactor: CGFloat = 0.72
+    }
+
+    enum SecondaryMetrics {
+        static let accessibilitySpacing: CGFloat = 14
+        static let standardSpacing: CGFloat = 16
+        static let valueSpacing: CGFloat = 6
+        static let titleDarkOpacity: Double = 0.94
+        static let titleLightOpacity: Double = 0.94
+        static let dividerDarkOpacity: Double = 0.10
+        static let dividerLightOpacity: Double = 0.08
+        static let valueDarkOpacity: Double = 0.94
+        static let valueLightOpacity: Double = 0.78
+        static let labelMinimumScaleFactor: CGFloat = 0.85
+        static let valueMinimumScaleFactor: CGFloat = 0.78
+        static let verticalDividerHeight: CGFloat = 42
+    }
+
+    enum EmptyState {
+        static let horizontalPadding: CGFloat = 6
+        static let topPadding: CGFloat = 2
+        static let bottomPadding: CGFloat = 4
+    }
+
+    enum TrendCard {
+        static let contentInset: CGFloat = 18
+        static let cornerRadius: CGFloat = 26
+        static let stackSpacing: CGFloat = 14
+        static let headerSpacing: CGFloat = 10
+        static let iconSize: CGFloat = 15
+        static let iconFrame: CGFloat = 36
+        static let iconCornerRadius: CGFloat = 12
+        static let iconChipDarkOpacity: Double = 0.085
+        static let iconChipLightOpacity: Double = 0.058
+        static let accentLabelDarkOpacity: Double = 0.90
+        static let accentLabelLightOpacity: Double = 0.84
+        static let primaryTextDarkOpacity: Double = 0.94
+        static let primaryTextLightOpacity: Double = 0.80
+        static let secondaryTextDarkOpacity: Double = 0.54
+        static let secondaryTextLightOpacity: Double = 0.48
+        static let gridDarkOpacity: Double = 0.10
+        static let gridLightOpacity: Double = 0.08
+        static let accentOverlayDarkOpacity: Double = 0.022
+        static let accentOverlayLightOpacity: Double = 0.010
+        static let chartHeight: CGFloat = 186
+        static let chartBottomPadding: CGFloat = 22
+        static let xAxisOffset: CGFloat = 8
+    }
+
+    enum RangeBadge {
+        static let titleTracking: CGFloat = 0.45
+        static let horizontalPadding: CGFloat = 10
+        static let verticalPadding: CGFloat = 6
+        static let fillDarkOpacity: Double = 0.16
+        static let fillLightOpacity: Double = 0.10
+        static let strokeDarkOpacity: Double = 0.18
+        static let strokeLightOpacity: Double = 0.10
+        static let textDarkOpacity: Double = 0.95
+        static let textLightOpacity: Double = 0.88
+        static let strokeWidth: CGFloat = 0.8
+    }
+
+    enum ChartAxis {
+        static let labelMinimumScaleFactor: CGFloat = 0.72
+    }
+}
+
 struct ProductivityScreen: View {
     @EnvironmentObject private var store: PomodoroStore
     @State private var selectedRange: ProductivityRange = .week
@@ -12,15 +120,15 @@ struct ProductivityScreen: View {
     var body: some View {
         NavigationStack {
             ScrollView(showsIndicators: false) {
-                VStack(alignment: .leading, spacing: 14) {
+                VStack(alignment: .leading, spacing: ProductivityLayout.sectionSpacing) {
                     ProductivitySummaryStrip(snapshot: renderState)
 
                     if renderState.completedSessionCount == 0 {
                         ProductivityEmptyStateNote()
                     }
 
-                    VStack(alignment: .leading, spacing: 14) {
-                        ForEach(ProductivityMetricKind.chartMetrics) { metric in
+                    VStack(alignment: .leading, spacing: ProductivityLayout.sectionSpacing) {
+                        ForEach(ProductivityChartMetricKind.allCases) { metric in
                             ProductivityTrendCard(
                                 metric: metric,
                                 snapshot: renderState,
@@ -28,11 +136,16 @@ struct ProductivityScreen: View {
                             )
                         }
                     }
-                    .padding(.top, renderState.completedSessionCount == 0 ? 4 : 8)
+                    .padding(
+                        .top,
+                        renderState.completedSessionCount == 0
+                            ? ProductivityLayout.TrendGroup.emptyTopInset
+                            : ProductivityLayout.TrendGroup.populatedTopInset
+                    )
                 }
-                .padding(.horizontal, 18)
-                .padding(.top, 12)
-                .padding(.bottom, 28)
+                .padding(.horizontal, ProductivityLayout.pageHorizontalInset)
+                .padding(.top, ProductivityLayout.pageTopInset)
+                .padding(.bottom, ProductivityLayout.pageBottomInset)
             }
             .navigationTitle("Productivity")
             .navigationBarTitleDisplayMode(.large)
@@ -71,16 +184,172 @@ private struct ProductivityRangeToolbarMenu: View {
     }
 }
 
+private struct ProductivityCardChromeStyle {
+    let cornerRadius: CGFloat
+    let highlightHorizontalInset: CGFloat
+    let borderLineWidth: CGFloat
+    let borderDarkOpacity: Double
+    let borderLightOpacity: Double
+    let highlightDarkOpacity: Double
+    let highlightLightOpacity: Double
+    let shadowDarkOpacity: Double
+    let shadowLightOpacity: Double
+    let shadowDarkRadius: CGFloat
+    let shadowLightRadius: CGFloat
+    let shadowDarkYOffset: CGFloat
+    let shadowLightYOffset: CGFloat
+    let surfaceDarkTopOpacity: Double
+    let surfaceLightTopOpacity: Double
+    let surfaceDarkBottomOpacity: Double
+    let surfaceLightBottomOpacity: Double
+
+    static func summary(contentInset: CGFloat, cornerRadius: CGFloat) -> Self {
+        ProductivityCardChromeStyle(
+            cornerRadius: cornerRadius,
+            highlightHorizontalInset: contentInset,
+            borderLineWidth: 0.85,
+            borderDarkOpacity: 0.15,
+            borderLightOpacity: 0.66,
+            highlightDarkOpacity: 0.12,
+            highlightLightOpacity: 0.46,
+            shadowDarkOpacity: 0.13,
+            shadowLightOpacity: 0.05,
+            shadowDarkRadius: 16,
+            shadowLightRadius: 10,
+            shadowDarkYOffset: 8,
+            shadowLightYOffset: 5,
+            surfaceDarkTopOpacity: 0.035,
+            surfaceLightTopOpacity: 0.20,
+            surfaceDarkBottomOpacity: 0.01,
+            surfaceLightBottomOpacity: 0.08
+        )
+    }
+
+    static func trend(contentInset: CGFloat, cornerRadius: CGFloat) -> Self {
+        ProductivityCardChromeStyle(
+            cornerRadius: cornerRadius,
+            highlightHorizontalInset: contentInset,
+            borderLineWidth: 0.75,
+            borderDarkOpacity: 0.13,
+            borderLightOpacity: 0.60,
+            highlightDarkOpacity: 0.08,
+            highlightLightOpacity: 0.40,
+            shadowDarkOpacity: 0.10,
+            shadowLightOpacity: 0.04,
+            shadowDarkRadius: 14,
+            shadowLightRadius: 8,
+            shadowDarkYOffset: 7,
+            shadowLightYOffset: 4,
+            surfaceDarkTopOpacity: 0,
+            surfaceLightTopOpacity: 0,
+            surfaceDarkBottomOpacity: 0,
+            surfaceLightBottomOpacity: 0
+        )
+    }
+
+    func borderColor(for colorScheme: ColorScheme) -> Color {
+        colorScheme == .dark ? Color.white.opacity(borderDarkOpacity) : Color.white.opacity(borderLightOpacity)
+    }
+
+    func topHighlightGradient(for colorScheme: ColorScheme) -> LinearGradient {
+        LinearGradient(
+            colors: [
+                Color.white.opacity(colorScheme == .dark ? highlightDarkOpacity : highlightLightOpacity),
+                Color.white.opacity(0)
+            ],
+            startPoint: .top,
+            endPoint: .bottom
+        )
+    }
+
+    func shadowColor(for colorScheme: ColorScheme) -> Color {
+        Color.black.opacity(colorScheme == .dark ? shadowDarkOpacity : shadowLightOpacity)
+    }
+
+    func shadowRadius(for colorScheme: ColorScheme) -> CGFloat {
+        colorScheme == .dark ? shadowDarkRadius : shadowLightRadius
+    }
+
+    func shadowYOffset(for colorScheme: ColorScheme) -> CGFloat {
+        colorScheme == .dark ? shadowDarkYOffset : shadowLightYOffset
+    }
+
+    func surfaceGradient(for colorScheme: ColorScheme) -> LinearGradient {
+        LinearGradient(
+            colors: [
+                Color.white.opacity(colorScheme == .dark ? surfaceDarkTopOpacity : surfaceLightTopOpacity),
+                Color.white.opacity(colorScheme == .dark ? surfaceDarkBottomOpacity : surfaceLightBottomOpacity)
+            ],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+    }
+}
+
+private struct ProductivityGlassCardModifier<AccentOverlay: View>: ViewModifier {
+    let colorScheme: ColorScheme
+    let style: ProductivityCardChromeStyle
+    let accentOverlay: AccentOverlay
+
+    func body(content: Content) -> some View {
+        content
+            .background(cardBackground)
+            .overlay {
+                RoundedRectangle(cornerRadius: style.cornerRadius, style: .continuous)
+                    .strokeBorder(style.borderColor(for: colorScheme), lineWidth: style.borderLineWidth)
+            }
+            .overlay(alignment: .top) {
+                RoundedRectangle(cornerRadius: style.cornerRadius, style: .continuous)
+                    .fill(style.topHighlightGradient(for: colorScheme))
+                    .frame(height: 1)
+                    .padding(.horizontal, style.highlightHorizontalInset)
+            }
+            .shadow(
+                color: style.shadowColor(for: colorScheme),
+                radius: style.shadowRadius(for: colorScheme),
+                y: style.shadowYOffset(for: colorScheme)
+            )
+    }
+
+    private var cardBackground: some View {
+        RoundedRectangle(cornerRadius: style.cornerRadius, style: .continuous)
+            .fill(.thinMaterial)
+            .overlay {
+                RoundedRectangle(cornerRadius: style.cornerRadius, style: .continuous)
+                    .fill(style.surfaceGradient(for: colorScheme))
+            }
+            .overlay {
+                accentOverlay
+            }
+    }
+}
+
+private extension View {
+    func productivityGlassCard<AccentOverlay: View>(
+        colorScheme: ColorScheme,
+        style: ProductivityCardChromeStyle,
+        @ViewBuilder accentOverlay: () -> AccentOverlay
+    ) -> some View {
+        modifier(
+            ProductivityGlassCardModifier(
+                colorScheme: colorScheme,
+                style: style,
+                accentOverlay: accentOverlay()
+            )
+        )
+    }
+}
+
 private struct ProductivitySummaryStrip: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     let snapshot: ProductivityMetricsSnapshot
-    private let contentInset: CGFloat = 20
-    private let cornerRadius: CGFloat = 28
+    private let contentInset = ProductivityLayout.SummaryCard.contentInset
+    private let cornerRadius = ProductivityLayout.SummaryCard.cornerRadius
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 17) {
+        VStack(alignment: .leading, spacing: ProductivityLayout.SummaryCard.stackSpacing) {
             header
 
             ProductivityPrimarySummaryMetric(
@@ -106,39 +375,20 @@ private struct ProductivitySummaryStrip: View {
                 .fixedSize(horizontal: false, vertical: true)
         }
         .padding(.horizontal, contentInset)
-        .padding(.vertical, 20)
-        .background(background)
-        .overlay {
-            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                .strokeBorder(borderColor, lineWidth: 0.85)
+        .padding(.vertical, ProductivityLayout.SummaryCard.verticalPadding)
+        .productivityGlassCard(
+            colorScheme: colorScheme,
+            style: .summary(contentInset: contentInset, cornerRadius: cornerRadius)
+        ) {
+            summaryAccentOverlay
         }
-        .overlay(alignment: .top) {
-            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                .fill(
-                    LinearGradient(
-                        colors: [
-                            Color.white.opacity(colorScheme == .dark ? 0.12 : 0.46),
-                            Color.white.opacity(0.0)
-                        ],
-                        startPoint: .top,
-                        endPoint: .bottom
-                        )
-                )
-                .frame(height: 1)
-                .padding(.horizontal, contentInset)
-        }
-        .shadow(
-            color: Color.black.opacity(colorScheme == .dark ? 0.13 : 0.05),
-            radius: colorScheme == .dark ? 16 : 10,
-            y: colorScheme == .dark ? 8 : 5
-        )
     }
 
     private var header: some View {
         Text("ALL TIME COMPLETED SESSIONS")
             .font(.system(size: 12, weight: .semibold))
             .foregroundStyle(headerTextColor)
-            .tracking(0.72)
+            .tracking(ProductivityLayout.SummaryCard.titleTracking)
             .lineLimit(dynamicTypeSize.isAccessibilitySize ? 3 : 2)
             .minimumScaleFactor(0.92)
             .fixedSize(horizontal: false, vertical: true)
@@ -166,62 +416,57 @@ private struct ProductivitySummaryStrip: View {
     }
 
     private var headerTextColor: Color {
-        colorScheme == .dark ? VibePalette.warmBackground.opacity(0.54) : Color.black.opacity(0.45)
+        colorScheme == .dark
+            ? VibePalette.warmBackground.opacity(ProductivityLayout.SummaryCard.titleDarkOpacity)
+            : Color.black.opacity(ProductivityLayout.SummaryCard.titleLightOpacity)
     }
 
     private var primaryValueColor: Color {
-        colorScheme == .dark ? VibePalette.warmBackground.opacity(0.98) : Color.black.opacity(0.84)
+        colorScheme == .dark
+            ? VibePalette.warmBackground.opacity(ProductivityLayout.SummaryCard.valueDarkOpacity)
+            : Color.black.opacity(ProductivityLayout.SummaryCard.valueLightOpacity)
     }
 
     private var metaTextColor: Color {
-        colorScheme == .dark ? VibePalette.warmBackground.opacity(0.64) : Color.black.opacity(0.52)
-    }
-
-    private var borderColor: Color {
-        colorScheme == .dark ? Color.white.opacity(0.15) : Color.white.opacity(0.66)
+        colorScheme == .dark
+            ? VibePalette.warmBackground.opacity(ProductivityLayout.SummaryCard.metaDarkOpacity)
+            : Color.black.opacity(ProductivityLayout.SummaryCard.metaLightOpacity)
     }
 
     private var dividerColor: Color {
-        colorScheme == .dark ? Color.white.opacity(0.10) : Color.black.opacity(0.08)
+        colorScheme == .dark
+            ? Color.white.opacity(ProductivityLayout.SummaryCard.dividerDarkOpacity)
+            : Color.black.opacity(ProductivityLayout.SummaryCard.dividerLightOpacity)
     }
 
     private var sessionTitleColor: Color {
         colorScheme == .dark
-            ? VibePalette.warmAmberAccent.opacity(0.94)
-            : VibePalette.warmAmberAccentDeep.opacity(0.94)
+            ? VibePalette.warmAmberAccent.opacity(ProductivityLayout.SummaryCard.accentDarkOpacity)
+            : VibePalette.warmAmberAccentDeep.opacity(ProductivityLayout.SummaryCard.accentLightOpacity)
     }
 
-    private var background: some View {
+    private var summaryAccentOverlay: some View {
         RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-            .fill(.thinMaterial)
-            .overlay {
-                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .fill(
-                        LinearGradient(
-                            colors: [
-                                Color.white.opacity(colorScheme == .dark ? 0.035 : 0.20),
-                                Color.white.opacity(colorScheme == .dark ? 0.01 : 0.08)
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-            }
-            .overlay {
-                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .fill(
-                        RadialGradient(
-                            colors: [
-                                VibePalette.warmAmberAccent.opacity(colorScheme == .dark ? 0.12 : 0.07),
-                                VibePalette.warmAmberAccent.opacity(colorScheme == .dark ? 0.05 : 0.025),
-                                Color.clear
-                            ],
-                            center: .topLeading,
-                            startRadius: 10,
-                            endRadius: 220
-                        )
-                    )
-            }
+            .fill(
+                RadialGradient(
+                    colors: [
+                        VibePalette.warmAmberAccent.opacity(
+                            colorScheme == .dark
+                                ? ProductivityLayout.SummaryCard.accentGlowDarkPrimaryOpacity
+                                : ProductivityLayout.SummaryCard.accentGlowLightPrimaryOpacity
+                        ),
+                        VibePalette.warmAmberAccent.opacity(
+                            colorScheme == .dark
+                                ? ProductivityLayout.SummaryCard.accentGlowDarkSecondaryOpacity
+                                : ProductivityLayout.SummaryCard.accentGlowLightSecondaryOpacity
+                        ),
+                        Color.clear
+                    ],
+                    center: .topLeading,
+                    startRadius: ProductivityLayout.SummaryCard.accentGlowStartRadius,
+                    endRadius: ProductivityLayout.SummaryCard.accentGlowEndRadius
+                )
+            )
     }
 }
 
@@ -234,18 +479,29 @@ private struct ProductivityPrimarySummaryMetric: View {
     let dynamicTypeSize: DynamicTypeSize
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: ProductivityLayout.PrimaryMetric.spacing) {
             Text(title)
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundStyle(titleColor)
                 .textCase(.uppercase)
-                .tracking(0.65)
+                .tracking(ProductivityLayout.PrimaryMetric.titleTracking)
 
             Text(value)
-                .font(.system(size: dynamicTypeSize.isAccessibilitySize ? 36 : 44, weight: .semibold))
+                .font(
+                    .system(
+                        size: dynamicTypeSize.isAccessibilitySize
+                            ? ProductivityLayout.PrimaryMetric.accessibilityValueFontSize
+                            : ProductivityLayout.PrimaryMetric.defaultValueFontSize,
+                        weight: .semibold
+                    )
+                )
                 .foregroundStyle(valueColor)
                 .lineLimit(dynamicTypeSize.isAccessibilitySize ? 2 : 1)
-                .minimumScaleFactor(dynamicTypeSize.isAccessibilitySize ? 0.9 : 0.72)
+                .minimumScaleFactor(
+                    dynamicTypeSize.isAccessibilitySize
+                        ? ProductivityLayout.PrimaryMetric.accessibilityMinimumScaleFactor
+                        : ProductivityLayout.PrimaryMetric.defaultMinimumScaleFactor
+                )
                 .multilineTextAlignment(.leading)
                 .monospacedDigit()
         }
@@ -263,58 +519,62 @@ private struct ProductivitySecondaryMetricsRow: View {
     var body: some View {
         Group {
             if dynamicTypeSize.isAccessibilitySize {
-                VStack(alignment: .leading, spacing: 14) {
-                    secondaryMetric(
-                        title: "Daily Focus Avg",
-                        value: ProductivityValueFormatting.summaryAverageFocusText(snapshot.averageFocusHoursPerDay),
-                        accessibilityValue: ProductivityValueFormatting.summaryAverageFocusActiveDayAccessibilityValue(snapshot.averageFocusHoursPerDay),
-                        titleColor: averageTitleColor
-                    )
-
-                    horizontalDivider
-
-                    secondaryMetric(
-                        title: "Streak",
-                        value: ProductivityValueFormatting.summaryStreakText(snapshot.streakLength),
-                        accessibilityValue: ProductivityValueFormatting.summaryStreakAccessibilityValue(snapshot.streakLength),
-                        titleColor: streakTitleColor
-                    )
-                }
+                accessibilityLayout
             } else {
-                HStack(alignment: .top, spacing: 16) {
-                    secondaryMetric(
-                        title: "Daily Focus Avg",
-                        value: ProductivityValueFormatting.summaryAverageFocusText(snapshot.averageFocusHoursPerDay),
-                        accessibilityValue: ProductivityValueFormatting.summaryAverageFocusActiveDayAccessibilityValue(snapshot.averageFocusHoursPerDay),
-                        titleColor: averageTitleColor
-                    )
-
-                    verticalDivider
-
-                    secondaryMetric(
-                        title: "Streak",
-                        value: ProductivityValueFormatting.summaryStreakText(snapshot.streakLength),
-                        accessibilityValue: ProductivityValueFormatting.summaryStreakAccessibilityValue(snapshot.streakLength),
-                        titleColor: streakTitleColor
-                    )
-                }
+                standardLayout
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
+    private var metrics: [ProductivitySecondaryMetricDescriptor] {
+        [
+            ProductivitySecondaryMetricDescriptor(
+                title: "Daily Focus Avg",
+                value: ProductivityValueFormatting.summaryAverageFocusText(snapshot.averageFocusHoursPerDay),
+                accessibilityValue: ProductivityValueFormatting.summaryAverageFocusActiveDayAccessibilityValue(snapshot.averageFocusHoursPerDay),
+                titleColor: averageTitleColor
+            ),
+            ProductivitySecondaryMetricDescriptor(
+                title: "Streak",
+                value: ProductivityValueFormatting.summaryStreakText(snapshot.streakLength),
+                accessibilityValue: ProductivityValueFormatting.summaryStreakAccessibilityValue(snapshot.streakLength),
+                titleColor: streakTitleColor
+            )
+        ]
+    }
+
+    private var accessibilityLayout: some View {
+        VStack(alignment: .leading, spacing: ProductivityLayout.SecondaryMetrics.accessibilitySpacing) {
+            ForEach(Array(metrics.enumerated()), id: \.element.id) { index, metric in
+                secondaryMetric(metric)
+
+                if index < metrics.count - 1 {
+                    horizontalDivider
+                }
+            }
+        }
+    }
+
+    private var standardLayout: some View {
+        HStack(alignment: .top, spacing: ProductivityLayout.SecondaryMetrics.standardSpacing) {
+            ForEach(Array(metrics.enumerated()), id: \.element.id) { index, metric in
+                secondaryMetric(metric)
+
+                if index < metrics.count - 1 {
+                    verticalDivider
+                }
+            }
+        }
+    }
+
     @ViewBuilder
-    private func secondaryMetric(
-        title: String,
-        value: String,
-        accessibilityValue: String,
-        titleColor: Color
-    ) -> some View {
+    private func secondaryMetric(_ metric: ProductivitySecondaryMetricDescriptor) -> some View {
         ProductivitySecondarySummaryItem(
-            title: title,
-            value: value,
-            accessibilityValue: accessibilityValue,
-            titleColor: titleColor,
+            title: metric.title,
+            value: metric.value,
+            accessibilityValue: metric.accessibilityValue,
+            titleColor: metric.titleColor,
             colorScheme: colorScheme
         )
     }
@@ -322,7 +582,7 @@ private struct ProductivitySecondaryMetricsRow: View {
     private var verticalDivider: some View {
         Rectangle()
             .fill(dividerColor)
-            .frame(width: 1, height: 42)
+            .frame(width: 1, height: ProductivityLayout.SecondaryMetrics.verticalDividerHeight)
             .frame(maxHeight: .infinity, alignment: .center)
     }
 
@@ -333,20 +593,31 @@ private struct ProductivitySecondaryMetricsRow: View {
     }
 
     private var dividerColor: Color {
-        colorScheme == .dark ? Color.white.opacity(0.10) : Color.black.opacity(0.08)
+        colorScheme == .dark
+            ? Color.white.opacity(ProductivityLayout.SecondaryMetrics.dividerDarkOpacity)
+            : Color.black.opacity(ProductivityLayout.SecondaryMetrics.dividerLightOpacity)
     }
 
     private var averageTitleColor: Color {
         colorScheme == .dark
-            ? VibePalette.softJade.opacity(0.94)
-            : VibePalette.softJadeDeep.opacity(0.94)
+            ? VibePalette.softJade.opacity(ProductivityLayout.SecondaryMetrics.titleDarkOpacity)
+            : VibePalette.softJadeDeep.opacity(ProductivityLayout.SecondaryMetrics.titleLightOpacity)
     }
 
     private var streakTitleColor: Color {
         colorScheme == .dark
-            ? VibePalette.softMist.opacity(0.94)
-            : VibePalette.softMistDeep.opacity(0.94)
+            ? VibePalette.softMist.opacity(ProductivityLayout.SecondaryMetrics.titleDarkOpacity)
+            : VibePalette.softMistDeep.opacity(ProductivityLayout.SecondaryMetrics.titleLightOpacity)
     }
+}
+
+private struct ProductivitySecondaryMetricDescriptor: Identifiable {
+    let title: String
+    let value: String
+    let accessibilityValue: String
+    let titleColor: Color
+
+    var id: String { title }
 }
 
 private struct ProductivitySecondarySummaryItem: View {
@@ -357,17 +628,17 @@ private struct ProductivitySecondarySummaryItem: View {
     let colorScheme: ColorScheme
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: ProductivityLayout.SecondaryMetrics.valueSpacing) {
             Text(title)
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(titleColor)
                 .lineLimit(2)
-                .minimumScaleFactor(0.85)
+                .minimumScaleFactor(ProductivityLayout.SecondaryMetrics.labelMinimumScaleFactor)
 
             Text(value)
                 .font(.system(size: 24, weight: .semibold))
                 .foregroundStyle(valueColor)
-                .minimumScaleFactor(0.78)
+                .minimumScaleFactor(ProductivityLayout.SecondaryMetrics.valueMinimumScaleFactor)
                 .lineLimit(1)
                 .monospacedDigit()
         }
@@ -378,7 +649,9 @@ private struct ProductivitySecondarySummaryItem: View {
     }
 
     private var valueColor: Color {
-        colorScheme == .dark ? VibePalette.warmBackground.opacity(0.94) : Color.black.opacity(0.78)
+        colorScheme == .dark
+            ? VibePalette.warmBackground.opacity(ProductivityLayout.SecondaryMetrics.valueDarkOpacity)
+            : Color.black.opacity(ProductivityLayout.SecondaryMetrics.valueLightOpacity)
     }
 }
 
@@ -387,18 +660,21 @@ private struct ProductivityEmptyStateNote: View {
         Text("Complete a full session to start filling these charts. Productivity only reflects finished sessions.")
             .font(.system(size: 13, weight: .medium))
             .foregroundStyle(.secondary)
-            .padding(.horizontal, 6)
-            .padding(.top, 2)
-            .padding(.bottom, 4)
+            .padding(.horizontal, ProductivityLayout.EmptyState.horizontalPadding)
+            .padding(.top, ProductivityLayout.EmptyState.topPadding)
+            .padding(.bottom, ProductivityLayout.EmptyState.bottomPadding)
     }
 }
 
 private struct ProductivityTrendCard: View {
     @Environment(\.colorScheme) private var colorScheme
 
-    let metric: ProductivityMetricKind
+    let metric: ProductivityChartMetricKind
     let snapshot: ProductivityMetricsSnapshot
     let range: ProductivityRange
+
+    private let contentInset = ProductivityLayout.TrendCard.contentInset
+    private let cornerRadius = ProductivityLayout.TrendCard.cornerRadius
 
     private var displayBuckets: [ProductivityDisplayBucket] {
         ProductivityChartDisplay.displayBuckets(from: snapshot.chartPoints, range: range)
@@ -418,19 +694,32 @@ private struct ProductivityTrendCard: View {
     }
 
     private var accentLabelColor: Color {
-        accentColor.opacity(colorScheme == .dark ? 0.90 : 0.84)
+        accentColor.opacity(
+            colorScheme == .dark
+                ? ProductivityLayout.TrendCard.accentLabelDarkOpacity
+                : ProductivityLayout.TrendCard.accentLabelLightOpacity
+        )
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(spacing: 10) {
+        VStack(alignment: .leading, spacing: ProductivityLayout.TrendCard.stackSpacing) {
+            HStack(spacing: ProductivityLayout.TrendCard.headerSpacing) {
                 Image(systemName: metric.systemImage)
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.system(size: ProductivityLayout.TrendCard.iconSize, weight: .semibold))
                     .foregroundStyle(accentLabelColor)
-                    .frame(width: 36, height: 36)
+                    .frame(
+                        width: ProductivityLayout.TrendCard.iconFrame,
+                        height: ProductivityLayout.TrendCard.iconFrame
+                    )
                     .background(
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .fill(accentColor.opacity(colorScheme == .dark ? 0.085 : 0.058))
+                        RoundedRectangle(cornerRadius: ProductivityLayout.TrendCard.iconCornerRadius, style: .continuous)
+                            .fill(
+                                accentColor.opacity(
+                                    colorScheme == .dark
+                                        ? ProductivityLayout.TrendCard.iconChipDarkOpacity
+                                        : ProductivityLayout.TrendCard.iconChipLightOpacity
+                                )
+                            )
                     )
 
                 Text(metric.title)
@@ -475,8 +764,8 @@ private struct ProductivityTrendCard: View {
                     }
                 }
             }
-            .frame(height: 186)
-            .padding(.bottom, 22)
+            .frame(height: ProductivityLayout.TrendCard.chartHeight)
+            .padding(.bottom, ProductivityLayout.TrendCard.chartBottomPadding)
             .chartLegend(.hidden)
             .chartYScale(domain: 0...axisStyle.upperBound)
             .chartXScale(domain: slotDomain)
@@ -504,63 +793,48 @@ private struct ProductivityTrendCard: View {
                             plotFrame: geometry[plotFrame],
                             textColor: secondaryTextColor
                         )
-                        .offset(y: geometry[plotFrame].maxY + 8)
+                        .offset(y: geometry[plotFrame].maxY + ProductivityLayout.TrendCard.xAxisOffset)
                     }
                 }
             }
         }
-        .padding(.horizontal, 18)
-        .padding(.vertical, 18)
-        .background(cardBackground)
-        .overlay {
-            RoundedRectangle(cornerRadius: 26, style: .continuous)
-                .strokeBorder(cardBorderColor, lineWidth: 0.75)
+        .padding(.horizontal, contentInset)
+        .padding(.vertical, contentInset)
+        .productivityGlassCard(
+            colorScheme: colorScheme,
+            style: .trend(contentInset: contentInset, cornerRadius: cornerRadius)
+        ) {
+            trendAccentOverlay
         }
-        .overlay(alignment: .top) {
-            RoundedRectangle(cornerRadius: 26, style: .continuous)
-                .fill(
-                    LinearGradient(
-                        colors: [
-                            Color.white.opacity(colorScheme == .dark ? 0.08 : 0.40),
-                            Color.white.opacity(0.0)
-                        ],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                )
-                .frame(height: 1)
-                .padding(.horizontal, 18)
-        }
-        .shadow(
-            color: Color.black.opacity(colorScheme == .dark ? 0.10 : 0.04),
-            radius: colorScheme == .dark ? 14 : 8,
-            y: colorScheme == .dark ? 7 : 4
-        )
     }
 
     private var primaryTextColor: Color {
-        colorScheme == .dark ? VibePalette.warmBackground.opacity(0.94) : Color.black.opacity(0.80)
+        colorScheme == .dark
+            ? VibePalette.warmBackground.opacity(ProductivityLayout.TrendCard.primaryTextDarkOpacity)
+            : Color.black.opacity(ProductivityLayout.TrendCard.primaryTextLightOpacity)
     }
 
     private var secondaryTextColor: Color {
-        colorScheme == .dark ? VibePalette.warmBackground.opacity(0.54) : Color.black.opacity(0.48)
+        colorScheme == .dark
+            ? VibePalette.warmBackground.opacity(ProductivityLayout.TrendCard.secondaryTextDarkOpacity)
+            : Color.black.opacity(ProductivityLayout.TrendCard.secondaryTextLightOpacity)
     }
 
     private var gridColor: Color {
-        colorScheme == .dark ? Color.white.opacity(0.10) : Color.black.opacity(0.08)
+        colorScheme == .dark
+            ? Color.white.opacity(ProductivityLayout.TrendCard.gridDarkOpacity)
+            : Color.black.opacity(ProductivityLayout.TrendCard.gridLightOpacity)
     }
 
-    private var cardBackground: some View {
-        RoundedRectangle(cornerRadius: 26, style: .continuous)
-            .fill(.thinMaterial)
-            .overlay {
-                RoundedRectangle(cornerRadius: 26, style: .continuous)
-                    .fill(accentColor.opacity(colorScheme == .dark ? 0.022 : 0.010))
-            }
-    }
-
-    private var cardBorderColor: Color {
-        colorScheme == .dark ? Color.white.opacity(0.13) : Color.white.opacity(0.60)
+    private var trendAccentOverlay: some View {
+        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+            .fill(
+                accentColor.opacity(
+                    colorScheme == .dark
+                        ? ProductivityLayout.TrendCard.accentOverlayDarkOpacity
+                        : ProductivityLayout.TrendCard.accentOverlayLightOpacity
+                )
+            )
     }
 
     private func shouldShowAnnotation(for value: Double) -> Bool {
@@ -577,21 +851,36 @@ private struct ProductivityRangeBadge: View {
         Text(title.uppercased())
             .font(.system(size: 10, weight: .semibold))
             .foregroundStyle(badgeTextColor)
-            .tracking(0.45)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
+            .tracking(ProductivityLayout.RangeBadge.titleTracking)
+            .padding(.horizontal, ProductivityLayout.RangeBadge.horizontalPadding)
+            .padding(.vertical, ProductivityLayout.RangeBadge.verticalPadding)
             .background(
                 Capsule(style: .continuous)
-                    .fill(tint.opacity(colorScheme == .dark ? 0.16 : 0.10))
+                    .fill(
+                        tint.opacity(
+                            colorScheme == .dark
+                                ? ProductivityLayout.RangeBadge.fillDarkOpacity
+                                : ProductivityLayout.RangeBadge.fillLightOpacity
+                        )
+                    )
             )
             .overlay {
                 Capsule(style: .continuous)
-                    .strokeBorder(tint.opacity(colorScheme == .dark ? 0.18 : 0.10), lineWidth: 0.8)
+                    .strokeBorder(
+                        tint.opacity(
+                            colorScheme == .dark
+                                ? ProductivityLayout.RangeBadge.strokeDarkOpacity
+                                : ProductivityLayout.RangeBadge.strokeLightOpacity
+                        ),
+                        lineWidth: ProductivityLayout.RangeBadge.strokeWidth
+                    )
             }
     }
 
     private var badgeTextColor: Color {
-        colorScheme == .dark ? tint.opacity(0.95) : tint.opacity(0.88)
+        colorScheme == .dark
+            ? tint.opacity(ProductivityLayout.RangeBadge.textDarkOpacity)
+            : tint.opacity(ProductivityLayout.RangeBadge.textLightOpacity)
     }
 }
 
@@ -610,7 +899,7 @@ private struct ProductivityCustomXAxis: View {
                     .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(textColor)
                     .lineLimit(1)
-                    .minimumScaleFactor(0.72)
+                    .minimumScaleFactor(ProductivityLayout.ChartAxis.labelMinimumScaleFactor)
                     .frame(width: slotWidth, alignment: .center)
                     .position(
                         x: plotFrame.minX + slotWidth * (CGFloat(index) + 0.5),
@@ -651,17 +940,10 @@ private struct TopRoundedBarShape: Shape {
     }
 }
 
-private enum ProductivityMetricKind: CaseIterable, Identifiable {
+private enum ProductivityChartMetricKind: CaseIterable, Identifiable {
     case focusSessions
-    case sessionTime
     case focusTime
     case breakTime
-
-    static let chartMetrics: [ProductivityMetricKind] = [
-        .focusSessions,
-        .focusTime,
-        .breakTime
-    ]
 
     var id: String { title }
 
@@ -669,8 +951,6 @@ private enum ProductivityMetricKind: CaseIterable, Identifiable {
         switch self {
         case .focusSessions:
             return "Focus Sessions"
-        case .sessionTime:
-            return "Session Time"
         case .focusTime:
             return "Focus Time"
         case .breakTime:
@@ -682,8 +962,6 @@ private enum ProductivityMetricKind: CaseIterable, Identifiable {
         switch self {
         case .focusSessions:
             return "square.on.square"
-        case .sessionTime:
-            return "hourglass"
         case .focusTime:
             return "gauge.with.dots.needle.67percent"
         case .breakTime:
@@ -695,8 +973,6 @@ private enum ProductivityMetricKind: CaseIterable, Identifiable {
         switch self {
         case .focusSessions:
             return colorScheme == .dark ? VibePalette.softMist : VibePalette.softMistDeep
-        case .sessionTime:
-            return colorScheme == .dark ? VibePalette.warmAmberAccent : VibePalette.warmAmberAccentDeep
         case .focusTime:
             return colorScheme == .dark ? VibePalette.amberGold : VibePalette.amberGoldDeep
         case .breakTime:
@@ -718,7 +994,7 @@ private enum ProductivityMetricKind: CaseIterable, Identifiable {
         switch self {
         case .focusSessions:
             return "\(Int(rangeTotal(from: buckets).rounded()))"
-        case .sessionTime, .focusTime, .breakTime:
+        case .focusTime, .breakTime:
             return ProductivityValueFormatting.compactDurationText(rangeTotal(from: buckets))
         }
     }
@@ -733,8 +1009,6 @@ private enum ProductivityMetricKind: CaseIterable, Identifiable {
         switch self {
         case .focusSessions:
             return Double(bucket.completedFocusCount)
-        case .sessionTime:
-            return bucket.sessionTime
         case .focusTime:
             return bucket.focusTime
         case .breakTime:
@@ -746,7 +1020,7 @@ private enum ProductivityMetricKind: CaseIterable, Identifiable {
         switch self {
         case .focusSessions:
             return "\(Int(value.rounded()))"
-        case .sessionTime, .focusTime, .breakTime:
+        case .focusTime, .breakTime:
             return ProductivityChartFormatting.axisDurationText(value)
         }
     }
@@ -755,7 +1029,7 @@ private enum ProductivityMetricKind: CaseIterable, Identifiable {
         switch self {
         case .focusSessions:
             return "\(Int(value.rounded()))"
-        case .sessionTime, .focusTime, .breakTime:
+        case .focusTime, .breakTime:
             return ProductivityChartFormatting.annotationDurationText(value)
         }
     }
@@ -766,7 +1040,7 @@ private enum ProductivityMetricKind: CaseIterable, Identifiable {
         switch self {
         case .focusSessions:
             return Self.countAxisStyle(for: maxValue)
-        case .sessionTime, .focusTime, .breakTime:
+        case .focusTime, .breakTime:
             return ProductivityChartFormatting.timeAxisStyle(for: maxValue)
         }
     }
@@ -777,11 +1051,6 @@ private enum ProductivityMetricKind: CaseIterable, Identifiable {
             return [
                 VibePalette.softMist.opacity(colorScheme == .dark ? 0.88 : 0.78),
                 VibePalette.softMistDeep.opacity(colorScheme == .dark ? 0.66 : 0.54)
-            ]
-        case .sessionTime:
-            return [
-                VibePalette.warmAmberAccent.opacity(colorScheme == .dark ? 0.88 : 0.76),
-                VibePalette.warmAmberAccentDeep.opacity(colorScheme == .dark ? 0.66 : 0.54)
             ]
         case .focusTime:
             return [
@@ -946,10 +1215,6 @@ struct ProductivityDisplayBucket: Identifiable, Equatable {
 
     var id: Date { xDate }
     var slotValue: Double { Double(slotIndex) }
-
-    var sessionTime: TimeInterval {
-        focusTime + breakTime
-    }
 }
 
 struct ProductivityNumericAxisStyle: Equatable {
