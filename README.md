@@ -27,7 +27,11 @@ VibePomodoro/
 │   │   ├── ProductivityTrendSection.swift
 │   │   └── ProductivityChartSupport.swift
 │   └── Settings/
-│       └── SettingsScreen.swift
+│       ├── SettingsScreen.swift
+│       ├── SettingsSupport.swift
+│       ├── SettingsCardChrome.swift
+│       ├── SettingsSessionRhythmSection.swift
+│       └── SettingsPreferenceSections.swift
 ├── Shared/
 │   ├── Theme/
 │   │   └── VibeTheme.swift
@@ -128,8 +132,43 @@ VibePomodoro/
 - `SettingsScreen`：
   - 直接绑定 `store.settings`
   - 设置修改只走 store 的 update/set 接口，不直接改 model 副本
+  - 当前目录内拆分为：
+    - `SettingsScreen.swift`：页面骨架、section 排列与设置值 normalization 触发
+    - `SettingsSupport.swift`：布局常量、色彩映射、`SettingsTimerField` 离散档位与辅助规则
+    - `SettingsCardChrome.swift`：Settings 专属卡片壳、header 与 divider
+    - `SettingsSessionRhythmSection.swift`：`Session Rhythm` 主设置卡与 stepper row
+    - `SettingsPreferenceSections.swift`：`Alerts / Display / Other` 次级卡与共用 row 组件
+  - `Settings` 当前保持页面内拆分，不把其专属卡片 chrome 和设置行上提到 `Shared/*`
 
-### 0.1.4.1 Productivity 当前 UI 对齐备注
+### 0.1.4.1 Settings 当前 UI / 交互对齐备注
+
+- `Settings` 当前信息架构固定为：
+  - `Session Rhythm`
+  - `Alerts`
+  - `Display`
+  - `Other`
+- 当前视觉层级为：
+  - `Session Rhythm` 作为主设置卡
+  - `Alerts / Display / Other` 作为同一家族下的次级设置卡
+- `Session Rhythm` 使用离散档位，不提供自由输入：
+  - `Focus`：`15...90`，每 `5` 分钟一档
+  - `Short Break`：`5 / 10`
+  - `Long Break`：`15 / 20 / 30`
+  - `Rounds`：`1...10`
+- `Session Rhythm` 标题上的 `Next session only` 必须保留；默认语义是：
+  - 设置变更只影响下一次新 session
+  - 不回写正在进行中的 session
+- 页面出现时，历史持久化的非标准时长与轮数会被吸附到最近合法值；该 normalization 不触发反馈。
+- `Alerts` 内部当前存在明确依赖关系：
+  - `Sound` 依赖 `Notifications`
+  - `Sound Choice` 仅在 `Notifications` 与 `Sound` 都开启时显示
+- `Display` 当前只承载 `Keep Screen On`，语义限定为 `Active sessions only`
+- `Other` 当前仍是占位区：
+  - `Send Feedback`
+  - `Share App`
+  - 两者状态都为 `Soon`
+
+### 0.1.4.2 Productivity 当前 UI 对齐备注
 
 - `Productivity` 顶部摘要区当前已对齐为单独主卡，不再按旧版三等分摘要条作为后续设计基线。
 - 该主卡当前确认的标题文案为 `ALL TIME COMPLETED SESSIONS`。
@@ -455,6 +494,9 @@ MVP 需要支持的配置项：
 - 视觉最克制
 - 模块结构要清楚
 - 不做复杂装饰
+- 不做成分析面板或 dashboard 式卡片堆栈
+- `Session Rhythm` 可以作为主设置锚点，但次级设置区默认保持更安静
+- Settings 专属视觉 chrome 默认留在 `Screens/Settings/*` 内维护，不再复用 `Productivity` 命名的卡片壳
 
 ---
 
@@ -689,7 +731,15 @@ MVP 不需要额外寻找开源 PNG 照片素材。
 - [VibePomodoro/Screens/Productivity/ProductivityChartSupport.swift](./VibePomodoro/Screens/Productivity/ProductivityChartSupport.swift)
   - Productivity 图表格式化、桶映射与数值轴计算
 - [VibePomodoro/Screens/Settings/SettingsScreen.swift](./VibePomodoro/Screens/Settings/SettingsScreen.swift)
-  - Settings 页与专属设置行组件
+  - Settings 页页面骨架、section 排列与 normalization 触发
+- [VibePomodoro/Screens/Settings/SettingsSupport.swift](./VibePomodoro/Screens/Settings/SettingsSupport.swift)
+  - Settings 布局常量、色彩映射、离散档位规则与辅助逻辑
+- [VibePomodoro/Screens/Settings/SettingsCardChrome.swift](./VibePomodoro/Screens/Settings/SettingsCardChrome.swift)
+  - Settings 专属卡片壳、header、divider 与 card chrome modifier
+- [VibePomodoro/Screens/Settings/SettingsSessionRhythmSection.swift](./VibePomodoro/Screens/Settings/SettingsSessionRhythmSection.swift)
+  - `Session Rhythm` 主设置卡、stepper row 与时长更新映射
+- [VibePomodoro/Screens/Settings/SettingsPreferenceSections.swift](./VibePomodoro/Screens/Settings/SettingsPreferenceSections.swift)
+  - `Alerts / Display / Other` 次级设置卡与共用设置行组件
 - [VibePomodoro/Shared/Theme/VibeTheme.swift](./VibePomodoro/Shared/Theme/VibeTheme.swift)
   - 共享主题色板与 phase UI 扩展
 - [VibePomodoro/Shared/UI/SharedShell.swift](./VibePomodoro/Shared/UI/SharedShell.swift)
