@@ -181,19 +181,18 @@ private struct ProductivityRangeToolbarMenu: View {
     @Binding var selectedRange: ProductivityRange
 
     var body: some View {
-        Menu {
-            Picker("Range", selection: $selectedRange) {
-                ForEach(ProductivityRange.allCases) { range in
-                    Text(range.displayTitle).tag(range)
-                }
-            }
-        } label: {
+        PrimaryActionMenuButton(
+            options: ProductivityRange.allCases,
+            selected: selectedRange,
+            title: \.displayTitle,
+            onSelect: { selectedRange = $0 },
+            accessibilityLabel: "Time Range",
+            accessibilityValue: selectedRange.displayTitle
+        ) {
             Image(systemName: "line.3.horizontal.decrease")
                 .font(.system(size: 17, weight: .medium))
                 .foregroundStyle(toolbarIconColor)
         }
-        .accessibilityLabel("Time Range")
-        .accessibilityValue(selectedRange.displayTitle)
     }
 
     private var toolbarIconColor: Color {
