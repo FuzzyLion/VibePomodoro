@@ -12,6 +12,8 @@ struct SettingsSessionRhythmSection: View {
                 contentInset: SettingsLayout.cardContentInset,
                 cornerRadius: SettingsLayout.summaryCardCornerRadius
             ),
+            topInset: SettingsLayout.summaryCardTopInset,
+            bottomInset: SettingsLayout.summaryCardBottomInset,
             accentOverlay: {
                 LinearGradient(
                     colors: [

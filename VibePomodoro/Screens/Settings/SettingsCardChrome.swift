@@ -160,15 +160,21 @@ struct SettingsCard<Content: View, AccentOverlay: View>: View {
     @Environment(\.colorScheme) private var colorScheme
 
     let style: SettingsCardChromeStyle
+    let topInset: CGFloat
+    let bottomInset: CGFloat
     let accentOverlay: AccentOverlay
     let content: Content
 
     init(
         style: SettingsCardChromeStyle,
+        topInset: CGFloat = SettingsLayout.cardVerticalInset,
+        bottomInset: CGFloat = SettingsLayout.cardVerticalInset,
         @ViewBuilder accentOverlay: () -> AccentOverlay,
         @ViewBuilder content: () -> Content
     ) {
         self.style = style
+        self.topInset = topInset
+        self.bottomInset = bottomInset
         self.accentOverlay = accentOverlay()
         self.content = content()
     }
@@ -177,7 +183,9 @@ struct SettingsCard<Content: View, AccentOverlay: View>: View {
         VStack(alignment: .leading, spacing: 0) {
             content
         }
-        .padding(SettingsLayout.cardContentInset)
+        .padding(.horizontal, SettingsLayout.cardContentInset)
+        .padding(.top, topInset)
+        .padding(.bottom, bottomInset)
         .settingsGlassCard(
             colorScheme: colorScheme,
             style: style
@@ -213,7 +221,51 @@ struct SettingsCardHeader: View {
                 }
             }
         }
-        .padding(.bottom, SettingsLayout.headerBottomPadding)
+        .padding(.bottom, SettingsLayout.cardHeaderBottomSpacing)
+    }
+
+    private var titleLabel: some View {
+        Text(title)
+            .font(.system(size: 12, weight: .semibold))
+            .tracking(SettingsLayout.sectionTitleTracking)
+            .foregroundStyle(SettingsTheme.sectionLabelColor(for: colorScheme))
+            .accessibilityAddTraits(.isHeader)
+    }
+
+    private func trailingLabel(_ text: String) -> some View {
+        Text(text)
+            .font(.system(.footnote, weight: .semibold))
+            .foregroundStyle(SettingsTheme.sectionAccentColor(for: colorScheme))
+    }
+}
+
+struct SettingsSectionHeader: View {
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    let title: String
+    var trailingText: String? = nil
+
+    var body: some View {
+        Group {
+            if dynamicTypeSize.isAccessibilitySize {
+                VStack(alignment: .leading, spacing: 6) {
+                    titleLabel
+                    if let trailingText {
+                        trailingLabel(trailingText)
+                    }
+                }
+            } else {
+                HStack(alignment: .firstTextBaseline, spacing: 12) {
+                    titleLabel
+                    Spacer(minLength: 12)
+                    if let trailingText {
+                        trailingLabel(trailingText)
+                    }
+                }
+            }
+        }
+        .padding(.horizontal, SettingsLayout.cardContentInset)
     }
 
     private var titleLabel: some View {
