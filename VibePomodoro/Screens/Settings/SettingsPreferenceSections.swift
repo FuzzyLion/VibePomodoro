@@ -2,6 +2,7 @@ import SwiftUI
 
 struct SettingsAlertsSection: View {
     @EnvironmentObject private var store: PomodoroStore
+    @State private var isPresentingSoundChoice = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: SettingsLayout.sectionHeaderBottomSpacing) {
@@ -32,8 +33,8 @@ struct SettingsAlertsSection: View {
                     if store.settings.notificationsEnabled && store.settings.soundEnabled {
                         SettingsDivider()
 
-                        NavigationLink {
-                            SettingsSoundChoiceScreen()
+                        Button {
+                            isPresentingSoundChoice = true
                         } label: {
                             SettingsNavigationValueRow(
                                 title: "Sound Choice",
@@ -53,6 +54,9 @@ struct SettingsAlertsSection: View {
                     )
                 }
             }
+        }
+        .navigationDestination(isPresented: $isPresentingSoundChoice) {
+            SettingsSoundChoiceScreen()
         }
     }
 
@@ -220,38 +224,40 @@ private struct SettingsSoundChoiceScreen: View {
     }
 
     var body: some View {
-        ScrollView(showsIndicators: false) {
-            VStack(alignment: .leading, spacing: SettingsLayout.pageSectionSpacing) {
-                SettingsCard(
-                    style: .secondary(
-                        contentInset: SettingsLayout.cardContentInset,
-                        cornerRadius: SettingsLayout.secondaryCardCornerRadius
-                    ),
-                    accentOverlay: { EmptyView() }
-                ) {
-                    VStack(spacing: 0) {
-                        ForEach(Array(soundOptions.enumerated()), id: \.element.id) { index, option in
-                            Button {
-                                store.setSelectedSound(option)
-                            } label: {
-                                SettingsSoundChoiceOptionRow(
-                                    title: option.title,
-                                    isSelected: store.settings.selectedSound == option
-                                )
-                            }
-                            .buttonStyle(.plain)
+        VStack(alignment: .leading, spacing: 0) {
+            SettingsCard(
+                style: .secondary(
+                    contentInset: SettingsLayout.cardContentInset,
+                    cornerRadius: SettingsLayout.secondaryCardCornerRadius
+                ),
+                accentOverlay: { EmptyView() }
+            ) {
+                VStack(spacing: 0) {
+                    ForEach(Array(soundOptions.enumerated()), id: \.element.id) { index, option in
+                        Button {
+                            store.setSelectedSound(option)
+                        } label: {
+                            SettingsSoundChoiceOptionRow(
+                                title: option.title,
+                                isSelected: store.settings.selectedSound == option
+                            )
+                        }
+                        .buttonStyle(.plain)
 
-                            if index < soundOptions.count - 1 {
-                                SettingsDivider()
-                            }
+                        if index < soundOptions.count - 1 {
+                            SettingsDivider()
                         }
                     }
                 }
             }
-            .padding(.horizontal, SettingsLayout.pageHorizontalInset)
-            .padding(.top, SettingsLayout.pageTopInset)
-            .padding(.bottom, SettingsLayout.pageBottomInset)
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            Spacer(minLength: 0)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .padding(.horizontal, SettingsLayout.pageHorizontalInset)
+        .padding(.top, SettingsLayout.pageTopInset)
+        .padding(.bottom, SettingsLayout.pageBottomInset)
         .navigationTitle("Reminder Sound")
         .navigationBarTitleDisplayMode(.inline)
     }
