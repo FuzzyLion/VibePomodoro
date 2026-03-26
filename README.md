@@ -13,8 +13,20 @@ Before coding:
 VibePomodoro/
 ├── VibePomodoroApp.swift
 ├── ContentView.swift
-├── PomodoroModels.swift
-├── PomodoroStore.swift
+├── Core/
+│   ├── Engine/
+│   │   └── PomodoroEngine.swift
+│   ├── Models/
+│   │   ├── PomodoroTypes.swift
+│   │   ├── SessionModels.swift
+│   │   └── ProductivityModels.swift
+│   └── Store/
+│       ├── PomodoroStore.swift
+│       ├── PomodoroStore+Settings.swift
+│       ├── PomodoroStore+Lifecycle.swift
+│       ├── PomodoroStore+Notifications.swift
+│       ├── PomodoroStore+Persistence.swift
+│       └── PomodoroStore+Productivity.swift
 ├── Screens/
 │   ├── Focus/
 │   │   ├── FocusScreen.swift
@@ -57,8 +69,9 @@ VibePomodoro/
 
 - `VibePomodoroApp.swift` 创建单一 `@StateObject PomodoroStore`，并把它注入整个 app。
 - `ContentView.swift` 只负责全局背景与 `TabView`，不承载业务状态机。
-- `PomodoroModels.swift` 定义核心数据模型、统计结构和 `PomodoroEngine` 状态推进规则。
-- `PomodoroStore.swift` 是运行时唯一 source of truth，负责状态持有、持久化、通知、scene phase 协调和副作用触发。
+- `Core/Models/*` 定义核心数据模型、session 快照和 productivity 聚合结构。
+- `Core/Engine/PomodoroEngine.swift` 定义 session 状态推进规则与事件产出。
+- `Core/Store/*` 仍是运行时唯一 source of truth，但按 `主状态 / 设置 / 生命周期 / 通知 / 持久化 / 统计` 拆分职责。
 - `Screens/*` 负责页面级 UI 和页面专属子视图，不新增第二套全局状态源。
 - `Screens/Focus/*` 当前按 `页面骨架 / 页面专属控件 / 气泡计时器实现` 拆分，但仍属于同一页面边界。
 - `Screens/Productivity/*` 当前按 `页面骨架 / 卡片玻璃壳 / 摘要区 / 趋势图区 / 图表支持逻辑` 拆分，但仍属于同一页面边界。
@@ -194,9 +207,9 @@ VibePomodoro/
 - 改跨页面主题、背景、玻璃容器、共用标题：
   - 放 `Shared/Theme` 或 `Shared/UI`
 - 改 session 规则、统计口径、step 推进、时间真值：
-  - 放 `PomodoroModels.swift` 内的 model / engine
+  - 放 `Core/Models/*` 或 `Core/Engine/PomodoroEngine.swift`
 - 改持久化、通知、scene 恢复、idle timer、副作用协调：
-  - 放 `PomodoroStore.swift`
+  - 放 `Core/Store/*`
 - 新功能开始前，默认先回答三件事：
   - 当前架构是什么
   - 这个功能应该落在哪一层
@@ -710,10 +723,26 @@ MVP 不需要额外寻找开源 PNG 照片素材。
 
 当前代码已经开始落地以上方案，主要结构如下：
 
-- [VibePomodoro/PomodoroModels.swift](./VibePomodoro/PomodoroModels.swift)
-  - 核心模型、状态机、事件定义、Productivity 日聚合缓存模型
-- [VibePomodoro/PomodoroStore.swift](./VibePomodoro/PomodoroStore.swift)
-  - 状态管理、持久化、通知调度、session 完成后的统计入账与缓存重建
+- [VibePomodoro/Core/Models/PomodoroTypes.swift](./VibePomodoro/Core/Models/PomodoroTypes.swift)
+  - 全局 tab、session phase、run state、提醒音与 settings 基础类型
+- [VibePomodoro/Core/Models/SessionModels.swift](./VibePomodoro/Core/Models/SessionModels.swift)
+  - session step、segment、snapshot、completed session 与运行期统计
+- [VibePomodoro/Core/Models/ProductivityModels.swift](./VibePomodoro/Core/Models/ProductivityModels.swift)
+  - Productivity 日聚合缓存、自然日 summary 与 range 类型
+- [VibePomodoro/Core/Engine/PomodoroEngine.swift](./VibePomodoro/Core/Engine/PomodoroEngine.swift)
+  - 状态机推进、step 切换、reconcile 与事件定义
+- [VibePomodoro/Core/Store/PomodoroStore.swift](./VibePomodoro/Core/Store/PomodoroStore.swift)
+  - store 主状态、对外动作入口与页面读取的派生属性
+- [VibePomodoro/Core/Store/PomodoroStore+Settings.swift](./VibePomodoro/Core/Store/PomodoroStore+Settings.swift)
+  - 设置更新、提醒开关与调节 haptics
+- [VibePomodoro/Core/Store/PomodoroStore+Lifecycle.swift](./VibePomodoro/Core/Store/PomodoroStore+Lifecycle.swift)
+  - scene phase 协调、runtime 副作用刷新、step 边界 timer 与 session 完成入账
+- [VibePomodoro/Core/Store/PomodoroStore+Notifications.swift](./VibePomodoro/Core/Store/PomodoroStore+Notifications.swift)
+  - 本地通知权限与未来 step 边界提醒调度
+- [VibePomodoro/Core/Store/PomodoroStore+Persistence.swift](./VibePomodoro/Core/Store/PomodoroStore+Persistence.swift)
+  - UserDefaults 持久化、cache 修复与编解码辅助
+- [VibePomodoro/Core/Store/PomodoroStore+Productivity.swift](./VibePomodoro/Core/Store/PomodoroStore+Productivity.swift)
+  - Productivity snapshot、图表桶映射、streak 计算与统计查询
 - [VibePomodoro/Screens/Focus/FocusScreen.swift](./VibePomodoro/Screens/Focus/FocusScreen.swift)
   - Focus 页 render state、页面骨架与布局常量
 - [VibePomodoro/Screens/Focus/FocusControls.swift](./VibePomodoro/Screens/Focus/FocusControls.swift)

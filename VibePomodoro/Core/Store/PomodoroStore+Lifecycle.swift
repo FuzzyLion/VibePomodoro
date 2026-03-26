@@ -1,0 +1,118 @@
+import Foundation
+import SwiftUI
+import UIKit
+
+extension PomodoroStore {
+    func handleScenePhaseChange(_ phase: ScenePhase) {
+        currentScenePhase = phase
+
+        switch phase {
+        case .active:
+            reconcileNow()
+            syncIdleTimer()
+            syncNotifications()
+        case .inactive, .background:
+            persist()
+        @unknown default:
+            break
+        }
+
+        syncStepBoundaryTimer()
+    }
+
+    func startNewSession() {
+        activeSession = SessionSnapshot.makeNew(settings: settings, now: .now)
+        togglePrimaryAction()
+    }
+
+    func reconcileNow() {
+        guard var session = activeSession else { return }
+        let previousSession = session
+        let events = PomodoroEngine.reconcile(session: &session, now: .now)
+        guard session != previousSession || !events.isEmpty else { return }
+        activeSession = session
+        handle(events: events)
+    }
+
+    func handle(events: [PomodoroEvent]) {
+        guard !events.isEmpty else {
+            refreshRuntimeSideEffects()
+            return
+        }
+
+        for event in events {
+            switch event {
+            case .phaseStarted:
+                fireForegroundFeedback(type: .success)
+            case .phaseCompleted:
+                fireForegroundFeedback(type: .warning)
+            case .sessionCompleted:
+                fireForegroundFeedback(type: .success)
+                storeCompletedSessionIfNeeded()
+            }
+        }
+
+        refreshRuntimeSideEffects()
+    }
+
+    func syncIdleTimer() {
+        let keepAwake = settings.keepScreenOn && activeSession?.runState == .running
+        UIApplication.shared.isIdleTimerDisabled = keepAwake
+    }
+
+    func refreshRuntimeSideEffects() {
+        persist()
+        syncIdleTimer()
+        syncNotifications()
+        syncStepBoundaryTimer()
+    }
+
+    func syncStepBoundaryTimer() {
+        stepBoundaryTimer?.invalidate()
+        stepBoundaryTimer = nil
+
+        guard currentScenePhase == .active,
+              let session = activeSession,
+              session.runState == .running,
+              session.currentStep != nil,
+              let targetEndDate = session.targetEndDate else {
+            return
+        }
+
+        let interval = max(0.05, targetEndDate.timeIntervalSinceNow)
+        let timer = Timer.scheduledTimer(withTimeInterval: interval, repeats: false) { [weak self] _ in
+            DispatchQueue.main.async {
+                self?.reconcileNow()
+            }
+        }
+        timer.tolerance = min(0.25, interval * 0.05)
+        stepBoundaryTimer = timer
+    }
+
+    private func storeCompletedSessionIfNeeded() {
+        guard let session = activeSession, session.runState == .completed else { return }
+        let completedSession: CompletedSession
+
+        if let existing = completedSessions.first(where: { $0.id == session.id }) {
+            completedSession = existing
+        } else {
+            completedSession = CompletedSession(
+                id: session.id,
+                createdAt: session.createdAt,
+                completedAt: .now,
+                settingsSnapshot: session.settingsSnapshot,
+                segments: session.segments
+            )
+            completedSessions.insert(completedSession, at: 0)
+        }
+
+        productivityCache.apply(completedSession)
+    }
+
+    private func fireForegroundFeedback(type: UINotificationFeedbackGenerator.FeedbackType) {
+        guard settings.hapticsEnabled else { return }
+        let generator = UINotificationFeedbackGenerator()
+        generator.prepare()
+        generator.notificationOccurred(type)
+    }
+}
