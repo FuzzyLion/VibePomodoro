@@ -196,4 +196,17 @@ final class PomodoroStore: ObservableObject {
         activeSession = session
         handle(events: events)
     }
+
+    func finishSessionEarly() {
+        guard var session = activeSession, session.runState != .completed else { return }
+        let events = PomodoroEngine.finishSessionEarly(session: &session, now: .now)
+        activeSession = session
+        handle(events: events)
+    }
+
+    func dismissCompletedSession() {
+        guard activeSession?.runState == .completed else { return }
+        activeSession = nil
+        refreshRuntimeSideEffects()
+    }
 }

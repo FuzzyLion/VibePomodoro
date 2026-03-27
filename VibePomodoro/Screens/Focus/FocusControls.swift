@@ -220,28 +220,131 @@ private struct GlassCapsuleShell: View {
     }
 }
 
-struct TertiaryActionButton: View {
+struct FocusCornerIconButton: View {
     @Environment(\.colorScheme) private var colorScheme
 
-    let title: String
     let systemImage: String
+    let accessibilityLabel: String
     let isEnabled: Bool
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
+            Image(systemName: systemImage)
+                .font(.system(size: 14.5, weight: .semibold))
+                .foregroundStyle(iconColor)
+                .frame(width: 44, height: 44)
+                .background {
+                    FocusCircleShell(
+                        tint: Color.white.opacity(colorScheme == .dark ? 0.045 : 0.075)
+                    )
+                }
+        }
+        .buttonStyle(FocusCornerButtonStyle())
+        .disabled(!isEnabled)
+        .opacity(isEnabled ? 1 : 0.64)
+        .shadow(
+            color: Color.black.opacity(colorScheme == .dark ? 0.042 : 0.03),
+            radius: colorScheme == .dark ? 5 : 7,
+            y: colorScheme == .dark ? 1.5 : 2.5
+        )
+        .accessibilityLabel(accessibilityLabel)
+        .accessibilityAddTraits(.isButton)
+        .zIndex(4)
+    }
+
+    private var iconColor: Color {
+        isEnabled
+            ? VibePalette.glassTextMedium(for: colorScheme)
+            : VibePalette.labelSecondary.opacity(0.68)
+    }
+}
+
+private struct FocusCircleShell: View {
+    @Environment(\.colorScheme) private var colorScheme
+
+    let tint: Color
+
+    var body: some View {
+        Circle()
+            .fill(.thinMaterial)
+            .overlay {
+                Circle()
+                    .fill(colorScheme == .dark ? tint.opacity(0.72) : tint)
+            }
+            .overlay {
+                Circle()
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                Color.white.opacity(colorScheme == .dark ? 0.05 : 0.08),
+                                Color.clear
+                            ],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+            }
+            .overlay {
+                Circle()
+                    .stroke(
+                        Color.white.opacity(colorScheme == .dark ? 0.30 : 0.48),
+                        lineWidth: 0.9
+                    )
+            }
+    }
+}
+
+private struct FocusCornerButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.965 : 1)
+            .brightness(configuration.isPressed ? 0.012 : 0)
+            .animation(.easeOut(duration: 0.16), value: configuration.isPressed)
+    }
+}
+
+struct TertiaryActionButton: View {
+    @Environment(\.colorScheme) private var colorScheme
+
+    enum Prominence {
+        case standard
+        case quiet
+    }
+
+    let title: String
+    let systemImage: String
+    let isEnabled: Bool
+    var prominence: Prominence = .standard
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
             Label(title, systemImage: systemImage)
-                .font(.system(size: 14, weight: .medium, design: .default))
-                .foregroundStyle(
-                    isEnabled
-                        ? VibePalette.glassTextMedium(for: colorScheme)
-                        : VibePalette.labelSecondary.opacity(0.68)
-                )
+                .font(.system(size: prominence == .quiet ? 13 : 14, weight: .medium, design: .default))
+                .lineLimit(1)
+                .minimumScaleFactor(prominence == .quiet ? 0.84 : 0.9)
+                .multilineTextAlignment(.center)
+                .foregroundStyle(foregroundColor)
         }
         .buttonStyle(.plain)
         .disabled(!isEnabled)
         .padding(.top, 2)
-        .opacity(isEnabled ? 1 : 0.64)
+        .opacity(isEnabled ? enabledOpacity : 0.64)
         .zIndex(4)
+    }
+
+    private var foregroundColor: Color {
+        if isEnabled {
+            return prominence == .quiet
+                ? VibePalette.glassTextMedium(for: colorScheme).opacity(0.88)
+                : VibePalette.glassTextMedium(for: colorScheme)
+        }
+
+        return VibePalette.labelSecondary.opacity(0.68)
+    }
+
+    private var enabledOpacity: Double {
+        prominence == .quiet ? 0.84 : 1
     }
 }

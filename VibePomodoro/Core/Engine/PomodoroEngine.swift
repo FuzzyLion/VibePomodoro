@@ -53,6 +53,20 @@ enum PomodoroEngine {
         return advanceToNextStep(session: &session, startDate: now, shouldContinueRunning: shouldContinueRunning)
     }
 
+    static func finishSessionEarly(session: inout SessionSnapshot, now: Date = .now) -> [PomodoroEvent] {
+        guard session.runState != .completed else { return [] }
+        guard session.hasElapsedTime(now: now) else { return [] }
+
+        if session.runState == .running {
+            commitRunningSegment(session: &session, endDate: now)
+        }
+
+        session.currentSegmentStartDate = nil
+        session.targetEndDate = nil
+        session.runState = .completed
+        return [.sessionCompleted]
+    }
+
     static func resetCurrentStep(session: inout SessionSnapshot, now: Date = .now) -> [PomodoroEvent] {
         guard session.runState != .completed, let step = session.currentStep else { return [] }
 
