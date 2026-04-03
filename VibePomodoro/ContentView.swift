@@ -15,7 +15,7 @@ struct ContentView: View {
         ZStack {
             VibeBackground()
             TabView(selection: $store.selectedTab) {
-                FocusScreen()
+                FocusScreen(tabBarChromeHidden: $isFocusTabBarVisuallyHidden)
                     .tag(AppTab.focus)
                     .tabItem {
                         Label("Focus", systemImage: "timer")
@@ -38,9 +38,6 @@ struct ContentView: View {
                 SystemTabBarVisibilityBridge(isHidden: isFocusTabBarVisuallyHidden)
                     .allowsHitTesting(false)
             }
-        }
-        .onPreferenceChange(FocusTabBarVisibilityPreferenceKey.self) { hidden in
-            isFocusTabBarVisuallyHidden = hidden
         }
         .animation(.spring(response: 0.38, dampingFraction: 0.88), value: store.selectedTab)
     }

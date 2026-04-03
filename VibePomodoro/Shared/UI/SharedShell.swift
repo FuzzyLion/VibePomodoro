@@ -1,14 +1,6 @@
 import SwiftUI
 import UIKit
 
-struct FocusTabBarVisibilityPreferenceKey: PreferenceKey {
-    static var defaultValue = false
-
-    static func reduce(value: inout Bool, nextValue: () -> Bool) {
-        value = nextValue()
-    }
-}
-
 struct VibeBackground: View {
     @Environment(\.colorScheme) private var colorScheme
 
@@ -209,12 +201,10 @@ final class TabBarVisibilityController: UIViewController {
     func applyTabBarVisibility(isHidden: Bool, animationDuration: TimeInterval) {
         let applyChanges = {
             guard let tabBar = self.resolveTabBarIfNeeded() else { return }
-            if self.lastAppliedHiddenState == nil {
-                self.lastAppliedHiddenState = false
-            }
-
             let targetAlpha: CGFloat = isHidden ? 0 : 1
-            let shouldAnimate = self.lastAppliedHiddenState != isHidden && animationDuration > 0
+            let shouldAnimate = self.lastAppliedHiddenState != nil
+                && self.lastAppliedHiddenState != isHidden
+                && animationDuration > 0
 
             tabBar.isHidden = false
             tabBar.isUserInteractionEnabled = !isHidden
@@ -226,20 +216,16 @@ final class TabBarVisibilityController: UIViewController {
                     tabBar.alpha = 0
                 }
 
+                tabBar.layer.removeAllAnimations()
                 UIView.animate(
                     withDuration: animationDuration,
                     delay: 0,
                     options: [.beginFromCurrentState, .curveEaseOut, .allowUserInteraction]
                 ) {
                     tabBar.alpha = targetAlpha
-                } completion: { _ in
-                    tabBar.transform = .identity
-                    tabBar.isHidden = isHidden
                 }
             } else {
                 tabBar.alpha = targetAlpha
-                tabBar.transform = .identity
-                tabBar.isHidden = isHidden
             }
 
             self.lastAppliedHiddenState = isHidden

@@ -68,14 +68,14 @@ VibePomodoro/
 ### 0.1.1 当前架构摘要
 
 - `VibePomodoroApp.swift` 创建单一 `@StateObject PomodoroStore`，并把它注入整个 app。
-- `ContentView.swift` 只负责全局背景与 `TabView`，不承载业务状态机。
+- `ContentView.swift` 负责全局背景、`TabView`，以及跨页面的底部导航显隐协作；不承载业务状态机。
 - `Core/Models/*` 定义核心数据模型、session 快照和 productivity 聚合结构。
 - `Core/Engine/PomodoroEngine.swift` 定义 session 状态推进规则与事件产出。
 - `Core/Store/*` 仍是运行时唯一 source of truth，但按 `主状态 / 设置 / 生命周期 / 通知 / 持久化 / 统计` 拆分职责。
 - `Screens/*` 负责页面级 UI 和页面专属子视图，不新增第二套全局状态源。
 - `Screens/Focus/*` 当前按 `页面骨架 / 页面专属控件 / 气泡计时器实现` 拆分，但仍属于同一页面边界。
 - `Screens/Productivity/*` 当前按 `页面骨架 / 卡片玻璃壳 / 摘要区 / 趋势图区 / 图表支持逻辑` 拆分，但仍属于同一页面边界。
-- `Shared/*` 只承载跨页面复用的主题与通用 UI 外壳。
+- `Shared/*` 只承载跨页面复用的主题与通用 UI 外壳；全局背景、玻璃容器与系统底栏显隐桥接也归这里。
 
 ### 0.1.2 单一状态来源
 
@@ -119,6 +119,12 @@ VibePomodoro/
   - `Productivity` 正式统计不读取进行中的 session
   - 只有在 `.sessionCompleted` 时，才把该 session 写入 `completedSessions` 并增量更新 `productivityCache`
   - cache 缺失、版本不匹配或 session 集合不一致时，从 `completedSessions` 全量重建
+- `Focus` 沉浸模式视觉流：
+  - `FocusScreen` 在页面内维护 `isImmersive / isRestoringImmersiveLayout / immersiveVisualsHidden`
+  - 页面内 chrome 与气泡内主按钮的淡入淡出由同一个 SwiftUI 动画驱动
+  - `FocusScreen` 通过父层 binding 向 `ContentView` 发出底部导航显隐信号
+  - `ContentView` 把该信号交给 `Shared/UI/SharedShell.swift` 中的系统 `Tab Bar` 可见性桥接层
+  - 状态栏 / system overlays 仍由 `FocusScreen` 直接控制，底部导航的全局显隐则属于父层协作
 
 ### 0.1.4 页面与状态边界
 
@@ -126,7 +132,7 @@ VibePomodoro/
   - 读取 `PomodoroStore`
   - 生成 `FocusRenderState`
   - 当前目录内拆分为：
-    - `FocusScreen.swift`：render state、页面骨架、布局常量
+    - `FocusScreen.swift`：render state、页面骨架、布局常量、沉浸模式视觉状态与底栏显隐信号
     - `FocusControls.swift`：状态条、session 条、次级按钮与胶囊玻璃壳
     - `FocusBubbleTimer.swift`：气泡、液面动画、时间数字与玻璃球绘制
   - 页面内只做显示层拆分，不能自建 session 状态机
@@ -206,6 +212,9 @@ VibePomodoro/
   - 放对应 `Screens/<Page>/...`
 - 改跨页面主题、背景、玻璃容器、共用标题：
   - 放 `Shared/Theme` 或 `Shared/UI`
+- 改全局底部导航的显隐协作、系统 `Tab Bar` 动画桥接：
+  - 放 `ContentView.swift` 或 `Shared/UI/*`
+  - 具体页面只负责发出“是否应隐藏全局 chrome”的视觉信号
 - 改 session 规则、统计口径、step 推进、时间真值：
   - 放 `Core/Models/*` 或 `Core/Engine/PomodoroEngine.swift`
 - 改持久化、通知、scene 恢复、idle timer、副作用协调：
@@ -441,6 +450,7 @@ MVP 需要支持的配置项：
 补充说明：
 
 - 底部导航优先采用系统 `Tab Bar` / `Navigation` 的官方 `Liquid Glass` 样式
+- `Focus` 沉浸模式下，底部导航允许通过共享壳层对系统 `Tab Bar` 做协调显隐，但语义上仍应保持“系统导航栏”的感觉，而不是改造成独立页面组件
 - 自定义组件可以做玻璃化表达，但语言必须向系统靠拢
 
 ### 4.3 三个页面的角色

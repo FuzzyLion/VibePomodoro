@@ -194,6 +194,7 @@ struct FocusScreen: View {
     @EnvironmentObject private var store: PomodoroStore
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Binding var tabBarChromeHidden: Bool
     @State private var isImmersive = false
     @State private var isShowingFinishConfirmation = false
     @State private var isVoiceOverRunning = UIAccessibility.isVoiceOverRunning
@@ -231,10 +232,6 @@ struct FocusScreen: View {
             .frame(width: proxy.size.width, height: proxy.size.height, alignment: .top)
             .statusBarHidden(shouldHideSystemOverlays)
             .persistentSystemOverlays(shouldHideSystemOverlays ? .hidden : .visible)
-            .preference(
-                key: FocusTabBarVisibilityPreferenceKey.self,
-                value: shouldHideTabBarChrome
-            )
             .onAppear {
                 syncVoiceOverState()
                 syncCompletionSummary(with: store.activeSession)
@@ -683,15 +680,21 @@ struct FocusScreen: View {
     }
 
     private func setImmersiveVisualsHidden(_ hidden: Bool) {
-        guard immersiveVisualsHidden != hidden else { return }
+        let targetTabBarHidden = store.selectedTab == .focus && completionSummaryState == nil && hidden
+
+        guard immersiveVisualsHidden != hidden || tabBarChromeHidden != targetTabBarHidden else {
+            return
+        }
 
         if reduceMotion {
             immersiveVisualsHidden = hidden
+            tabBarChromeHidden = targetTabBarHidden
             return
         }
 
         withAnimation(FocusScreenLayout.immersiveVisualFadeAnimation) {
             immersiveVisualsHidden = hidden
+            tabBarChromeHidden = targetTabBarHidden
         }
     }
 
