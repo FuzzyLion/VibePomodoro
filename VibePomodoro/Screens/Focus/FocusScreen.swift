@@ -193,20 +193,29 @@ struct FocusRenderState: Equatable {
 struct FocusScreen: View {
     @EnvironmentObject private var store: PomodoroStore
     @Environment(\.scenePhase) private var scenePhase
-    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var isImmersive = false
     @State private var isShowingFinishConfirmation = false
     @State private var isVoiceOverRunning = UIAccessibility.isVoiceOverRunning
     @State private var completionSummaryState: FocusCompletionSummaryState?
-    @State private var immersiveHintVisible = false
-    @State private var immersiveHintDismissTask: Task<Void, Never>?
+    @State private var immersiveVisualsHidden = false
+    @State private var stableBubbleAnchor: CGPoint?
+    @State private var stableBubbleAnchorContainerSize: CGSize = .zero
+    @State private var isRestoringImmersiveLayout = false
+    @State private var immersiveLayoutRestoreTask: Task<Void, Never>?
 
     var body: some View {
         GeometryReader { proxy in
             let layout = FocusScreenLayout(size: proxy.size, safeAreaInsets: proxy.safeAreaInsets)
+            let containerFrame = proxy.frame(in: .global)
             let renderState = FocusRenderState.build(store: store, scenePhase: scenePhase)
             ZStack {
-                pageContent(renderState: renderState, layout: layout, size: proxy.size)
+                pageContent(
+                    renderState: renderState,
+                    layout: layout,
+                    size: proxy.size,
+                    containerFrame: containerFrame
+                )
                     .opacity(completionSummaryState == nil ? 1 : 0.22)
                     .blur(radius: completionSummaryState == nil ? 0 : 10)
                     .animation(.easeOut(duration: 0.22), value: completionSummaryState != nil)
@@ -217,18 +226,31 @@ struct FocusScreen: View {
                     }
                     .transition(.opacity.combined(with: .scale(scale: 0.985)))
                     .zIndex(2)
-                } else if isImmersive && immersiveHintVisible {
-                    immersiveHintBanner
-                        .transition(.opacity)
-                        .zIndex(2)
                 }
             }
             .frame(width: proxy.size.width, height: proxy.size.height, alignment: .top)
-            .toolbar(isImmersive && completionSummaryState == nil ? .hidden : .visible, for: .tabBar)
+            .statusBarHidden(shouldHideSystemOverlays)
+            .persistentSystemOverlays(shouldHideSystemOverlays ? .hidden : .visible)
+            .preference(
+                key: FocusTabBarVisibilityPreferenceKey.self,
+                value: shouldHideTabBarChrome
+            )
             .onAppear {
                 syncVoiceOverState()
                 syncCompletionSummary(with: store.activeSession)
                 syncImmersiveState()
+                syncBubbleAnchor(layout: layout, containerFrame: containerFrame)
+                syncImmersiveVisualState()
+            }
+            .onChange(of: layout.bubbleAnchorSignature) { _, _ in
+                syncBubbleAnchor(layout: layout, containerFrame: containerFrame)
+            }
+            .onChange(of: isImmersive) { _, _ in
+                syncBubbleAnchor(layout: layout, containerFrame: containerFrame)
+                syncImmersiveVisualState()
+            }
+            .onChange(of: isRestoringImmersiveLayout) { _, _ in
+                syncBubbleAnchor(layout: layout, containerFrame: containerFrame)
             }
             .onChange(of: store.activeSession?.id) { _, _ in
                 syncCompletionSummary(with: store.activeSession)
@@ -264,76 +286,81 @@ struct FocusScreen: View {
     private func pageContent(
         renderState: FocusRenderState,
         layout: FocusScreenLayout,
-        size: CGSize
+        size: CGSize,
+        containerFrame: CGRect
     ) -> some View {
         ZStack {
-            backgroundTapLayer
+            backgroundTapLayer(
+                layout: layout,
+                size: size,
+                containerFrame: containerFrame
+            )
 
-            bubbleLayer(renderState: renderState)
+            bubbleLayer(
+                renderState: renderState,
+                layout: layout,
+                size: size,
+                containerFrame: containerFrame
+            )
 
-            if !isImmersive {
-                topChrome(renderState: renderState, layout: layout)
-                bottomChrome(renderState: renderState, layout: layout)
-            }
+            topChrome(renderState: renderState, layout: layout)
+                .opacity(chromeOpacity)
+                .allowsHitTesting(isChromeInteractive)
+
+            bottomChrome(
+                renderState: renderState,
+                layout: layout,
+                size: size,
+                containerFrame: containerFrame
+            )
+            .opacity(chromeOpacity)
+            .allowsHitTesting(isChromeInteractive)
         }
         .frame(width: size.width, height: size.height, alignment: .center)
         .allowsHitTesting(completionSummaryState == nil)
     }
 
-    private var immersiveHintBanner: some View {
-        Text("Tap anywhere to show controls")
-            .font(.system(size: 13, weight: .semibold, design: .default))
-            .foregroundStyle(VibePalette.glassTextMedium(for: colorScheme))
-            .padding(.horizontal, 16)
-            .padding(.vertical, 9)
-            .background {
-                Capsule(style: .continuous)
-                    .fill(.thinMaterial)
-                    .overlay {
-                        Capsule(style: .continuous)
-                            .fill(Color.white.opacity(0.10))
-                    }
-                    .overlay {
-                        Capsule(style: .continuous)
-                            .stroke(Color.white.opacity(0.30), lineWidth: 0.85)
-                    }
-            }
-            .shadow(color: Color.black.opacity(0.08), radius: 12, y: 5)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
-            .offset(y: FocusScreenLayout.immersiveHintOffset)
-        .allowsHitTesting(false)
-    }
-
-    private var backgroundTapLayer: some View {
+    private func backgroundTapLayer(
+        layout: FocusScreenLayout,
+        size: CGSize,
+        containerFrame: CGRect
+    ) -> some View {
         Rectangle()
             .fill(Color.clear)
             .contentShape(Rectangle())
-            .onTapGesture {
-                handleBackgroundTap()
-            }
+            .gesture(
+                SpatialTapGesture()
+                    .onEnded { value in
+                        handleScreenTap(
+                            at: value.location,
+                            layout: layout,
+                            size: size,
+                            containerFrame: containerFrame
+                        )
+                    }
+            )
     }
 
     @ViewBuilder
-    private func bubbleLayer(renderState: FocusRenderState) -> some View {
+    private func bubbleLayer(
+        renderState: FocusRenderState,
+        layout: FocusScreenLayout,
+        size: CGSize,
+        containerFrame: CGRect
+    ) -> some View {
         let bubbleView = BubbleTimerView(
             renderState: renderState.bubble,
-            showsControlButton: !isImmersive && completionSummaryState == nil,
+            controlVisibility: bubbleControlOpacity,
+            controlIsInteractive: isChromeInteractive,
             action: store.togglePrimaryAction
         )
         .frame(
             width: FocusScreenLayout.bubbleDiameter,
             height: FocusScreenLayout.bubbleDiameter
         )
+        .position(bubblePosition(layout: layout, size: size, containerFrame: containerFrame))
 
-        if isImmersive {
-            bubbleView
-                .contentShape(Circle())
-                .onTapGesture {
-                    handleImmersiveBubbleTap()
-                }
-        } else {
-            bubbleView
-        }
+        bubbleView
     }
 
     private func topChrome(
@@ -381,7 +408,9 @@ struct FocusScreen: View {
 
     private func bottomChrome(
         renderState: FocusRenderState,
-        layout: FocusScreenLayout
+        layout: FocusScreenLayout,
+        size: CGSize,
+        containerFrame: CGRect
     ) -> some View {
         VStack(spacing: layout.bottomChromeSpacing) {
             SessionProgressPill(
@@ -412,7 +441,14 @@ struct FocusScreen: View {
             .frame(width: FocusScreenLayout.secondaryActionRowWidth)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .padding(.top, layout.bottomChromeTopPadding)
+        .padding(
+            .top,
+            bottomChromeTopPadding(
+                layout: layout,
+                size: size,
+                containerFrame: containerFrame
+            )
+        )
         .padding(.horizontal, FocusScreenLayout.horizontalPadding)
     }
 
@@ -429,49 +465,67 @@ struct FocusScreen: View {
         )
     }
 
-    private func handleBackgroundTap() {
+    private func handleScreenTap(
+        at location: CGPoint,
+        layout: FocusScreenLayout,
+        size: CGSize,
+        containerFrame: CGRect
+    ) {
         guard canEnterImmersiveMode else { return }
-        toggleImmersiveMode()
+
+        if isImmersive {
+            toggleImmersiveMode(force: false)
+            return
+        }
+
+        guard !bubbleHitFrame(layout: layout, size: size, containerFrame: containerFrame).contains(location) else {
+            return
+        }
+
+        toggleImmersiveMode(force: true)
     }
 
-    private func handleImmersiveBubbleTap() {
-        guard canEnterImmersiveMode, isImmersive else { return }
-        store.togglePrimaryAction()
+    private func toggleImmersiveMode(force newValue: Bool? = nil) {
+        setImmersiveMode(newValue ?? !isImmersive)
     }
 
-    private func toggleImmersiveMode() {
-        let newValue = !isImmersive
-        withAnimation(.easeOut(duration: 0.18)) {
-            isImmersive = newValue
+    private func setImmersiveMode(_ newValue: Bool) {
+        setImmersiveVisualsHidden(newValue)
+
+        guard isImmersive != newValue || (newValue == false && isRestoringImmersiveLayout) else {
+            return
         }
 
         if newValue {
-            showImmersiveHint()
-        } else {
-            hideImmersiveHint()
+            endImmersiveLayoutRestore()
+            isImmersive = true
+            return
+        }
+
+        let wasImmersive = isImmersive
+        isImmersive = false
+
+        if wasImmersive {
+            beginImmersiveLayoutRestore()
         }
     }
 
-    private func showImmersiveHint() {
-        immersiveHintDismissTask?.cancel()
+    private func beginImmersiveLayoutRestore() {
+        immersiveLayoutRestoreTask?.cancel()
+        isRestoringImmersiveLayout = true
 
-        withAnimation(.easeOut(duration: 0.18)) {
-            immersiveHintVisible = true
-        }
-
-        immersiveHintDismissTask = Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 1_000_000_000)
+        immersiveLayoutRestoreTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: FocusScreenLayout.immersiveLayoutRestoreFallbackDelay)
             guard !Task.isCancelled else { return }
-
-            withAnimation(.easeOut(duration: 0.18)) {
-                immersiveHintVisible = false
-            }
+            guard !isImmersive else { return }
+            isRestoringImmersiveLayout = false
         }
     }
 
-    private func hideImmersiveHint() {
-        immersiveHintDismissTask?.cancel()
-        immersiveHintVisible = false
+    private func endImmersiveLayoutRestore() {
+        immersiveLayoutRestoreTask?.cancel()
+        immersiveLayoutRestoreTask = nil
+        isRestoringImmersiveLayout = false
     }
 
     private var canEnterImmersiveMode: Bool {
@@ -492,18 +546,152 @@ struct FocusScreen: View {
     private func syncImmersiveState() {
         guard shouldKeepImmersiveMode else {
             if isImmersive {
-                withAnimation(.easeOut(duration: 0.18)) {
-                    isImmersive = false
-                }
+                setImmersiveMode(false)
+            } else {
+                endImmersiveLayoutRestore()
             }
-            hideImmersiveHint()
+            setImmersiveVisualsHidden(false)
             isShowingFinishConfirmation = false
             return
         }
 
         if scenePhase != .active {
-            hideImmersiveHint()
             isShowingFinishConfirmation = false
+        }
+    }
+
+    private func bubblePosition(
+        layout: FocusScreenLayout,
+        size: CGSize,
+        containerFrame: CGRect
+    ) -> CGPoint {
+        CGPoint(
+            x: size.width / 2,
+            y: resolvedBubbleCenterY(
+                layout: layout,
+                size: size,
+                containerFrame: containerFrame
+            )
+        )
+    }
+
+    private func bubbleHitFrame(
+        layout: FocusScreenLayout,
+        size: CGSize,
+        containerFrame: CGRect
+    ) -> CGRect {
+        let bubbleCenter = bubblePosition(layout: layout, size: size, containerFrame: containerFrame)
+        let radius = FocusScreenLayout.bubbleDiameter / 2
+
+        return CGRect(
+            x: bubbleCenter.x - radius,
+            y: bubbleCenter.y - radius,
+            width: FocusScreenLayout.bubbleDiameter,
+            height: FocusScreenLayout.bubbleDiameter
+        )
+    }
+
+    private func bottomChromeTopPadding(
+        layout: FocusScreenLayout,
+        size: CGSize,
+        containerFrame: CGRect
+    ) -> CGFloat {
+        resolvedBubbleCenterY(
+            layout: layout,
+            size: size,
+            containerFrame: containerFrame
+        ) + (FocusScreenLayout.bubbleDiameter / 2) + layout.bottomChromeOffset
+    }
+
+    private func resolvedBubbleCenterY(
+        layout: FocusScreenLayout,
+        size: CGSize,
+        containerFrame: CGRect
+    ) -> CGFloat {
+        let defaultCenterY = layout.defaultBubbleCenterY
+
+        guard let stableBubbleAnchor, shouldUseStableContentAnchor else {
+            return defaultCenterY
+        }
+
+        return stableBubbleAnchor.y - containerFrame.minY
+    }
+
+    private func syncBubbleAnchor(layout: FocusScreenLayout, containerFrame: CGRect) {
+        if isRestoringImmersiveLayout,
+           shouldEndImmersiveLayoutRestore(for: containerFrame.size) {
+            endImmersiveLayoutRestore()
+        }
+
+        guard shouldRefreshStableBubbleAnchor(for: containerFrame.size) else { return }
+
+        stableBubbleAnchor = CGPoint(
+            x: containerFrame.midX,
+            y: containerFrame.minY + layout.defaultBubbleCenterY
+        )
+        stableBubbleAnchorContainerSize = containerFrame.size
+    }
+
+    private func shouldRefreshStableBubbleAnchor(for containerSize: CGSize) -> Bool {
+        guard !isRestoringImmersiveLayout else { return false }
+        guard !isImmersive else { return stableBubbleAnchor == nil }
+        guard stableBubbleAnchor != nil else { return true }
+
+        let widthDelta = abs(stableBubbleAnchorContainerSize.width - containerSize.width)
+        let heightDelta = abs(stableBubbleAnchorContainerSize.height - containerSize.height)
+
+        return widthDelta > FocusScreenLayout.immersiveAnchorResetEpsilon
+            || heightDelta > FocusScreenLayout.immersiveAnchorResetEpsilon
+    }
+
+    private func shouldEndImmersiveLayoutRestore(for containerSize: CGSize) -> Bool {
+        guard stableBubbleAnchorContainerSize != .zero else { return true }
+
+        let widthDelta = abs(stableBubbleAnchorContainerSize.width - containerSize.width)
+        let heightDelta = abs(stableBubbleAnchorContainerSize.height - containerSize.height)
+
+        return widthDelta <= FocusScreenLayout.layoutSettlingEpsilon
+            && heightDelta <= FocusScreenLayout.layoutSettlingEpsilon
+    }
+
+    private var shouldUseStableContentAnchor: Bool {
+        stableBubbleAnchor != nil && (isImmersive || isRestoringImmersiveLayout)
+    }
+
+    private var chromeOpacity: Double {
+        completionSummaryState == nil && !immersiveVisualsHidden ? 1 : 0
+    }
+
+    private var bubbleControlOpacity: Double {
+        chromeOpacity
+    }
+
+    private var isChromeInteractive: Bool {
+        completionSummaryState == nil && !immersiveVisualsHidden
+    }
+
+    private var shouldHideSystemOverlays: Bool {
+        completionSummaryState == nil && immersiveVisualsHidden
+    }
+
+    private var shouldHideTabBarChrome: Bool {
+        store.selectedTab == .focus && completionSummaryState == nil && immersiveVisualsHidden
+    }
+
+    private func syncImmersiveVisualState() {
+        setImmersiveVisualsHidden(isImmersive && completionSummaryState == nil)
+    }
+
+    private func setImmersiveVisualsHidden(_ hidden: Bool) {
+        guard immersiveVisualsHidden != hidden else { return }
+
+        if reduceMotion {
+            immersiveVisualsHidden = hidden
+            return
+        }
+
+        withAnimation(FocusScreenLayout.immersiveVisualFadeAnimation) {
+            immersiveVisualsHidden = hidden
         }
     }
 
@@ -524,8 +712,8 @@ struct FocusScreen: View {
         if completionSummaryState != updatedState {
             completionSummaryState = updatedState
         }
-        isImmersive = false
-        hideImmersiveHint()
+        setImmersiveMode(false)
+        setImmersiveVisualsHidden(false)
         isShowingFinishConfirmation = false
     }
 
@@ -534,12 +722,17 @@ struct FocusScreen: View {
     }
 
     private func handleCompletionDismissal() {
-        hideImmersiveHint()
-        isImmersive = false
+        setImmersiveMode(false)
         isShowingFinishConfirmation = false
         completionSummaryState = nil
         store.dismissCompletedSession()
     }
+}
+
+fileprivate struct FocusBubbleAnchorSignature: Equatable {
+    let size: CGSize
+    let topInset: CGFloat
+    let bottomInset: CGFloat
 }
 
 struct FocusScreenLayout {
@@ -548,7 +741,10 @@ struct FocusScreenLayout {
     static let topActionButtonSize: CGFloat = 44
     static let secondaryActionRowWidth: CGFloat = 261.29
     static let secondaryActionSpacing: CGFloat = 16
-    static let immersiveHintOffset: CGFloat = -188
+    static let immersiveAnchorResetEpsilon: CGFloat = 1
+    static let layoutSettlingEpsilon: CGFloat = 1
+    static let immersiveLayoutRestoreFallbackDelay: UInt64 = 450_000_000
+    static let immersiveVisualFadeAnimation = Animation.easeOut(duration: 0.18)
 
     let size: CGSize
     let safeAreaInsets: EdgeInsets
@@ -573,7 +769,19 @@ struct FocusScreenLayout {
         isCompact ? 16 : 18
     }
 
-    var bottomChromeTopPadding: CGFloat {
-        (size.height / 2) + (FocusScreenLayout.bubbleDiameter / 2) + (isCompact ? 16 : 22)
+    var defaultBubbleCenterY: CGFloat {
+        size.height / 2
+    }
+
+    var bottomChromeOffset: CGFloat {
+        isCompact ? 16 : 22
+    }
+
+    fileprivate var bubbleAnchorSignature: FocusBubbleAnchorSignature {
+        FocusBubbleAnchorSignature(
+            size: size,
+            topInset: safeAreaInsets.top,
+            bottomInset: safeAreaInsets.bottom
+        )
     }
 }

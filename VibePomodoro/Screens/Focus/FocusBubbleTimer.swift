@@ -2,7 +2,8 @@ import SwiftUI
 
 struct BubbleTimerView: View {
     let renderState: BubbleRenderState
-    var showsControlButton: Bool = true
+    var controlVisibility: Double = 1
+    var controlIsInteractive: Bool = true
     let action: () -> Void
 
     @State private var accumulatedWaveTime: TimeInterval = 0
@@ -21,7 +22,8 @@ struct BubbleTimerView: View {
             BubbleAnimatedSurfaceLayer(renderState: renderState, waveClock: waveClock)
             BubbleForegroundContent(
                 renderState: renderState,
-                showsControlButton: showsControlButton,
+                controlVisibility: controlVisibility,
+                controlIsInteractive: controlIsInteractive,
                 action: action
             )
         }
@@ -99,7 +101,8 @@ private struct BubbleAnimatedSurfaceLayer: View {
 
 private struct BubbleForegroundContent: View {
     let renderState: BubbleRenderState
-    let showsControlButton: Bool
+    let controlVisibility: Double
+    let controlIsInteractive: Bool
     let action: () -> Void
 
     var body: some View {
@@ -107,10 +110,10 @@ private struct BubbleForegroundContent: View {
             .frame(maxWidth: 208)
             .offset(y: -10)
             .overlay(alignment: .center) {
-                if showsControlButton {
-                    BubbleControlButton(actionTitle: renderState.actionTitle, action: action)
-                        .offset(y: 58)
-                }
+                BubbleControlButton(actionTitle: renderState.actionTitle, action: action)
+                    .offset(y: 58)
+                    .opacity(controlVisibility)
+                    .allowsHitTesting(controlIsInteractive)
             }
     }
 }

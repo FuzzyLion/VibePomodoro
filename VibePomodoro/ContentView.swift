@@ -9,6 +9,7 @@ import SwiftUI
 
 struct ContentView: View {
     @EnvironmentObject private var store: PomodoroStore
+    @State private var isFocusTabBarVisuallyHidden = false
 
     var body: some View {
         ZStack {
@@ -33,6 +34,13 @@ struct ContentView: View {
                     }
             }
             .tint(VibePalette.warmAmberAccent)
+            .background {
+                SystemTabBarVisibilityBridge(isHidden: isFocusTabBarVisuallyHidden)
+                    .allowsHitTesting(false)
+            }
+        }
+        .onPreferenceChange(FocusTabBarVisibilityPreferenceKey.self) { hidden in
+            isFocusTabBarVisuallyHidden = hidden
         }
         .animation(.spring(response: 0.38, dampingFraction: 0.88), value: store.selectedTab)
     }
