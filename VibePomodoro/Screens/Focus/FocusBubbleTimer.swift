@@ -603,7 +603,14 @@ private struct BubbleGlassShell: View {
 
 private struct BubbleGlassShape: Shape {
     func path(in rect: CGRect) -> Path {
-        Path(ellipseIn: rect.insetBy(dx: 0.9, dy: 0.9))
+        guard rect.width.isFinite,
+              rect.height.isFinite,
+              rect.width > 1,
+              rect.height > 1 else {
+            return Path()
+        }
+
+        return Path(ellipseIn: rect.insetBy(dx: 0.9, dy: 0.9))
     }
 }
 
@@ -614,13 +621,17 @@ private struct BubbleGlowBackdrop: View {
     let glowExpansion: Double
 
     var body: some View {
+        let glow = glowExpansion.isFinite ? max(0, glowExpansion) : 0
+
         ZStack {
             BubbleGlassShape()
                 .stroke(
                     phase.shadowColor.opacity(
-                        colorScheme == .dark
-                            ? 0.045 + glowExpansion * 0.009
-                            : 0.018 + glowExpansion * 0.005
+                        clampedOpacity(
+                            colorScheme == .dark
+                                ? 0.045 + glow * 0.009
+                                : 0.018 + glow * 0.005
+                        )
                     ),
                     lineWidth: colorScheme == .dark ? 13 : 11
                 )
@@ -630,9 +641,11 @@ private struct BubbleGlowBackdrop: View {
             BubbleGlassShape()
                 .stroke(
                     Color.white.opacity(
-                        colorScheme == .dark
-                            ? 0.020 + glowExpansion * 0.003
-                            : 0.020 + glowExpansion * 0.004
+                        clampedOpacity(
+                            colorScheme == .dark
+                                ? 0.020 + glow * 0.003
+                                : 0.020 + glow * 0.004
+                        )
                     ),
                     lineWidth: colorScheme == .dark ? 4.5 : 3.5
                 )
@@ -645,38 +658,48 @@ private struct BubbleGlowBackdrop: View {
                     RadialGradient(
                         colors: [
                             phase.shadowColor.opacity(
-                                colorScheme == .dark
-                                    ? 0.08 + glowExpansion * 0.05
-                                    : 0.08 + glowExpansion * 0.04
+                                clampedOpacity(
+                                    colorScheme == .dark
+                                        ? 0.08 + glow * 0.05
+                                        : 0.08 + glow * 0.04
+                                )
                             ),
                             phase.shadowColor.opacity(
-                                colorScheme == .dark
-                                    ? 0.024 + glowExpansion * 0.018
-                                    : 0.024 + glowExpansion * 0.015
+                                clampedOpacity(
+                                    colorScheme == .dark
+                                        ? 0.024 + glow * 0.018
+                                        : 0.024 + glow * 0.015
+                                )
                             ),
                             Color.clear
                         ],
                         center: .center,
                         startRadius: 8,
-                        endRadius: 100 + glowExpansion * 24
+                        endRadius: 100 + glow * 24
                     )
                 )
-                .frame(width: 168 + glowExpansion * 28, height: 38 + glowExpansion * 7)
-                .blur(radius: colorScheme == .dark ? 16 + glowExpansion * 5 : 16 + glowExpansion * 4)
+                .frame(width: 168 + glow * 28, height: 38 + glow * 7)
+                .blur(radius: colorScheme == .dark ? 16 + glow * 5 : 16 + glow * 4)
                 .offset(y: 126)
 
             Ellipse()
                 .fill(
                     Color.white.opacity(
-                        colorScheme == .dark
-                            ? 0.06 + glowExpansion * 0.02
-                            : 0.04 + glowExpansion * 0.015
+                        clampedOpacity(
+                            colorScheme == .dark
+                                ? 0.06 + glow * 0.02
+                                : 0.04 + glow * 0.015
+                        )
                     )
                 )
-                .frame(width: 138 + glowExpansion * 10, height: 18 + glowExpansion * 3)
+                .frame(width: 138 + glow * 10, height: 18 + glow * 3)
                 .blur(radius: colorScheme == .dark ? 9 : 8)
                 .offset(y: 118)
         }
+    }
+
+    private func clampedOpacity(_ value: Double) -> Double {
+        min(1, max(0, value.isFinite ? value : 0))
     }
 }
 
@@ -697,9 +720,18 @@ private struct BubbleLiquidLayer: View {
         let amplitude = 4.2 + glowExpansion * 2.4
 
         Canvas(rendersAsynchronously: true) { context, canvasSize in
+            guard canvasSize.width.isFinite,
+                  canvasSize.height.isFinite,
+                  canvasSize.width > 0,
+                  canvasSize.height > 0 else {
+                return
+            }
+
             let sphereRect = CGRect(origin: .zero, size: canvasSize)
             let spherePath = BubbleGlassShape().path(in: sphereRect)
             let waterlineY = sphereRect.maxY - sphereRect.height * CGFloat(visualFillRatio)
+
+            guard waterlineY.isFinite else { return }
 
             context.clip(to: spherePath)
 
@@ -829,6 +861,16 @@ private struct WaveLiquidShape: Shape {
     let amplitude: Double
 
     func path(in rect: CGRect) -> Path {
+        guard rect.width.isFinite,
+              rect.height.isFinite,
+              rect.width > 0,
+              rect.height > 0,
+              fillRatio.isFinite,
+              phase.isFinite,
+              amplitude.isFinite else {
+            return Path()
+        }
+
         let clampedFill = max(0, min(fillRatio, 1))
         let baseY = rect.height * (1 - clampedFill)
         let mainAmplitude = min(rect.height * 0.06, amplitude)

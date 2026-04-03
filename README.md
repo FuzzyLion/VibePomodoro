@@ -30,8 +30,11 @@ VibePomodoro/
 ├── Screens/
 │   ├── Focus/
 │   │   ├── FocusScreen.swift
+│   │   ├── FocusRenderState.swift
+│   │   ├── FocusLayout.swift
 │   │   ├── FocusControls.swift
-│   │   └── FocusBubbleTimer.swift
+│   │   ├── FocusBubbleTimer.swift
+│   │   └── FocusCompletionSummary.swift
 │   ├── Productivity/
 │   │   ├── ProductivityScreen.swift
 │   │   ├── ProductivityCardChrome.swift
@@ -73,7 +76,7 @@ VibePomodoro/
 - `Core/Engine/PomodoroEngine.swift` 定义 session 状态推进规则与事件产出。
 - `Core/Store/*` 仍是运行时唯一 source of truth，但按 `主状态 / 设置 / 生命周期 / 通知 / 持久化 / 统计` 拆分职责。
 - `Screens/*` 负责页面级 UI 和页面专属子视图，不新增第二套全局状态源。
-- `Screens/Focus/*` 当前按 `页面骨架 / 页面专属控件 / 气泡计时器实现` 拆分，但仍属于同一页面边界。
+- `Screens/Focus/*` 当前按 `页面骨架 / render state / 布局 support / 页面专属控件 / 气泡计时器实现 / 完成总结 overlay` 拆分，但仍属于同一页面边界。
 - `Screens/Productivity/*` 当前按 `页面骨架 / 卡片玻璃壳 / 摘要区 / 趋势图区 / 图表支持逻辑` 拆分，但仍属于同一页面边界。
 - `Shared/*` 只承载跨页面复用的主题与通用 UI 外壳；全局背景、玻璃容器与系统底栏显隐桥接也归这里。
 
@@ -132,9 +135,12 @@ VibePomodoro/
   - 读取 `PomodoroStore`
   - 生成 `FocusRenderState`
   - 当前目录内拆分为：
-    - `FocusScreen.swift`：render state、页面骨架、布局常量、沉浸模式视觉状态与底栏显隐信号
+    - `FocusScreen.swift`：页面骨架、沉浸模式视觉状态与底栏显隐信号
+    - `FocusRenderState.swift`：`FocusRenderState / BubbleRenderState` 与 Focus 页显示态推导
+    - `FocusLayout.swift`：布局常量、safe area 适配与气泡 anchor support
     - `FocusControls.swift`：状态条、session 条、次级按钮与胶囊玻璃壳
     - `FocusBubbleTimer.swift`：气泡、液面动画、时间数字与玻璃球绘制
+    - `FocusCompletionSummary.swift`：session 完成总结 overlay 与格式化显示
   - 页面内只做显示层拆分，不能自建 session 状态机
   - 计时数字按 `1Hz` 刷新，气泡动画按低帧率刷新，仅在 `Focus` tab 可见且 session 运行时激活
 - `ProductivityScreen`：
@@ -754,11 +760,17 @@ MVP 不需要额外寻找开源 PNG 照片素材。
 - [VibePomodoro/Core/Store/PomodoroStore+Productivity.swift](./VibePomodoro/Core/Store/PomodoroStore+Productivity.swift)
   - Productivity snapshot、图表桶映射、streak 计算与统计查询
 - [VibePomodoro/Screens/Focus/FocusScreen.swift](./VibePomodoro/Screens/Focus/FocusScreen.swift)
-  - Focus 页 render state、页面骨架与布局常量
+  - Focus 页页面骨架、沉浸模式视觉状态与底栏显隐协作
+- [VibePomodoro/Screens/Focus/FocusRenderState.swift](./VibePomodoro/Screens/Focus/FocusRenderState.swift)
+  - Focus 页 render state、时间显示态与操作可用性推导
+- [VibePomodoro/Screens/Focus/FocusLayout.swift](./VibePomodoro/Screens/Focus/FocusLayout.swift)
+  - Focus 页布局常量、safe area 适配与气泡 anchor support
 - [VibePomodoro/Screens/Focus/FocusControls.swift](./VibePomodoro/Screens/Focus/FocusControls.swift)
   - Focus 页状态条、session 条、次级按钮与胶囊玻璃控件
 - [VibePomodoro/Screens/Focus/FocusBubbleTimer.swift](./VibePomodoro/Screens/Focus/FocusBubbleTimer.swift)
   - Focus 气泡、液面动画、倒计时数字刷新与玻璃球绘制
+- [VibePomodoro/Screens/Focus/FocusCompletionSummary.swift](./VibePomodoro/Screens/Focus/FocusCompletionSummary.swift)
+  - Focus 完成总结 overlay、文案格式化与完成态确认 UI
 - [VibePomodoro/Screens/Productivity/ProductivityScreen.swift](./VibePomodoro/Screens/Productivity/ProductivityScreen.swift)
   - Productivity 页页面骨架、布局常量、本地 range 选择态与 render state
 - [VibePomodoro/Screens/Productivity/ProductivityCardChrome.swift](./VibePomodoro/Screens/Productivity/ProductivityCardChrome.swift)

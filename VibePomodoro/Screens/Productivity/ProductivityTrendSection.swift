@@ -226,9 +226,16 @@ private struct ProductivityCustomXAxis: View {
     let textColor: Color
 
     var body: some View {
+        guard plotFrame.width.isFinite,
+              plotFrame.height.isFinite,
+              plotFrame.width > 0,
+              plotFrame.height > 0 else {
+            return AnyView(EmptyView())
+        }
+
         let slotWidth = plotFrame.width / CGFloat(max(buckets.count, 1))
 
-        ZStack(alignment: .topLeading) {
+        return AnyView(ZStack(alignment: .topLeading) {
             ForEach(Array(buckets.enumerated()), id: \.element.id) { index, bucket in
                 Text(ProductivityChartFormatting.xAxisLabel(for: bucket.labelDate, range: range))
                     .font(.system(size: 11, weight: .medium))
@@ -244,7 +251,7 @@ private struct ProductivityCustomXAxis: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .allowsHitTesting(false)
-        .accessibilityHidden(true)
+        .accessibilityHidden(true))
     }
 }
 
