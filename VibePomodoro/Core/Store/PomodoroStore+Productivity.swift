@@ -1,6 +1,12 @@
 import Foundation
 
 extension PomodoroStore {
+    func clearProductivityHistory() {
+        completedSessions = []
+        productivityCache = .empty
+        persist()
+    }
+
     func productivitySnapshot(for range: ProductivityRange, now: Date = .now) -> ProductivityMetricsSnapshot {
         ProductivityMetricsSnapshot(
             chartPoints: chartPoints(for: range, cache: productivityCache, now: now),

@@ -480,6 +480,74 @@ struct VibePomodoroTests {
         #expect(store.productivityCache.completedFocusCount == 1)
     }
 
+    @Test func clearProductivityHistoryRemovesPersistedHistoryButKeepsActiveSessionAndSettings() async throws {
+        let (defaults, suiteName) = makeDefaults()
+        defer { clear(defaults, suiteName: suiteName) }
+
+        var settings = PomodoroSettings.default
+        settings.focusMinutes = 45
+        settings.keepScreenOn = false
+
+        let start = Date(timeIntervalSince1970: 40_000)
+        let completedSession = makeCompletedSession(
+            settings: settings,
+            createdAt: start.addingTimeInterval(-5_400),
+            completedAt: start.addingTimeInterval(-1_800),
+            segments: [
+                makeSegment(
+                    phase: .focus,
+                    roundNumber: 1,
+                    startDate: start.addingTimeInterval(-5_400),
+                    endDate: start.addingTimeInterval(-2_700)
+                ),
+                makeSegment(
+                    phase: .longBreak,
+                    roundNumber: 1,
+                    startDate: start.addingTimeInterval(-2_700),
+                    endDate: start.addingTimeInterval(-1_800)
+                )
+            ]
+        )
+
+        var activeSession = SessionSnapshot.makeNew(settings: settings, now: start)
+        let currentStep = try #require(activeSession.currentStep)
+        activeSession.runState = .paused
+        activeSession.segments = [
+            ActivitySegment(
+                id: UUID(),
+                stepID: currentStep.id,
+                phase: .focus,
+                roundNumber: currentStep.roundNumber,
+                startDate: start,
+                endDate: start.addingTimeInterval(600)
+            )
+        ]
+
+        saveValue(settings, for: PomodoroStore.StorageKey.settings, defaults: defaults)
+        saveValue(activeSession, for: TestStorageKey.activeSession, defaults: defaults)
+        saveValue([completedSession], for: TestStorageKey.completedSessions, defaults: defaults)
+
+        let store = PomodoroStore(defaults: defaults)
+        let preservedSettings = store.settings
+        let preservedActiveSession = try #require(store.activeSession)
+
+        #expect(store.completedSessions.count == 1)
+        #expect(store.productivityCache.completedSessionCount == 1)
+
+        store.clearProductivityHistory()
+
+        #expect(store.completedSessions.isEmpty)
+        #expect(store.productivityCache == .empty)
+        #expect(store.settings == preservedSettings)
+        #expect(store.activeSession == preservedActiveSession)
+
+        let reloadedStore = PomodoroStore(defaults: defaults)
+        #expect(reloadedStore.completedSessions.isEmpty)
+        #expect(reloadedStore.productivityCache == .empty)
+        #expect(reloadedStore.settings == preservedSettings)
+        #expect(reloadedStore.activeSession == preservedActiveSession)
+    }
+
     @Test func productivityMonthDisplayBucketsRollUpThirtyDailyPointsWithoutChangingTotals() async throws {
         let calendar = Calendar(identifier: .gregorian)
         let start = try #require(calendar.date(from: DateComponents(year: 2026, month: 2, day: 20)))
@@ -493,14 +561,12 @@ struct VibePomodoroTests {
             )
         }
         let buckets = ProductivityChartDisplay.displayBuckets(from: points, range: .month)
-        let marks = ProductivityChartFormatting.xAxisMarkDates(for: buckets)
         let expectedLastBucketStart = try #require(calendar.date(from: DateComponents(year: 2026, month: 3, day: 20)))
 
         #expect(buckets.count == 5)
         #expect(buckets.reduce(0) { $0 + $1.focusTime } == points.reduce(0) { $0 + $1.focusTime })
         #expect(buckets.reduce(0) { $0 + $1.breakTime } == points.reduce(0) { $0 + $1.breakTime })
         #expect(buckets.reduce(0) { $0 + $1.completedFocusCount } == points.reduce(0) { $0 + $1.completedFocusCount })
-        #expect(marks.count == 5)
         #expect(buckets.first?.labelDate == points.first?.startDate)
         #expect(buckets.last?.labelDate == expectedLastBucketStart)
     }
@@ -518,10 +584,9 @@ struct VibePomodoroTests {
             )
         }
         let buckets = ProductivityChartDisplay.displayBuckets(from: points, range: .month)
-        let marks = ProductivityChartFormatting.xAxisMarkDates(for: buckets)
-        let labels = marks.map { ProductivityChartFormatting.xAxisLabel(for: $0, buckets: buckets, range: .month) }
+        let labels = buckets.map { ProductivityChartFormatting.xAxisLabel(for: $0.labelDate, range: .month) }
 
-        #expect(labels == ["20. Feb", "27. Feb", "6. Mar", "13. Mar", "20. Mar"])
+        #expect(labels == ["20 Feb", "27 Feb", "6 Mar", "13 Mar", "20 Mar"])
     }
 
     @Test func productivityYearAxisUsesSingleLetterEnglishMonths() async throws {
@@ -532,6 +597,7 @@ struct VibePomodoroTests {
 
         let buckets = [
             ProductivityDisplayBucket(
+                slotIndex: 0,
                 startDate: january,
                 endDate: calendar.date(byAdding: .month, value: 1, to: january)!,
                 xDate: january.addingTimeInterval(15 * 24 * 3600),
@@ -541,6 +607,7 @@ struct VibePomodoroTests {
                 completedFocusCount: 0
             ),
             ProductivityDisplayBucket(
+                slotIndex: 1,
                 startDate: september,
                 endDate: calendar.date(byAdding: .month, value: 1, to: september)!,
                 xDate: september.addingTimeInterval(15 * 24 * 3600),
@@ -550,6 +617,7 @@ struct VibePomodoroTests {
                 completedFocusCount: 0
             ),
             ProductivityDisplayBucket(
+                slotIndex: 2,
                 startDate: november,
                 endDate: calendar.date(byAdding: .month, value: 1, to: november)!,
                 xDate: november.addingTimeInterval(15 * 24 * 3600),
@@ -560,9 +628,9 @@ struct VibePomodoroTests {
             )
         ]
 
-        #expect(ProductivityChartFormatting.xAxisLabel(for: buckets[0].xDate, buckets: buckets, range: .year) == "J")
-        #expect(ProductivityChartFormatting.xAxisLabel(for: buckets[1].xDate, buckets: buckets, range: .year) == "S")
-        #expect(ProductivityChartFormatting.xAxisLabel(for: buckets[2].xDate, buckets: buckets, range: .year) == "N")
+        #expect(ProductivityChartFormatting.xAxisLabel(for: buckets[0].labelDate, range: .year) == "J")
+        #expect(ProductivityChartFormatting.xAxisLabel(for: buckets[1].labelDate, range: .year) == "S")
+        #expect(ProductivityChartFormatting.xAxisLabel(for: buckets[2].labelDate, range: .year) == "N")
     }
 
     @Test func productivityTimeAxisUsesRequestedStepRules() async throws {

@@ -192,10 +192,17 @@ VibePomodoro/
   - `Sound` 依赖 `Notifications`
   - `Sound Choice` 仅在 `Notifications` 与 `Sound` 都开启时显示
 - `Display` 当前只承载 `Keep Screen On`，语义限定为 `Active sessions only`
-- `Other` 当前仍是占位区：
+- `Other` 当前包含占位项与维护动作：
   - `Send Feedback`
   - `Share App`
   - 两者状态都为 `Soon`
+  - `Clear Productivity History`
+- `Clear Productivity History` 的默认语义是：
+  - 只清空已完成历史统计，不影响当前进行中的 session
+  - 删除对象为 `completedSessions` 与 `productivityCache`
+  - 行入口常驻，但在没有历史数据时禁用并显示 `No history yet`
+  - 点击后直接进入最终 destructive `alert`，不再经过中间确认菜单
+  - 该行标题可保留危险语义，但辅助副标题应维持普通次级灰，避免整行过度发红
 
 ### 0.1.4.2 Productivity 当前 UI 对齐备注
 
@@ -365,6 +372,8 @@ MVP 需要支持的配置项：
 - `Productivity` 的指标卡总量基于已完成 session 的聚合缓存读取
 - `Productivity` 只保留 `W / M / Y`
 - `Productivity` 的 `W / M` 图按日缓存读取，`Y` 由日缓存卷到月
+- `Clear Productivity History` 会同时清空已完成 session 归档与 Productivity 聚合缓存
+- 清空历史后，`Productivity` 应立即回到 empty state；后续新完成的 session 会从零重新累计
 - `Skip` 记录当前阶段已发生时长，但不计入额外完成轮次
 - `Reset` 会清空当前 step 已结算时长
 - `Back to last step` 会回滚相关已结算统计
@@ -609,7 +618,23 @@ MVP 中的气泡不是追求高写实的流体特效，而是：
 - 进入 `Short Break / Long Break` 后，对应节点变为实心
 - 尚未开始的后续节点保持低对比度未激活态
 
-### 5.5 不采用“拖拽圆环改时长”的原因
+### 5.5 Focus 完成总结页
+
+- `Session complete / Session finished` 需要被视为独立确认层，而不是盖在完整 Focus 页面上的普通 overlay
+- 完成总结出现时，背景只保留极淡的气泡轮廓作为情绪延续，不再保留 back、status badge、skip、reset 与底部 tab bar
+- `COMPLETE` 仍保留为内部状态语义，但完成总结出现后不再继续占据顶部可见层级
+- 正常完成时，标题下方默认不再追加解释性副文案；提前结束时才保留一条简短说明
+- 完成卡片采用上紧下松的非对称留白，避免顶部空隙过大
+- `Done` 必须是居中的窄胶囊确认动作，而不是通栏底部条；材质保持中性玻璃，不使用突兀的彩色渐变
+- 完成总结的动效以 calm choreography 为原则：
+  - badge 先确认
+  - 标题与卡片随后进入
+  - `Done` 最后进入
+- 离开完成总结时，动作顺序应保持同一套克制层级，但不允许出现只剩黑遮罩和背景气泡停留过久的空档
+- 仅文字组适合使用 reveal mask；带圆角的卡片和按钮在进出场中不应再被 mask 切掉边角
+- `Reduce Motion` 下取消分段 choreography，退化为简单显隐
+
+### 5.6 不采用“拖拽圆环改时长”的原因
 
 这个想法被保留为未来可能性，但不进入 MVP。
 
@@ -626,7 +651,7 @@ MVP 中的气泡不是追求高写实的流体特效，而是：
 - `End Early`
 - `Adjust Duration`
 
-### 5.6 Focus 页性能约束
+### 5.7 Focus 页性能约束
 
 - `Focus` 页在真机上不应带来持续明显发热或肉眼可见的卡顿
 - 动态刷新频率应遵循“足够顺滑，而非默认满帧”的原则；液面与波动目标约为 `15-20fps` 级别即可
@@ -641,7 +666,7 @@ MVP 中的气泡不是追求高写实的流体特效，而是：
 
 而不是在主视觉上直接拖拽修改。
 
-### 5.7 当前 Focus 性能优化策略对齐
+### 5.8 当前 Focus 性能优化策略对齐
 
 以下内容用于和后续 threads 对齐，默认视为当前有效方向：
 
@@ -659,7 +684,7 @@ MVP 中的气泡不是追求高写实的流体特效，而是：
 
 最近一次真机 `30s Activity Monitor` 对比表明，这个方向已经明显降低了 CPU、wakeups 和磁盘读取，且 thermal 仍保持 `Nominal`。
 
-### 5.8 本项目中的玻璃理解与实现原则
+### 5.9 本项目中的玻璃理解与实现原则
 
 这个项目中的“玻璃”不是把 `blur / material / shadow / mask` 一层层堆到最重，而是尽量用更少的层表达更可信的材质。
 
@@ -762,7 +787,7 @@ MVP 不需要额外寻找开源 PNG 照片素材。
 - [VibePomodoro/Core/Store/PomodoroStore+Persistence.swift](./VibePomodoro/Core/Store/PomodoroStore+Persistence.swift)
   - UserDefaults 持久化、cache 修复与编解码辅助
 - [VibePomodoro/Core/Store/PomodoroStore+Productivity.swift](./VibePomodoro/Core/Store/PomodoroStore+Productivity.swift)
-  - Productivity snapshot、图表桶映射、streak 计算与统计查询
+  - Productivity snapshot、图表桶映射、streak 计算、统计查询与历史清空动作
 - [VibePomodoro/Screens/Focus/FocusScreen.swift](./VibePomodoro/Screens/Focus/FocusScreen.swift)
   - Focus 页页面骨架、沉浸模式状态同步与系统显隐协作
 - [VibePomodoro/Screens/Focus/FocusRenderState.swift](./VibePomodoro/Screens/Focus/FocusRenderState.swift)
@@ -778,7 +803,7 @@ MVP 不需要额外寻找开源 PNG 照片素材。
 - [VibePomodoro/Screens/Focus/FocusBubbleTimer.swift](./VibePomodoro/Screens/Focus/FocusBubbleTimer.swift)
   - Focus 气泡、液面动画、倒计时数字刷新与玻璃球绘制
 - [VibePomodoro/Screens/Focus/FocusCompletionSummary.swift](./VibePomodoro/Screens/Focus/FocusCompletionSummary.swift)
-  - Focus 完成总结 overlay、文案格式化与完成态确认 UI
+  - Focus 完成总结独立确认层、文案格式化与完成态确认 UI
 - [VibePomodoro/Screens/Productivity/ProductivityScreen.swift](./VibePomodoro/Screens/Productivity/ProductivityScreen.swift)
   - Productivity 页页面骨架、布局常量、本地 range 选择态与 render state
 - [VibePomodoro/Screens/Productivity/ProductivityCardChrome.swift](./VibePomodoro/Screens/Productivity/ProductivityCardChrome.swift)
@@ -798,7 +823,7 @@ MVP 不需要额外寻找开源 PNG 照片素材。
 - [VibePomodoro/Screens/Settings/SettingsSessionRhythmSection.swift](./VibePomodoro/Screens/Settings/SettingsSessionRhythmSection.swift)
   - `Session Rhythm` 主设置卡、stepper row 与时长更新映射
 - [VibePomodoro/Screens/Settings/SettingsPreferenceSections.swift](./VibePomodoro/Screens/Settings/SettingsPreferenceSections.swift)
-  - `Alerts / Display / Other` 次级设置卡与共用设置行组件
+  - `Alerts / Display / Other` 次级设置卡、共用设置行组件与清空 Productivity 历史确认入口
 - [VibePomodoro/Shared/Theme/VibeTheme.swift](./VibePomodoro/Shared/Theme/VibeTheme.swift)
   - 共享主题色板与 phase UI 扩展
 - [VibePomodoro/Shared/UI/SharedShell.swift](./VibePomodoro/Shared/UI/SharedShell.swift)

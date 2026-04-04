@@ -150,7 +150,6 @@ struct FocusCompletionSummaryView: View {
                     FocusCompletionSummaryCard(state: state)
                         .opacity(Double(contentRevealProgress))
                         .offset(y: (1 - contentRevealProgress) * 12)
-                        .mask(CompletionVerticalRevealMask(progress: contentRevealProgress))
                         .padding(.top, state.message == nil ? 20 : 24)
 
                     Spacer(minLength: dynamicTypeSize.isAccessibilitySize ? 28 : 34)
@@ -159,7 +158,6 @@ struct FocusCompletionSummaryView: View {
                         .frame(width: doneButtonWidth(for: proxy.size.width))
                         .opacity(Double(actionRevealProgress))
                         .offset(y: (1 - actionRevealProgress) * 10)
-                        .mask(CompletionVerticalRevealMask(progress: actionRevealProgress))
                         .allowsHitTesting(actionRevealProgress > 0.96 && !isDismissing)
                         .padding(.bottom, bottomActionPadding(for: proxy.safeAreaInsets.bottom))
                 }

@@ -114,6 +114,9 @@ struct SettingsDisplaySection: View {
 }
 
 struct SettingsOtherSection: View {
+    @EnvironmentObject private var store: PomodoroStore
+    @State private var isShowingClearHistoryAlert = false
+
     var body: some View {
         VStack(alignment: .leading, spacing: SettingsLayout.sectionHeaderBottomSpacing) {
             SettingsSectionHeader(title: "OTHER")
@@ -131,9 +134,44 @@ struct SettingsOtherSection: View {
                     SettingsDivider()
 
                     SettingsPlaceholderRow(title: "Share App", status: "Soon")
+
+                    SettingsDivider()
+
+                    Button {
+                        isShowingClearHistoryAlert = true
+                    } label: {
+                        SettingsDestructiveActionRow(
+                            title: "Clear Productivity History",
+                            subtitle: hasProductivityHistory
+                                ? "Delete all completed sessions and stats"
+                                : "No history yet",
+                            disabled: !hasProductivityHistory
+                        )
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(!hasProductivityHistory)
+                    .accessibilityHint(
+                        hasProductivityHistory
+                            ? "Shows a final confirmation before deleting all completed sessions and stats."
+                            : "No completed session history to delete."
+                    )
                 }
             }
         }
+        .alert("Delete all productivity history?", isPresented: $isShowingClearHistoryAlert) {
+            Button("Cancel", role: .cancel) {}
+            Button("Delete History", role: .destructive) {
+                store.clearProductivityHistory()
+            }
+        } message: {
+            Text("This action can't be undone. Current session and timer settings will stay as they are.")
+        }
+    }
+
+    private var hasProductivityHistory: Bool {
+        !store.completedSessions.isEmpty
+            || store.productivityCache.completedSessionCount > 0
+            || !store.productivityCache.dailySummaries.isEmpty
     }
 }
 
@@ -213,6 +251,59 @@ private struct SettingsNavigationValueRow: View {
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundStyle(SettingsTheme.secondaryTextColor(for: colorScheme))
         }
+    }
+}
+
+private struct SettingsDestructiveActionRow: View {
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    let title: String
+    let subtitle: String
+    let disabled: Bool
+
+    var body: some View {
+        Group {
+            if dynamicTypeSize.isAccessibilitySize {
+                VStack(alignment: .leading, spacing: 10) {
+                    labelStack
+                    trailingIcon
+                }
+            } else {
+                HStack(spacing: 14) {
+                    labelStack
+                    Spacer(minLength: 12)
+                    trailingIcon
+                }
+            }
+        }
+        .padding(.vertical, SettingsLayout.rowVerticalPadding)
+        .contentShape(Rectangle())
+        .opacity(disabled ? 0.72 : 1)
+    }
+
+    private var labelStack: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .font(.system(.body, weight: .semibold))
+                .foregroundStyle(destructiveTextColor)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Text(subtitle)
+                .font(.system(.footnote, weight: .medium))
+                .foregroundStyle(SettingsTheme.secondaryTextColor(for: colorScheme))
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private var trailingIcon: some View {
+        Image(systemName: "trash")
+            .font(.system(size: 14, weight: .semibold))
+            .foregroundStyle(disabled ? SettingsTheme.secondaryTextColor(for: colorScheme) : destructiveTextColor)
+    }
+
+    private var destructiveTextColor: Color {
+        colorScheme == .dark ? Color.red.opacity(0.86) : Color.red.opacity(0.82)
     }
 }
 
