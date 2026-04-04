@@ -4,7 +4,6 @@ struct FocusPageContent: View {
     let renderState: FocusRenderState
     let layout: FocusScreenLayout
     let size: CGSize
-    let isCompletionSummaryPresented: Bool
     let bubbleCenter: CGPoint
     let bottomChromeTopPadding: CGFloat
     let chromeOpacity: Double
@@ -61,7 +60,32 @@ struct FocusPageContent: View {
             .allowsHitTesting(isChromeInteractive)
         }
         .frame(width: size.width, height: size.height, alignment: .center)
-        .allowsHitTesting(!isCompletionSummaryPresented)
+    }
+}
+
+struct FocusCompletionBackdropBubble: View {
+    @Environment(\.colorScheme) private var colorScheme
+
+    let renderState: BubbleRenderState
+    let size: CGSize
+    let bubbleCenter: CGPoint
+
+    var body: some View {
+        BubbleTimerView(
+            renderState: renderState,
+            showsForegroundContent: false,
+            action: {}
+        )
+        .frame(
+            width: FocusScreenLayout.bubbleDiameter,
+            height: FocusScreenLayout.bubbleDiameter
+        )
+        .position(bubbleCenter)
+        .opacity(colorScheme == .dark ? 0.18 : 0.14)
+        .blur(radius: colorScheme == .dark ? 5 : 4)
+        .frame(width: size.width, height: size.height, alignment: .center)
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
     }
 }
 

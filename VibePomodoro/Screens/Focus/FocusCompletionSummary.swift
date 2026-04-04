@@ -1,8 +1,69 @@
 import SwiftUI
 
+enum FocusCompletionMotion {
+    static let backdropFadeDuration: Double = 0.34
+    static let containerFadeInDuration: Double = 0.32
+    static let containerFadeOutDuration: Double = 0.32
+    static let badgeEntranceDuration: Double = 0.40
+    static let contentEntranceDuration: Double = 0.42
+    static let actionEntranceDuration: Double = 0.38
+    static let badgeDismissDuration: Double = 0.34
+    static let contentDismissDuration: Double = 0.36
+    static let actionDismissDuration: Double = 0.30
+
+    static let contentRevealDelay: UInt64 = 140_000_000
+    static let actionRevealDelay: UInt64 = 120_000_000
+    static let contentDismissDelay: UInt64 = 80_000_000
+    static let dismissCompletionDelay: UInt64 = 470_000_000
+
+    static func easeOutQuart(duration: Double) -> Animation {
+        .timingCurve(0.25, 1, 0.5, 1, duration: duration)
+    }
+
+    static func easeOutQuint(duration: Double) -> Animation {
+        .timingCurve(0.22, 1, 0.36, 1, duration: duration)
+    }
+
+    static var backdropAnimation: Animation {
+        easeOutQuart(duration: backdropFadeDuration)
+    }
+
+    static var containerFadeInAnimation: Animation {
+        easeOutQuart(duration: containerFadeInDuration)
+    }
+
+    static var containerFadeOutAnimation: Animation {
+        easeOutQuart(duration: containerFadeOutDuration)
+    }
+
+    static var badgeAnimation: Animation {
+        easeOutQuint(duration: badgeEntranceDuration)
+    }
+
+    static var contentAnimation: Animation {
+        easeOutQuint(duration: contentEntranceDuration)
+    }
+
+    static var actionAnimation: Animation {
+        easeOutQuint(duration: actionEntranceDuration)
+    }
+
+    static var badgeDismissAnimation: Animation {
+        easeOutQuart(duration: badgeDismissDuration)
+    }
+
+    static var contentDismissAnimation: Animation {
+        easeOutQuart(duration: contentDismissDuration)
+    }
+
+    static var actionDismissAnimation: Animation {
+        easeOutQuart(duration: actionDismissDuration)
+    }
+}
+
 struct FocusCompletionSummaryState: Equatable {
     let title: String
-    let message: String
+    let message: String?
     let focusTimeText: String
     let focusTimeAccessibilityText: String
     let breakTimeText: String
@@ -18,9 +79,7 @@ struct FocusCompletionSummaryState: Equatable {
         let completedFocusCount = statistics.completedFocusCount
 
         title = isFinishedEarly ? "Session finished" : "Session complete"
-        message = isFinishedEarly
-            ? "Saved what you completed so far."
-            : "Your focus and break time have been saved."
+        message = isFinishedEarly ? "Saved what you completed so far." : nil
         focusTimeText = FocusCompletionFormatting.durationText(statistics.focusTime)
         focusTimeAccessibilityText = FocusCompletionFormatting.accessibilityDurationText(statistics.focusTime)
         breakTimeText = FocusCompletionFormatting.durationText(statistics.breakTime)
@@ -45,47 +104,77 @@ struct FocusCompletionSummaryState: Equatable {
 struct FocusCompletionSummaryView: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    @State private var backdropProgress: CGFloat = 0
+    @State private var badgeRevealProgress: CGFloat = 0
+    @State private var contentRevealProgress: CGFloat = 0
+    @State private var actionRevealProgress: CGFloat = 0
+    @State private var isDismissing = false
+    @State private var entranceTask: Task<Void, Never>?
 
     let state: FocusCompletionSummaryState
     let doneAction: () -> Void
 
     var body: some View {
-        ZStack {
-            Color.black
-                .opacity(colorScheme == .dark ? 0.16 : 0.06)
-                .ignoresSafeArea()
+        GeometryReader { proxy in
+            ZStack {
+                CompletionBackdropVeil(progress: backdropProgress)
 
-            VStack(spacing: 0) {
-                Spacer(minLength: dynamicTypeSize.isAccessibilitySize ? 44 : 72)
+                VStack(spacing: 0) {
+                    Spacer(minLength: dynamicTypeSize.isAccessibilitySize ? 34 : 54)
 
-                FocusCompletionBadge()
+                    FocusCompletionBadge(
+                        revealProgress: badgeRevealProgress
+                    )
 
-                VStack(spacing: 10) {
-                    Text(state.title)
-                        .font(.system(size: dynamicTypeSize.isAccessibilitySize ? 30 : 34, weight: .semibold))
-                        .foregroundStyle(titleColor)
-                        .multilineTextAlignment(.center)
+                    VStack(spacing: state.message == nil ? 0 : 10) {
+                        Text(state.title)
+                            .font(.system(size: dynamicTypeSize.isAccessibilitySize ? 30 : 34, weight: .semibold))
+                            .foregroundStyle(titleColor)
+                            .multilineTextAlignment(.center)
 
-                    Text(state.message)
-                        .font(.system(size: dynamicTypeSize.isAccessibilitySize ? 16 : 15, weight: .medium))
-                        .foregroundStyle(messageColor)
-                        .multilineTextAlignment(.center)
-                        .fixedSize(horizontal: false, vertical: true)
+                        if let message = state.message {
+                            Text(message)
+                                .font(.system(size: dynamicTypeSize.isAccessibilitySize ? 16 : 15, weight: .medium))
+                                .foregroundStyle(messageColor)
+                                .multilineTextAlignment(.center)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                    .opacity(Double(contentRevealProgress))
+                    .offset(y: (1 - contentRevealProgress) * 8)
+                    .mask(CompletionVerticalRevealMask(progress: contentRevealProgress))
+                    .padding(.top, dynamicTypeSize.isAccessibilitySize ? 20 : 22)
+
+                    FocusCompletionSummaryCard(state: state)
+                        .opacity(Double(contentRevealProgress))
+                        .offset(y: (1 - contentRevealProgress) * 12)
+                        .mask(CompletionVerticalRevealMask(progress: contentRevealProgress))
+                        .padding(.top, state.message == nil ? 20 : 24)
+
+                    Spacer(minLength: dynamicTypeSize.isAccessibilitySize ? 28 : 34)
+
+                    FocusCompletionDoneButton(action: beginDismissal)
+                        .frame(width: doneButtonWidth(for: proxy.size.width))
+                        .opacity(Double(actionRevealProgress))
+                        .offset(y: (1 - actionRevealProgress) * 10)
+                        .mask(CompletionVerticalRevealMask(progress: actionRevealProgress))
+                        .allowsHitTesting(actionRevealProgress > 0.96 && !isDismissing)
+                        .padding(.bottom, bottomActionPadding(for: proxy.safeAreaInsets.bottom))
                 }
-                .padding(.top, 26)
-
-                FocusCompletionSummaryCard(state: state)
-                    .padding(.top, 28)
-
-                Spacer(minLength: 40)
-
-                FocusCompletionDoneButton(action: doneAction)
-                    .padding(.bottom, dynamicTypeSize.isAccessibilitySize ? 20 : 12)
+                .padding(.horizontal, 24)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-            .padding(.horizontal, 24)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .transition(.opacity.combined(with: .move(edge: .bottom)))
+        .onAppear {
+            runEntranceAnimation()
+        }
+        .onDisappear {
+            entranceTask?.cancel()
+            entranceTask = nil
+            resetEntranceState()
+        }
     }
 
     private var titleColor: Color {
@@ -99,10 +188,107 @@ struct FocusCompletionSummaryView: View {
             ? VibePalette.warmBackground.opacity(0.72)
             : Color.black.opacity(0.50)
     }
+
+    private func bottomActionPadding(for bottomInset: CGFloat) -> CGFloat {
+        let basePadding = dynamicTypeSize.isAccessibilitySize ? 10.0 : 6.0
+        return max(bottomInset, dynamicTypeSize.isAccessibilitySize ? 20.0 : 12.0) + basePadding
+    }
+
+    private func doneButtonWidth(for containerWidth: CGFloat) -> CGFloat {
+        let availableWidth = max(0, containerWidth - 48)
+        let preferredWidth = availableWidth * 0.56
+        let clampedWidth = min(192, max(160, preferredWidth))
+        return min(availableWidth, clampedWidth)
+    }
+
+    private func runEntranceAnimation() {
+        entranceTask?.cancel()
+        entranceTask = nil
+        resetEntranceState()
+
+        guard !reduceMotion else {
+            backdropProgress = 1
+            badgeRevealProgress = 1
+            contentRevealProgress = 1
+            actionRevealProgress = 1
+            return
+        }
+
+        entranceTask = Task { @MainActor in
+            await Task.yield()
+
+            withAnimation(FocusCompletionMotion.backdropAnimation) {
+                backdropProgress = 1
+            }
+
+            withAnimation(FocusCompletionMotion.badgeAnimation) {
+                badgeRevealProgress = 1
+            }
+
+            try? await Task.sleep(nanoseconds: FocusCompletionMotion.contentRevealDelay)
+            guard !Task.isCancelled else { return }
+
+            withAnimation(FocusCompletionMotion.contentAnimation) {
+                contentRevealProgress = 1
+            }
+
+            try? await Task.sleep(nanoseconds: FocusCompletionMotion.actionRevealDelay)
+            guard !Task.isCancelled else { return }
+
+            withAnimation(FocusCompletionMotion.actionAnimation) {
+                actionRevealProgress = 1
+            }
+        }
+    }
+
+    private func beginDismissal() {
+        guard !isDismissing else { return }
+
+        entranceTask?.cancel()
+        entranceTask = nil
+
+        guard !reduceMotion else {
+            doneAction()
+            return
+        }
+
+        isDismissing = true
+        entranceTask = Task { @MainActor in
+            withAnimation(FocusCompletionMotion.actionDismissAnimation) {
+                actionRevealProgress = 0
+            }
+
+            try? await Task.sleep(nanoseconds: FocusCompletionMotion.contentDismissDelay)
+            guard !Task.isCancelled else { return }
+
+            withAnimation(FocusCompletionMotion.contentDismissAnimation) {
+                contentRevealProgress = 0
+                badgeRevealProgress = 0
+            }
+
+            withAnimation(FocusCompletionMotion.backdropAnimation) {
+                backdropProgress = 0
+            }
+
+            try? await Task.sleep(nanoseconds: FocusCompletionMotion.dismissCompletionDelay)
+            guard !Task.isCancelled else { return }
+            doneAction()
+        }
+    }
+
+    private func resetEntranceState() {
+        backdropProgress = 0
+        badgeRevealProgress = 0
+        contentRevealProgress = 0
+        actionRevealProgress = 0
+        isDismissing = false
+    }
 }
 
 private struct FocusCompletionBadge: View {
     @Environment(\.colorScheme) private var colorScheme
+
+    let revealProgress: CGFloat
 
     var body: some View {
         ZStack {
@@ -141,12 +327,82 @@ private struct FocusCompletionBadge: View {
                     )
                 )
         }
+        .opacity(Double(revealProgress))
+        .scaleEffect(0.98 + (0.02 * revealProgress))
+        .offset(y: (1 - revealProgress) * 4)
         .shadow(
-            color: VibePalette.softJadeDeep.opacity(colorScheme == .dark ? 0.18 : 0.10),
+            color: VibePalette.softJadeDeep.opacity((colorScheme == .dark ? 0.18 : 0.10) * revealProgress),
             radius: colorScheme == .dark ? 20 : 14,
             y: colorScheme == .dark ? 8 : 6
         )
         .accessibilityHidden(true)
+    }
+}
+
+private struct CompletionBackdropVeil: View {
+    @Environment(\.colorScheme) private var colorScheme
+
+    let progress: CGFloat
+
+    var body: some View {
+        let clampedProgress = min(max(progress, 0), 1)
+        let topOpacity = (colorScheme == .dark ? 0.010 : 0.004) * clampedProgress
+        let midOpacity = (colorScheme == .dark ? 0.040 : 0.016) * clampedProgress
+        let bottomOpacity = (colorScheme == .dark ? 0.105 : 0.042) * clampedProgress
+        let vignetteOpacity = (colorScheme == .dark ? 0.090 : 0.036) * clampedProgress
+
+        ZStack {
+            LinearGradient(
+                colors: [
+                    Color.black.opacity(topOpacity),
+                    Color.black.opacity(midOpacity),
+                    Color.black.opacity(bottomOpacity)
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+
+            RadialGradient(
+                colors: [
+                    Color.black.opacity(0),
+                    Color.black.opacity(vignetteOpacity * 0.45),
+                    Color.black.opacity(vignetteOpacity)
+                ],
+                center: .center,
+                startRadius: 72,
+                endRadius: 540
+            )
+        }
+        .ignoresSafeArea()
+        .allowsHitTesting(false)
+    }
+}
+
+private struct CompletionVerticalRevealMask: View {
+    let progress: CGFloat
+
+    var body: some View {
+        let clampedProgress = min(max(progress, 0), 1)
+
+        Group {
+            if clampedProgress <= 0 {
+                Color.clear
+            } else if clampedProgress >= 1 {
+                Color.white
+            } else {
+                LinearGradient(
+                    stops: [
+                        .init(color: .white, location: 0),
+                        .init(color: .white, location: max(0, clampedProgress - 0.22)),
+                        .init(color: Color.white.opacity(0.82), location: max(0, clampedProgress - 0.08)),
+                        .init(color: .clear, location: min(1, clampedProgress + 0.04)),
+                        .init(color: .clear, location: 1)
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+            }
+        }
     }
 }
 
@@ -163,7 +419,9 @@ private struct FocusCompletionSummaryCard: View {
                 value: state.focusTimeText,
                 accessibilityValue: state.focusTimeAccessibilityText,
                 systemImage: "timer.circle.fill",
-                accent: focusAccent
+                accent: focusAccent,
+                topPadding: dynamicTypeSize.isAccessibilitySize ? 10 : 8,
+                bottomPadding: dynamicTypeSize.isAccessibilitySize ? 14 : 16
             )
 
             divider
@@ -173,7 +431,9 @@ private struct FocusCompletionSummaryCard: View {
                 value: state.breakTimeText,
                 accessibilityValue: state.breakTimeAccessibilityText,
                 systemImage: "cup.and.saucer.fill",
-                accent: breakAccent
+                accent: breakAccent,
+                topPadding: dynamicTypeSize.isAccessibilitySize ? 14 : 16,
+                bottomPadding: dynamicTypeSize.isAccessibilitySize ? 14 : 16
             )
 
             divider
@@ -182,11 +442,13 @@ private struct FocusCompletionSummaryCard: View {
                 .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(footerColor)
                 .fixedSize(horizontal: false, vertical: true)
-                .padding(.top, 14)
+                .padding(.top, 12)
+                .padding(.bottom, dynamicTypeSize.isAccessibilitySize ? 2 : 4)
                 .accessibilityLabel(state.completedFocusAccessibilityText)
         }
         .padding(.horizontal, 20)
-        .padding(.vertical, dynamicTypeSize.isAccessibilitySize ? 18 : 20)
+        .padding(.top, dynamicTypeSize.isAccessibilitySize ? 14 : 12)
+        .padding(.bottom, dynamicTypeSize.isAccessibilitySize ? 18 : 20)
         .background {
             RoundedRectangle(cornerRadius: 24, style: .continuous)
                 .fill(.thinMaterial)
@@ -220,7 +482,9 @@ private struct FocusCompletionSummaryCard: View {
         value: String,
         accessibilityValue: String,
         systemImage: String,
-        accent: Color
+        accent: Color,
+        topPadding: CGFloat,
+        bottomPadding: CGFloat
     ) -> some View {
         HStack(alignment: .center, spacing: 14) {
             Image(systemName: systemImage)
@@ -244,7 +508,8 @@ private struct FocusCompletionSummaryCard: View {
 
             Spacer(minLength: 12)
         }
-        .padding(.vertical, dynamicTypeSize.isAccessibilitySize ? 14 : 16)
+        .padding(.top, topPadding)
+        .padding(.bottom, bottomPadding)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(title)
         .accessibilityValue(accessibilityValue)
@@ -293,44 +558,51 @@ private struct FocusCompletionDoneButton: View {
             Text("Done")
                 .font(.system(size: 17, weight: .semibold))
                 .foregroundStyle(buttonTextColor)
-                .frame(maxWidth: .infinity, minHeight: 58)
+                .frame(maxWidth: .infinity, minHeight: 56)
                 .background {
-                    RoundedRectangle(cornerRadius: 20, style: .continuous)
-                        .fill(.thinMaterial)
+                    Capsule(style: .continuous)
+                        .fill(.ultraThinMaterial)
                         .overlay {
-                            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                                .fill(buttonSurface)
+                            Capsule(style: .continuous)
+                                .fill(buttonSurfaceTint)
                         }
                         .overlay {
-                            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                                .stroke(Color.white.opacity(colorScheme == .dark ? 0.20 : 0.46), lineWidth: 0.9)
+                            Capsule(style: .continuous)
+                                .fill(
+                                    LinearGradient(
+                                        colors: [
+                                            Color.white.opacity(colorScheme == .dark ? 0.10 : 0.18),
+                                            Color.clear
+                                        ],
+                                        startPoint: .top,
+                                        endPoint: .bottom
+                                    )
+                                )
+                        }
+                        .overlay {
+                            Capsule(style: .continuous)
+                                .stroke(Color.white.opacity(colorScheme == .dark ? 0.18 : 0.42), lineWidth: 0.9)
                         }
                 }
         }
         .buttonStyle(.plain)
         .shadow(
-            color: Color.black.opacity(colorScheme == .dark ? 0.20 : 0.08),
-            radius: colorScheme == .dark ? 18 : 12,
-            y: colorScheme == .dark ? 10 : 6
+            color: Color.black.opacity(colorScheme == .dark ? 0.14 : 0.06),
+            radius: colorScheme == .dark ? 14 : 10,
+            y: colorScheme == .dark ? 7 : 5
         )
     }
 
     private var buttonTextColor: Color {
         colorScheme == .dark
             ? VibePalette.warmBackground.opacity(0.96)
-            : Color.black.opacity(0.76)
+            : Color.black.opacity(0.72)
     }
 
-    private var buttonSurface: LinearGradient {
-        LinearGradient(
-            colors: [
-                VibePalette.softMist.opacity(colorScheme == .dark ? 0.26 : 0.20),
-                VibePalette.softJade.opacity(colorScheme == .dark ? 0.22 : 0.16),
-                Color.white.opacity(colorScheme == .dark ? 0.06 : 0.10)
-            ],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
+    private var buttonSurfaceTint: Color {
+        colorScheme == .dark
+            ? Color.white.opacity(0.05)
+            : Color.white.opacity(0.22)
     }
 }
 

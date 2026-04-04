@@ -2,6 +2,7 @@ import SwiftUI
 
 struct BubbleTimerView: View {
     let renderState: BubbleRenderState
+    var showsForegroundContent: Bool = true
     var controlVisibility: Double = 1
     var controlIsInteractive: Bool = true
     let action: () -> Void
@@ -20,12 +21,14 @@ struct BubbleTimerView: View {
         ZStack {
             BubbleGlassShell(phase: renderState.phase, sphereSize: sphereSize)
             BubbleAnimatedSurfaceLayer(renderState: renderState, waveClock: waveClock)
-            BubbleForegroundContent(
-                renderState: renderState,
-                controlVisibility: controlVisibility,
-                controlIsInteractive: controlIsInteractive,
-                action: action
-            )
+            if showsForegroundContent {
+                BubbleForegroundContent(
+                    renderState: renderState,
+                    controlVisibility: controlVisibility,
+                    controlIsInteractive: controlIsInteractive,
+                    action: action
+                )
+            }
         }
         .frame(width: sphereSize, height: sphereSize)
         .onAppear {

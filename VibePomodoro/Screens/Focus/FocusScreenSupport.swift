@@ -111,7 +111,7 @@ enum FocusScreenSupport {
         hasCompletionSummary: Bool,
         immersiveVisualsHidden: Bool
     ) -> Bool {
-        selectedTab == .focus && !hasCompletionSummary && immersiveVisualsHidden
+        selectedTab == .focus && (immersiveVisualsHidden || hasCompletionSummary)
     }
 
     private static func resolvedBubbleCenterY(

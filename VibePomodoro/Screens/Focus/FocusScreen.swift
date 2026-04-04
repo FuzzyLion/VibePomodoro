@@ -39,7 +39,6 @@ struct FocusScreen: View {
                     renderState: renderState,
                     layout: layout,
                     size: proxy.size,
-                    isCompletionSummaryPresented: hasCompletionSummary,
                     bubbleCenter: bubbleCenter,
                     bottomChromeTopPadding: bottomChromeTopPadding,
                     chromeOpacity: chromeOpacity,
@@ -59,15 +58,21 @@ struct FocusScreen: View {
                     skipAction: store.skipCurrentStep,
                     resetAction: store.resetCurrentStep
                 )
-                .opacity(hasCompletionSummary ? 0.22 : 1)
-                .blur(radius: hasCompletionSummary ? 10 : 0)
-                .animation(.easeOut(duration: 0.22), value: hasCompletionSummary)
+                .opacity(hasCompletionSummary ? 0 : 1)
+                .allowsHitTesting(!hasCompletionSummary)
+                .accessibilityHidden(hasCompletionSummary)
+
+                FocusCompletionBackdropBubble(
+                    renderState: renderState.bubble,
+                    size: proxy.size,
+                    bubbleCenter: bubbleCenter
+                )
+                .opacity(hasCompletionSummary ? 1 : 0)
 
                 if let completionSummaryState {
                     FocusCompletionSummaryView(state: completionSummaryState) {
                         handleCompletionDismissal()
                     }
-                    .transition(.opacity.combined(with: .scale(scale: 0.985)))
                     .zIndex(2)
                 }
             }
@@ -306,7 +311,13 @@ struct FocusScreen: View {
     private func syncCompletionSummary(with session: SessionSnapshot?) {
         guard let session, session.runState == .completed else {
             if completionSummaryState != nil {
-                completionSummaryState = nil
+                if reduceMotion {
+                    completionSummaryState = nil
+                } else {
+                    withAnimation(FocusCompletionMotion.containerFadeOutAnimation) {
+                        completionSummaryState = nil
+                    }
+                }
             }
             isShowingFinishConfirmation = false
             return
@@ -314,7 +325,13 @@ struct FocusScreen: View {
 
         let updatedState = FocusCompletionSummaryState.make(from: session)
         if completionSummaryState != updatedState {
-            completionSummaryState = updatedState
+            if reduceMotion {
+                completionSummaryState = updatedState
+            } else {
+                withAnimation(FocusCompletionMotion.containerFadeInAnimation) {
+                    completionSummaryState = updatedState
+                }
+            }
         }
         setImmersiveMode(false)
         setImmersiveVisualsHidden(false)
@@ -326,9 +343,16 @@ struct FocusScreen: View {
     }
 
     private func handleCompletionDismissal() {
+        if reduceMotion {
+            completionSummaryState = nil
+        } else {
+            withAnimation(FocusCompletionMotion.containerFadeOutAnimation) {
+                completionSummaryState = nil
+            }
+        }
         setImmersiveMode(false)
+        setImmersiveVisualsHidden(false)
         isShowingFinishConfirmation = false
-        completionSummaryState = nil
         store.dismissCompletedSession()
     }
 }
