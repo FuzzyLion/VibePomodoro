@@ -3,18 +3,18 @@ import SwiftUI
 enum FocusCompletionMotion {
     static let backdropFadeDuration: Double = 0.34
     static let containerFadeInDuration: Double = 0.32
-    static let containerFadeOutDuration: Double = 0.32
+    static let containerFadeOutDuration: Double = 0.28
     static let badgeEntranceDuration: Double = 0.40
     static let contentEntranceDuration: Double = 0.42
     static let actionEntranceDuration: Double = 0.38
-    static let badgeDismissDuration: Double = 0.34
-    static let contentDismissDuration: Double = 0.36
-    static let actionDismissDuration: Double = 0.30
+    static let badgeDismissDuration: Double = 0.30
+    static let contentDismissDuration: Double = 0.32
+    static let actionDismissDuration: Double = 0.26
 
     static let contentRevealDelay: UInt64 = 140_000_000
     static let actionRevealDelay: UInt64 = 120_000_000
-    static let contentDismissDelay: UInt64 = 80_000_000
-    static let dismissCompletionDelay: UInt64 = 470_000_000
+    static let contentDismissDelay: UInt64 = 70_000_000
+    static let dismissCompletionDelay: UInt64 = 240_000_000
 
     static func easeOutQuart(duration: Double) -> Animation {
         .timingCurve(0.25, 1, 0.5, 1, duration: duration)
