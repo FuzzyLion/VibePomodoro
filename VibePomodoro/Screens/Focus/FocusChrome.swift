@@ -5,6 +5,7 @@ struct FocusPageContent: View {
     let layout: FocusScreenLayout
     let size: CGSize
     let bubbleCenter: CGPoint
+    let progressDotsTopPadding: CGFloat
     let bottomChromeTopPadding: CGFloat
     let chromeOpacity: Double
     let isChromeInteractive: Bool
@@ -36,6 +37,12 @@ struct FocusPageContent: View {
             )
             .position(bubbleCenter)
 
+            FocusProgressDotsChrome(
+                renderState: renderState,
+                topPadding: progressDotsTopPadding
+            )
+            .opacity(chromeOpacity)
+
             FocusTopChrome(
                 renderState: renderState,
                 layout: layout,
@@ -47,7 +54,6 @@ struct FocusPageContent: View {
 
             FocusBottomChrome(
                 renderState: renderState,
-                layout: layout,
                 topPadding: bottomChromeTopPadding,
                 primaryAction: primaryAction,
                 goBackAction: goBackAction,
@@ -85,6 +91,22 @@ struct FocusCompletionBackdropBubble: View {
     }
 }
 
+private struct FocusProgressDotsChrome: View {
+    let renderState: FocusRenderState
+    let topPadding: CGFloat
+
+    var body: some View {
+        SessionProgressDots(
+            phase: renderState.phase,
+            nodeStates: renderState.nodeStates
+        )
+        .fixedSize(horizontal: true, vertical: false)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .padding(.top, topPadding)
+        .allowsHitTesting(false)
+    }
+}
+
 private struct FocusTopChrome: View {
     let renderState: FocusRenderState
     let layout: FocusScreenLayout
@@ -98,7 +120,7 @@ private struct FocusTopChrome: View {
                     .fixedSize(horizontal: true, vertical: false)
 
                 HStack {
-                    FocusActionSlot {
+                    FocusActionSlot(size: FocusScreenLayout.topActionButtonHitSize) {
                         FocusTopBarButton(
                             systemImage: "arrow.counterclockwise",
                             isEnabled: renderState.canReset,
@@ -109,7 +131,7 @@ private struct FocusTopChrome: View {
 
                     Spacer(minLength: layout.topChromeInnerSpacing)
 
-                    FocusActionSlot {
+                    FocusActionSlot(size: FocusScreenLayout.topActionButtonHitSize) {
                         if renderState.shouldShowFinishAction {
                             FocusTopBarButton(
                                 systemImage: "flag.checkered",
@@ -125,50 +147,49 @@ private struct FocusTopChrome: View {
             Spacer(minLength: 0)
         }
         .padding(.top, layout.topChromePadding)
-        .padding(.horizontal, FocusScreenLayout.horizontalPadding)
+        .padding(.horizontal, FocusScreenLayout.topChromeHorizontalPadding)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
 }
 
 private struct FocusBottomChrome: View {
     let renderState: FocusRenderState
-    let layout: FocusScreenLayout
     let topPadding: CGFloat
     let primaryAction: () -> Void
     let goBackAction: () -> Void
     let skipAction: () -> Void
 
     var body: some View {
-        VStack(spacing: layout.bottomChromeSpacing) {
-            SessionProgressDots(
-                phase: renderState.phase,
-                nodeStates: renderState.nodeStates
-            )
-            .fixedSize(horizontal: true, vertical: false)
+        HStack(spacing: FocusScreenLayout.bottomControlSpacing) {
+            GlassEffectContainer(spacing: FocusScreenLayout.bottomGlassMergeSpacing) {
+                HStack(spacing: FocusScreenLayout.bottomControlSpacing) {
+                    FocusActionSlot(size: FocusScreenLayout.bottomSecondaryButtonHitSize) {
+                        FocusBottomSecondaryButton(
+                            systemImage: "chevron.left.2",
+                            isEnabled: renderState.shouldShowBackAction && renderState.canGoBack,
+                            accessibilityLabel: "Back to last step",
+                            action: goBackAction
+                        )
+                    }
 
-            HStack(spacing: FocusScreenLayout.bottomControlSpacing) {
-                FocusBottomSecondaryButton(
-                    systemImage: "backward.end.fill",
-                    isEnabled: renderState.shouldShowBackAction && renderState.canGoBack,
-                    accessibilityLabel: "Back to last step",
-                    action: goBackAction
-                )
+                    FocusPrimaryControlButton(
+                        title: renderState.bubble.actionTitle,
+                        systemImage: primaryActionIconName,
+                        action: primaryAction
+                    )
 
-                FocusPrimaryControlButton(
-                    title: renderState.bubble.actionTitle,
-                    systemImage: primaryActionIconName,
-                    action: primaryAction
-                )
-
-                FocusBottomSecondaryButton(
-                    systemImage: "forward.end.fill",
-                    isEnabled: renderState.canSkip,
-                    accessibilityLabel: "Skip current step",
-                    action: skipAction
-                )
+                    FocusActionSlot(size: FocusScreenLayout.bottomSecondaryButtonHitSize) {
+                        FocusBottomSecondaryButton(
+                            systemImage: "chevron.right.2",
+                            isEnabled: renderState.canSkip,
+                            accessibilityLabel: "Skip current step",
+                            action: skipAction
+                        )
+                    }
+                }
             }
-            .frame(width: FocusScreenLayout.bottomControlRowWidth)
         }
+        .frame(width: FocusScreenLayout.bottomControlRowWidth)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .padding(.top, topPadding)
         .padding(.horizontal, FocusScreenLayout.horizontalPadding)
@@ -187,17 +208,12 @@ private struct FocusBottomChrome: View {
 }
 
 private struct FocusActionSlot<Content: View>: View {
+    let size: CGFloat
     @ViewBuilder let content: () -> Content
 
     var body: some View {
-        ZStack {
-            Circle()
-                .fill(Color.clear)
-            content()
-        }
-        .frame(
-            width: FocusScreenLayout.topActionButtonSize,
-            height: FocusScreenLayout.topActionButtonSize
-        )
+        content()
+            .frame(width: size, height: size)
+            .contentShape(Rectangle())
     }
 }

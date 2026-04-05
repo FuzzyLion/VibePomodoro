@@ -194,8 +194,8 @@ struct FocusCompletionSummaryView: View {
 
     private func doneButtonWidth(for containerWidth: CGFloat) -> CGFloat {
         let availableWidth = max(0, containerWidth - 48)
-        let preferredWidth = availableWidth * 0.56
-        let clampedWidth = min(192, max(160, preferredWidth))
+        let preferredWidth = availableWidth * 0.52
+        let clampedWidth = min(176, max(148, preferredWidth))
         return min(availableWidth, clampedWidth)
     }
 
@@ -554,53 +554,21 @@ private struct FocusCompletionDoneButton: View {
     var body: some View {
         Button(action: action) {
             Text("Done")
-                .font(.system(size: 17, weight: .semibold))
-                .foregroundStyle(buttonTextColor)
+                .font(.system(size: 19, weight: .semibold))
+                .tracking(-0.18)
+                .minimumScaleFactor(0.92)
+                .foregroundStyle(.primary)
                 .frame(maxWidth: .infinity, minHeight: 56)
-                .background {
-                    Capsule(style: .continuous)
-                        .fill(.ultraThinMaterial)
-                        .overlay {
-                            Capsule(style: .continuous)
-                                .fill(buttonSurfaceTint)
-                        }
-                        .overlay {
-                            Capsule(style: .continuous)
-                                .fill(
-                                    LinearGradient(
-                                        colors: [
-                                            Color.white.opacity(colorScheme == .dark ? 0.10 : 0.18),
-                                            Color.clear
-                                        ],
-                                        startPoint: .top,
-                                        endPoint: .bottom
-                                    )
-                                )
-                        }
-                        .overlay {
-                            Capsule(style: .continuous)
-                                .stroke(Color.white.opacity(colorScheme == .dark ? 0.18 : 0.42), lineWidth: 0.9)
-                        }
-                }
         }
-        .buttonStyle(.plain)
-        .shadow(
-            color: Color.black.opacity(colorScheme == .dark ? 0.14 : 0.06),
-            radius: colorScheme == .dark ? 14 : 10,
-            y: colorScheme == .dark ? 7 : 5
-        )
+        .buttonStyle(.glassProminent)
+        .tint(doneTint)
+        .buttonBorderShape(.capsule)
     }
 
-    private var buttonTextColor: Color {
+    private var doneTint: Color {
         colorScheme == .dark
-            ? VibePalette.warmBackground.opacity(0.96)
-            : Color.black.opacity(0.72)
-    }
-
-    private var buttonSurfaceTint: Color {
-        colorScheme == .dark
-            ? Color.white.opacity(0.05)
-            : Color.white.opacity(0.22)
+            ? VibePalette.amberGold.opacity(0.52)
+            : VibePalette.warmAmberAccent.opacity(0.54)
     }
 }
 

@@ -7,20 +7,20 @@ struct FocusStatusTitle: View {
     let phase: SessionPhase
 
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 6) {
             Circle()
                 .fill(phase.tintColor)
-                .frame(width: 8, height: 8)
-                .shadow(color: phase.shadowColor.opacity(colorScheme == .dark ? 0.24 : 0.18), radius: 4)
+                .frame(width: 6.5, height: 6.5)
+                .shadow(color: phase.shadowColor.opacity(colorScheme == .dark ? 0.20 : 0.14), radius: 3)
 
             Text(displayText)
-                .font(.system(size: 20, weight: .semibold, design: .default))
-                .tracking(-0.35)
+                .font(.system(size: 17, weight: .semibold, design: .default))
+                .tracking(-0.2)
                 .lineLimit(1)
-                .minimumScaleFactor(0.8)
+                .minimumScaleFactor(0.84)
                 .foregroundStyle(titleColor)
         }
-        .frame(minHeight: FocusScreenLayout.topActionButtonSize)
+        .frame(minHeight: FocusScreenLayout.topActionButtonVisualSize)
         .zIndex(4)
     }
 
@@ -30,8 +30,8 @@ struct FocusStatusTitle: View {
 
     private var titleColor: Color {
         colorScheme == .dark
-            ? VibePalette.warmBackground.opacity(0.95)
-            : VibePalette.labelPrimary.opacity(0.92)
+            ? VibePalette.warmBackground.opacity(0.92)
+            : VibePalette.labelPrimary.opacity(0.84)
     }
 }
 
@@ -123,22 +123,32 @@ struct FocusTopBarButton: View {
     var body: some View {
         Button(action: action) {
             Image(systemName: systemImage)
-                .font(.system(size: 17, weight: .semibold))
-                .foregroundStyle(.primary)
-                .frame(width: FocusScreenLayout.topActionButtonSize, height: FocusScreenLayout.topActionButtonSize)
+                .font(.system(size: 17, weight: .medium))
+                .foregroundStyle(toolbarSymbolColor)
+                .frame(
+                    width: FocusScreenLayout.topActionButtonVisualSize,
+                    height: FocusScreenLayout.topActionButtonVisualSize
+                )
         }
         .buttonStyle(.glass(topBarGlass))
         .buttonBorderShape(.circle)
         .disabled(!isEnabled)
+        .opacity(isEnabled ? 1 : 0.34)
+        .animation(nil, value: isEnabled)
         .accessibilityLabel(accessibilityLabel)
         .accessibilityAddTraits(.isButton)
         .zIndex(4)
     }
 
+    private var toolbarSymbolColor: Color {
+        colorScheme == .dark
+            ? VibePalette.amberGold.opacity(0.86)
+            : VibePalette.warmAmberAccentDeep.opacity(0.88)
+    }
+
     private var topBarGlass: Glass {
         .regular
             .tint(Color.white.opacity(colorScheme == .dark ? 0.06 : 0.12))
-            .interactive()
     }
 }
 
@@ -153,8 +163,8 @@ struct FocusBottomSecondaryButton: View {
     var body: some View {
         Button(action: action) {
             Image(systemName: systemImage)
-                .font(.system(size: 20, weight: .semibold))
-                .foregroundStyle(.primary)
+                .font(.system(size: 18, weight: .medium))
+                .foregroundStyle(secondaryIconColor.opacity(isEnabled ? 1 : 0.38))
                 .frame(
                     width: FocusScreenLayout.bottomSecondaryButtonSize,
                     height: FocusScreenLayout.bottomSecondaryButtonSize
@@ -168,41 +178,67 @@ struct FocusBottomSecondaryButton: View {
         .zIndex(4)
     }
 
+    private var secondaryIconColor: Color {
+        colorScheme == .dark
+            ? VibePalette.amberGold.opacity(0.84)
+            : VibePalette.warmAmberAccentDeep.opacity(0.88)
+    }
+
     private var bottomButtonGlass: Glass {
         .regular
             .tint(Color.white.opacity(colorScheme == .dark ? 0.06 : 0.12))
-            .interactive()
     }
 }
 
 struct FocusPrimaryControlButton: View {
+    @Environment(\.colorScheme) private var colorScheme
+
     let title: String
     let systemImage: String
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 8) {
+            HStack(spacing: 9) {
                 Image(systemName: systemImage)
-                    .font(.system(size: 16, weight: .bold))
+                    .font(.system(size: 15, weight: .semibold))
 
                 Text(title)
                     .font(.system(size: 17, weight: .semibold, design: .default))
-                    .tracking(-0.22)
+                    .tracking(-0.18)
                     .lineLimit(1)
-                    .minimumScaleFactor(0.82)
+                    .minimumScaleFactor(0.88)
             }
             .foregroundStyle(.primary)
             .frame(
+                minWidth: FocusScreenLayout.bottomPrimaryButtonMinWidth,
                 maxWidth: .infinity,
                 minHeight: FocusScreenLayout.bottomPrimaryButtonHeight,
                 maxHeight: FocusScreenLayout.bottomPrimaryButtonHeight
             )
         }
         .buttonStyle(.glassProminent)
+        .tint(primaryTint)
         .buttonBorderShape(.capsule)
         .accessibilityLabel(title)
         .accessibilityAddTraits(.isButton)
         .zIndex(4)
+    }
+
+    private var primaryTint: Color {
+        switch title {
+        case "Pause":
+            return colorScheme == .dark
+                ? VibePalette.amberGold.opacity(0.58)
+                : VibePalette.warmAmberAccent.opacity(0.60)
+        case "Resume", "Start", "Start Again":
+            return colorScheme == .dark
+                ? VibePalette.softJade.opacity(0.22)
+                : VibePalette.softMistDeep.opacity(0.18)
+        default:
+            return colorScheme == .dark
+                ? VibePalette.amberGold.opacity(0.52)
+                : VibePalette.warmAmberAccent.opacity(0.54)
+        }
     }
 }

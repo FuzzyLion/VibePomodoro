@@ -51,7 +51,18 @@ enum FocusScreenSupport {
         layout: FocusScreenLayout,
         bubbleCenterY: CGFloat
     ) -> CGFloat {
-        bubbleCenterY + (FocusScreenLayout.bubbleDiameter / 2) + layout.bottomChromeOffset
+        bubbleCenterY
+            + (FocusScreenLayout.bubbleDiameter / 2)
+            + layout.bottomChromeOffset
+            + FocusScreenLayout.progressDotsHeight
+            + layout.bottomChromeSpacing
+    }
+
+    static func progressDotsTopPadding(
+        layout: FocusScreenLayout,
+        bubbleCenterY: CGFloat
+    ) -> CGFloat {
+        bubbleCenterY + (FocusScreenLayout.bubbleDiameter / 2) + layout.progressDotsOffset
     }
 
     static func shouldRefreshStableBubbleAnchor(

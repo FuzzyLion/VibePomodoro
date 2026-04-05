@@ -9,11 +9,17 @@ struct FocusBubbleAnchorSignature: Equatable {
 struct FocusScreenLayout {
     static let bubbleDiameter: CGFloat = 280
     static let horizontalPadding: CGFloat = 24
-    static let topActionButtonSize: CGFloat = 44
-    static let bottomControlRowWidth: CGFloat = bubbleDiameter
-    static let bottomControlSpacing: CGFloat = 12
-    static let bottomSecondaryButtonSize: CGFloat = 52
-    static let bottomPrimaryButtonHeight: CGFloat = 54
+    static let topChromeHorizontalPadding: CGFloat = 18
+    static let topActionButtonHitSize: CGFloat = 40
+    static let topActionButtonVisualSize: CGFloat = 36
+    static let progressDotsHeight: CGFloat = 12
+    static let bottomControlRowWidth: CGFloat = 324
+    static let bottomControlSpacing: CGFloat = 14
+    static let bottomGlassMergeSpacing: CGFloat = 0
+    static let bottomSecondaryButtonHitSize: CGFloat = 58
+    static let bottomSecondaryButtonSize: CGFloat = 50
+    static let bottomPrimaryButtonHeight: CGFloat = 52
+    static let bottomPrimaryButtonMinWidth: CGFloat = 176
     static let immersiveAnchorResetEpsilon: CGFloat = 1
     static let layoutSettlingEpsilon: CGFloat = 1
     static let immersiveLayoutRestoreFallbackDelay: UInt64 = 450_000_000
@@ -27,19 +33,19 @@ struct FocusScreenLayout {
     }
 
     var topChromePadding: CGFloat {
-        if safeAreaInsets.top > FocusScreenLayout.topActionButtonSize {
-            return max(8, safeAreaInsets.top - FocusScreenLayout.topActionButtonSize)
-        }
-
-        return max(8, safeAreaInsets.top)
+        max(6, safeAreaInsets.top - 50)
     }
 
     var topChromeInnerSpacing: CGFloat {
-        20
+        16
     }
 
     var bottomChromeSpacing: CGFloat {
-        isCompact ? 12 : 14
+        isCompact ? 18 : 22
+    }
+
+    var progressDotsOffset: CGFloat {
+        isCompact ? 16 : 20
     }
 
     var defaultBubbleCenterY: CGFloat {
@@ -47,7 +53,7 @@ struct FocusScreenLayout {
     }
 
     var bottomChromeOffset: CGFloat {
-        isCompact ? 16 : 20
+        isCompact ? 40 : 56
     }
 
     var bubbleAnchorSignature: FocusBubbleAnchorSignature {

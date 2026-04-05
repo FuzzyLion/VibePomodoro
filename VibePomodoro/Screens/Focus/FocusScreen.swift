@@ -34,11 +34,16 @@ struct FocusScreen: View {
                 layout: layout,
                 bubbleCenterY: bubbleCenter.y
             )
+            let progressDotsTopPadding = FocusScreenSupport.progressDotsTopPadding(
+                layout: layout,
+                bubbleCenterY: bubbleCenter.y
+            )
             let pageContent = FocusPageContent(
                 renderState: renderState,
                 layout: layout,
                 size: proxy.size,
                 bubbleCenter: bubbleCenter,
+                progressDotsTopPadding: progressDotsTopPadding,
                 bottomChromeTopPadding: bottomChromeTopPadding,
                 chromeOpacity: chromeOpacity,
                 isChromeInteractive: isChromeInteractive,
