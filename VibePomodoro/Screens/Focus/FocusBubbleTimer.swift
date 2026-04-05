@@ -3,9 +3,6 @@ import SwiftUI
 struct BubbleTimerView: View {
     let renderState: BubbleRenderState
     var showsForegroundContent: Bool = true
-    var controlVisibility: Double = 1
-    var controlIsInteractive: Bool = true
-    let action: () -> Void
 
     @State private var accumulatedWaveTime: TimeInterval = 0
     @State private var waveAnimationStart: Date?
@@ -22,12 +19,7 @@ struct BubbleTimerView: View {
             BubbleGlassShell(phase: renderState.phase, sphereSize: sphereSize)
             BubbleAnimatedSurfaceLayer(renderState: renderState, waveClock: waveClock)
             if showsForegroundContent {
-                BubbleForegroundContent(
-                    renderState: renderState,
-                    controlVisibility: controlVisibility,
-                    controlIsInteractive: controlIsInteractive,
-                    action: action
-                )
+                BubbleForegroundContent(renderState: renderState)
             }
         }
         .frame(width: sphereSize, height: sphereSize)
@@ -104,20 +96,10 @@ private struct BubbleAnimatedSurfaceLayer: View {
 
 private struct BubbleForegroundContent: View {
     let renderState: BubbleRenderState
-    let controlVisibility: Double
-    let controlIsInteractive: Bool
-    let action: () -> Void
 
     var body: some View {
         BubbleTimerDigitsView(renderState: renderState)
             .frame(maxWidth: 208)
-            .offset(y: -10)
-            .overlay(alignment: .center) {
-                BubbleControlButton(actionTitle: renderState.actionTitle, action: action)
-                    .offset(y: 58)
-                    .opacity(controlVisibility)
-                    .allowsHitTesting(controlIsInteractive)
-            }
     }
 }
 
@@ -264,113 +246,6 @@ private struct BubbleTimerTextLabel: View {
         Text(text)
             .font(.system(size: 58, weight: .heavy, design: .default))
             .fontWidth(.expanded)
-    }
-}
-
-private struct BubbleControlButton: View {
-    @Environment(\.colorScheme) private var colorScheme
-
-    let actionTitle: String
-    let action: () -> Void
-
-    var body: some View {
-        let symbol = Image(systemName: controlIconName)
-            .font(.system(size: 13, weight: .heavy))
-
-        Button(action: action) {
-            symbol
-                .foregroundStyle(iconForegroundStyle)
-                .shadow(
-                    color: Color.black.opacity(colorScheme == .dark ? 0.05 : 0),
-                    radius: colorScheme == .dark ? 4 : 0,
-                    y: colorScheme == .dark ? 1.5 : 0
-                )
-                .frame(width: 30, height: 30)
-                .background {
-                    GlassCircleShell(
-                        tint: Color.white.opacity(colorScheme == .dark ? 0.03 : 0.03)
-                    )
-                }
-        }
-        .buttonStyle(.plain)
-        .shadow(
-            color: Color.white.opacity(colorScheme == .dark ? 0.05 : 0.06),
-            radius: colorScheme == .dark ? 3 : 4,
-            y: -1
-        )
-        .shadow(
-            color: Color.black.opacity(colorScheme == .dark ? 0.06 : 0.03),
-            radius: colorScheme == .dark ? 4 : 5,
-            y: colorScheme == .dark ? 1.5 : 2
-        )
-    }
-
-    private var controlIconName: String {
-        switch actionTitle {
-        case "Pause":
-            return "pause.fill"
-        case "Resume", "Start", "Start Again":
-            return "play.fill"
-        default:
-            return "play.fill"
-        }
-    }
-
-    private var iconForegroundStyle: AnyShapeStyle {
-        if colorScheme == .light {
-            return AnyShapeStyle(Color(red: 0.36, green: 0.37, blue: 0.40))
-        }
-
-        return AnyShapeStyle(
-            LinearGradient(
-                colors: [
-                    Color.white.opacity(0.98),
-                    Color.white.opacity(0.82)
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-        )
-    }
-}
-
-private struct GlassCircleShell: View {
-    @Environment(\.colorScheme) private var colorScheme
-
-    let tint: Color
-    var material: Material = .thinMaterial
-    var darkStrokeOpacity: Double = 0.38
-    var lightStrokeOpacity: Double = 0.44
-
-    var body: some View {
-        Circle()
-            .fill(material)
-            .overlay {
-                Circle()
-                    .fill(colorScheme == .dark ? tint.opacity(0.70) : tint)
-            }
-            .overlay {
-                Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: [
-                                Color.white.opacity(colorScheme == .dark ? 0.05 : 0.03),
-                                Color.clear
-                            ],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                    )
-            }
-            .overlay {
-                Circle()
-                    .stroke(
-                        Color.white.opacity(
-                            colorScheme == .dark ? darkStrokeOpacity * 0.84 : lightStrokeOpacity
-                        ),
-                        lineWidth: 0.85
-                    )
-            }
     }
 }
 

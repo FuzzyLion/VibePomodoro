@@ -7,14 +7,13 @@ struct FocusPageContent: View {
     let bubbleCenter: CGPoint
     let bottomChromeTopPadding: CGFloat
     let chromeOpacity: Double
-    let bubbleControlOpacity: Double
     let isChromeInteractive: Bool
     let backgroundTapAction: (CGPoint) -> Void
     let primaryAction: () -> Void
     let goBackAction: () -> Void
+    let resetAction: () -> Void
     let requestFinishAction: () -> Void
     let skipAction: () -> Void
-    let resetAction: () -> Void
 
     var body: some View {
         ZStack {
@@ -29,10 +28,7 @@ struct FocusPageContent: View {
                 )
 
             BubbleTimerView(
-                renderState: renderState.bubble,
-                controlVisibility: bubbleControlOpacity,
-                controlIsInteractive: isChromeInteractive,
-                action: primaryAction
+                renderState: renderState.bubble
             )
             .frame(
                 width: FocusScreenLayout.bubbleDiameter,
@@ -43,7 +39,7 @@ struct FocusPageContent: View {
             FocusTopChrome(
                 renderState: renderState,
                 layout: layout,
-                goBackAction: goBackAction,
+                resetAction: resetAction,
                 requestFinishAction: requestFinishAction
             )
             .opacity(chromeOpacity)
@@ -53,8 +49,9 @@ struct FocusPageContent: View {
                 renderState: renderState,
                 layout: layout,
                 topPadding: bottomChromeTopPadding,
-                skipAction: skipAction,
-                resetAction: resetAction
+                primaryAction: primaryAction,
+                goBackAction: goBackAction,
+                skipAction: skipAction
             )
             .opacity(chromeOpacity)
             .allowsHitTesting(isChromeInteractive)
@@ -73,8 +70,7 @@ struct FocusCompletionBackdropBubble: View {
     var body: some View {
         BubbleTimerView(
             renderState: renderState,
-            showsForegroundContent: false,
-            action: {}
+            showsForegroundContent: false
         )
         .frame(
             width: FocusScreenLayout.bubbleDiameter,
@@ -92,35 +88,33 @@ struct FocusCompletionBackdropBubble: View {
 private struct FocusTopChrome: View {
     let renderState: FocusRenderState
     let layout: FocusScreenLayout
-    let goBackAction: () -> Void
+    let resetAction: () -> Void
     let requestFinishAction: () -> Void
 
     var body: some View {
         VStack(spacing: 0) {
             ZStack {
-                PhaseStatusBadge(text: renderState.statusText, phase: renderState.phase)
+                FocusStatusTitle(text: renderState.statusText, phase: renderState.phase)
                     .fixedSize(horizontal: true, vertical: false)
 
                 HStack {
                     FocusActionSlot {
-                        if renderState.shouldShowBackAction {
-                            FocusCornerIconButton(
-                                systemImage: "chevron.left",
-                                accessibilityLabel: "Back to last step",
-                                isEnabled: renderState.canGoBack,
-                                action: goBackAction
-                            )
-                        }
+                        FocusTopBarButton(
+                            systemImage: "arrow.counterclockwise",
+                            isEnabled: renderState.canReset,
+                            accessibilityLabel: "Reset current step",
+                            action: resetAction
+                        )
                     }
 
                     Spacer(minLength: layout.topChromeInnerSpacing)
 
                     FocusActionSlot {
                         if renderState.shouldShowFinishAction {
-                            FocusCornerIconButton(
+                            FocusTopBarButton(
                                 systemImage: "flag.checkered",
-                                accessibilityLabel: "Finish session early",
                                 isEnabled: true,
+                                accessibilityLabel: "Finish session early",
                                 action: requestFinishAction
                             )
                         }
@@ -140,41 +134,55 @@ private struct FocusBottomChrome: View {
     let renderState: FocusRenderState
     let layout: FocusScreenLayout
     let topPadding: CGFloat
+    let primaryAction: () -> Void
+    let goBackAction: () -> Void
     let skipAction: () -> Void
-    let resetAction: () -> Void
 
     var body: some View {
         VStack(spacing: layout.bottomChromeSpacing) {
-            SessionProgressPill(
+            SessionProgressDots(
                 phase: renderState.phase,
                 nodeStates: renderState.nodeStates
             )
             .fixedSize(horizontal: true, vertical: false)
 
-            HStack(spacing: FocusScreenLayout.secondaryActionSpacing) {
-                SecondaryActionButton(
-                    title: "Skip",
-                    systemImage: "forward.end",
+            HStack(spacing: FocusScreenLayout.bottomControlSpacing) {
+                FocusBottomSecondaryButton(
+                    systemImage: "backward.end.fill",
+                    isEnabled: renderState.shouldShowBackAction && renderState.canGoBack,
+                    accessibilityLabel: "Back to last step",
+                    action: goBackAction
+                )
+
+                FocusPrimaryControlButton(
+                    title: renderState.bubble.actionTitle,
+                    systemImage: primaryActionIconName,
+                    action: primaryAction
+                )
+
+                FocusBottomSecondaryButton(
+                    systemImage: "forward.end.fill",
                     isEnabled: renderState.canSkip,
-                    glassTint: renderState.phase.glassTint,
+                    accessibilityLabel: "Skip current step",
                     action: skipAction
                 )
-                .frame(maxWidth: .infinity)
-
-                SecondaryActionButton(
-                    title: "Reset",
-                    systemImage: "arrow.counterclockwise",
-                    isEnabled: renderState.canReset,
-                    glassTint: renderState.phase.glassTint,
-                    action: resetAction
-                )
-                .frame(maxWidth: .infinity)
             }
-            .frame(width: FocusScreenLayout.secondaryActionRowWidth)
+            .frame(width: FocusScreenLayout.bottomControlRowWidth)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .padding(.top, topPadding)
         .padding(.horizontal, FocusScreenLayout.horizontalPadding)
+    }
+
+    private var primaryActionIconName: String {
+        switch renderState.bubble.actionTitle {
+        case "Pause":
+            return "pause.fill"
+        case "Resume", "Start", "Start Again":
+            return "play.fill"
+        default:
+            return "play.fill"
+        }
     }
 }
 

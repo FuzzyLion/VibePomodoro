@@ -10,8 +10,10 @@ struct FocusScreenLayout {
     static let bubbleDiameter: CGFloat = 280
     static let horizontalPadding: CGFloat = 24
     static let topActionButtonSize: CGFloat = 44
-    static let secondaryActionRowWidth: CGFloat = 261.29
-    static let secondaryActionSpacing: CGFloat = 16
+    static let bottomControlRowWidth: CGFloat = bubbleDiameter
+    static let bottomControlSpacing: CGFloat = 12
+    static let bottomSecondaryButtonSize: CGFloat = 52
+    static let bottomPrimaryButtonHeight: CGFloat = 54
     static let immersiveAnchorResetEpsilon: CGFloat = 1
     static let layoutSettlingEpsilon: CGFloat = 1
     static let immersiveLayoutRestoreFallbackDelay: UInt64 = 450_000_000
@@ -26,10 +28,10 @@ struct FocusScreenLayout {
 
     var topChromePadding: CGFloat {
         if safeAreaInsets.top > FocusScreenLayout.topActionButtonSize {
-            return safeAreaInsets.top - FocusScreenLayout.topActionButtonSize + (isCompact ? 2 : 4)
+            return max(8, safeAreaInsets.top - FocusScreenLayout.topActionButtonSize)
         }
 
-        return safeAreaInsets.top + (isCompact ? 2 : 4)
+        return max(8, safeAreaInsets.top)
     }
 
     var topChromeInnerSpacing: CGFloat {
@@ -37,7 +39,7 @@ struct FocusScreenLayout {
     }
 
     var bottomChromeSpacing: CGFloat {
-        isCompact ? 16 : 18
+        isCompact ? 12 : 14
     }
 
     var defaultBubbleCenterY: CGFloat {
@@ -45,7 +47,7 @@ struct FocusScreenLayout {
     }
 
     var bottomChromeOffset: CGFloat {
-        isCompact ? 16 : 22
+        isCompact ? 16 : 20
     }
 
     var bubbleAnchorSignature: FocusBubbleAnchorSignature {

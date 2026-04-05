@@ -34,40 +34,42 @@ struct FocusScreen: View {
                 layout: layout,
                 bubbleCenterY: bubbleCenter.y
             )
-            ZStack {
-                FocusPageContent(
-                    renderState: renderState,
-                    layout: layout,
-                    size: proxy.size,
-                    bubbleCenter: bubbleCenter,
-                    bottomChromeTopPadding: bottomChromeTopPadding,
-                    chromeOpacity: chromeOpacity,
-                    bubbleControlOpacity: bubbleControlOpacity,
-                    isChromeInteractive: isChromeInteractive,
-                    backgroundTapAction: { location in
-                        handleScreenTap(
-                            at: location,
-                            layout: layout,
-                            size: proxy.size,
-                            containerFrame: containerFrame
-                        )
-                    },
-                    primaryAction: store.togglePrimaryAction,
-                    goBackAction: store.goBackOneStep,
-                    requestFinishAction: requestFinishConfirmation,
-                    skipAction: store.skipCurrentStep,
-                    resetAction: store.resetCurrentStep
-                )
-                .opacity(hasCompletionSummary ? 0 : 1)
-                .allowsHitTesting(!hasCompletionSummary)
-                .accessibilityHidden(hasCompletionSummary)
+            let pageContent = FocusPageContent(
+                renderState: renderState,
+                layout: layout,
+                size: proxy.size,
+                bubbleCenter: bubbleCenter,
+                bottomChromeTopPadding: bottomChromeTopPadding,
+                chromeOpacity: chromeOpacity,
+                isChromeInteractive: isChromeInteractive,
+                backgroundTapAction: { location in
+                    handleScreenTap(
+                        at: location,
+                        layout: layout,
+                        size: proxy.size,
+                        containerFrame: containerFrame
+                    )
+                },
+                primaryAction: store.togglePrimaryAction,
+                goBackAction: store.goBackOneStep,
+                resetAction: store.resetCurrentStep,
+                requestFinishAction: requestFinishConfirmation,
+                skipAction: store.skipCurrentStep
+            )
+            .opacity(hasCompletionSummary ? 0 : 1)
+            .allowsHitTesting(!hasCompletionSummary)
+            .accessibilityHidden(hasCompletionSummary)
 
-                FocusCompletionBackdropBubble(
-                    renderState: renderState.bubble,
-                    size: proxy.size,
-                    bubbleCenter: bubbleCenter
-                )
-                .opacity(hasCompletionSummary ? 1 : 0)
+            let completionBackdrop = FocusCompletionBackdropBubble(
+                renderState: renderState.bubble,
+                size: proxy.size,
+                bubbleCenter: bubbleCenter
+            )
+            .opacity(hasCompletionSummary ? 1 : 0)
+
+            ZStack {
+                pageContent
+                completionBackdrop
 
                 if let completionSummaryState {
                     FocusCompletionSummaryView(state: completionSummaryState) {
@@ -257,10 +259,6 @@ struct FocusScreen: View {
             hasCompletionSummary: completionSummaryState != nil,
             immersiveVisualsHidden: immersiveVisualsHidden
         )
-    }
-
-    private var bubbleControlOpacity: Double {
-        chromeOpacity
     }
 
     private var isChromeInteractive: Bool {
