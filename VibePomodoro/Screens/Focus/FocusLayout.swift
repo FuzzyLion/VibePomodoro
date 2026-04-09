@@ -24,6 +24,10 @@ struct FocusScreenLayout {
     static let layoutSettlingEpsilon: CGFloat = 1
     static let immersiveLayoutRestoreFallbackDelay: UInt64 = 450_000_000
     static let immersiveVisualFadeAnimation = Animation.easeOut(duration: 0.18)
+    static let phaseMorphAnimation = Animation.easeInOut(duration: 0.34)
+    static let phaseChromeBreathInAnimation = Animation.easeOut(duration: 0.18)
+    static let phaseChromeBreathOutAnimation = Animation.easeInOut(duration: 0.24)
+    static let phaseChromeBreathHoldDuration: UInt64 = 90_000_000
 
     let size: CGSize
     let safeAreaInsets: EdgeInsets

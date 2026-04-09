@@ -104,6 +104,15 @@ private struct FocusProgressDotsChrome: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .padding(.top, topPadding)
         .allowsHitTesting(false)
+        .modifier(
+            FocusPhaseBreathModifier(
+                phase: renderState.phase,
+                lift: 2.2,
+                scaleAmount: 0.015,
+                opacityDrop: 0.06,
+                shadowBoost: 0.08
+            )
+        )
     }
 }
 
@@ -149,6 +158,15 @@ private struct FocusTopChrome: View {
         .padding(.top, layout.topChromePadding)
         .padding(.horizontal, FocusScreenLayout.topChromeHorizontalPadding)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .modifier(
+            FocusPhaseBreathModifier(
+                phase: renderState.phase,
+                lift: 1.2,
+                scaleAmount: 0.010,
+                opacityDrop: 0.04,
+                shadowBoost: 0
+            )
+        )
     }
 }
 
@@ -215,5 +233,59 @@ private struct FocusActionSlot<Content: View>: View {
         content()
             .frame(width: size, height: size)
             .contentShape(Rectangle())
+    }
+}
+
+private struct FocusPhaseBreathModifier: ViewModifier {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    let phase: SessionPhase
+    let lift: CGFloat
+    let scaleAmount: CGFloat
+    let opacityDrop: Double
+    let shadowBoost: Double
+
+    @State private var pulse: CGFloat = 0
+    @State private var pulseTask: Task<Void, Never>?
+
+    func body(content: Content) -> some View {
+        content
+            .scaleEffect(1 + (pulse * scaleAmount))
+            .offset(y: -pulse * lift)
+            .opacity(1 - (Double(pulse) * opacityDrop))
+            .shadow(
+                color: phase.shadowColor.opacity(Double(pulse) * shadowBoost),
+                radius: Double(pulse) * 10,
+                y: Double(pulse) * 2
+            )
+            .onChange(of: phase) { oldValue, newValue in
+                guard oldValue != newValue else { return }
+                triggerPhaseBreath()
+            }
+            .onDisappear {
+                pulseTask?.cancel()
+            }
+    }
+
+    private func triggerPhaseBreath() {
+        pulseTask?.cancel()
+
+        guard !reduceMotion else {
+            pulse = 0
+            return
+        }
+
+        withAnimation(FocusScreenLayout.phaseChromeBreathInAnimation) {
+            pulse = 1
+        }
+
+        pulseTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: FocusScreenLayout.phaseChromeBreathHoldDuration)
+            guard !Task.isCancelled else { return }
+
+            withAnimation(FocusScreenLayout.phaseChromeBreathOutAnimation) {
+                pulse = 0
+            }
+        }
     }
 }

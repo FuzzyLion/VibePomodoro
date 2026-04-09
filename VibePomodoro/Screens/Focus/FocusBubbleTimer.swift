@@ -1,14 +1,23 @@
 import SwiftUI
 
 struct BubbleTimerView: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     let renderState: BubbleRenderState
     var showsForegroundContent: Bool = true
 
     @State private var accumulatedWaveTime: TimeInterval = 0
     @State private var waveAnimationStart: Date?
+    @State private var morphSourcePhase: SessionPhase = .focus
+    @State private var morphProgress: CGFloat = 1
 
     var body: some View {
         let sphereSize = FocusScreenLayout.bubbleDiameter
+        let phaseMorph = BubblePhaseMorph(
+            sourcePhase: morphSourcePhase,
+            targetPhase: renderState.phase,
+            progress: morphProgress
+        )
         let waveClock = BubbleWaveClock(
             accumulatedWaveTime: accumulatedWaveTime,
             waveAnimationStart: waveAnimationStart,
@@ -16,15 +25,21 @@ struct BubbleTimerView: View {
         )
 
         ZStack {
-            BubbleGlassBackdrop(phase: renderState.phase, sphereSize: sphereSize)
-            BubbleAnimatedSurfaceLayer(renderState: renderState, waveClock: waveClock)
-            BubbleGlassRimOverlay(phase: renderState.phase, sphereSize: sphereSize)
+            BubbleGlassBackdrop(phaseMorph: phaseMorph, sphereSize: sphereSize)
+            BubbleAnimatedSurfaceLayer(
+                renderState: renderState,
+                waveClock: waveClock,
+                phaseMorph: phaseMorph
+            )
+            BubbleGlassRimOverlay(phaseMorph: phaseMorph, sphereSize: sphereSize)
             if showsForegroundContent {
                 BubbleForegroundContent(renderState: renderState)
             }
         }
         .frame(width: sphereSize, height: sphereSize)
         .onAppear {
+            morphSourcePhase = renderState.phase
+            morphProgress = 1
             if renderState.isAnimating && waveAnimationStart == nil {
                 waveAnimationStart = .now
             }
@@ -38,10 +53,51 @@ struct BubbleTimerView: View {
                 self.waveAnimationStart = nil
             }
         }
-        .onChange(of: renderState.phase) { _, _ in
+        .onChange(of: renderState.phase) { oldValue, newValue in
             accumulatedWaveTime = 0
             waveAnimationStart = renderState.isAnimating ? .now : nil
+
+            guard oldValue != newValue else { return }
+
+            if reduceMotion {
+                morphSourcePhase = newValue
+                morphProgress = 1
+                return
+            }
+
+            morphSourcePhase = oldValue
+            morphProgress = 0
+
+            withAnimation(FocusScreenLayout.phaseMorphAnimation) {
+                morphProgress = 1
+            }
         }
+    }
+}
+
+private struct BubblePhaseMorph: Equatable {
+    let sourcePhase: SessionPhase
+    let targetPhase: SessionPhase
+    let progress: CGFloat
+
+    var clampedProgress: CGFloat {
+        max(0, min(progress, 1))
+    }
+
+    var shape: BubbleGlassShape {
+        BubbleGlassShape(
+            sourcePhase: sourcePhase,
+            targetPhase: targetPhase,
+            progress: clampedProgress
+        )
+    }
+
+    func shellProfile(for sphereSize: CGFloat) -> BubbleShellProfile {
+        BubbleShellProfile.interpolated(
+            from: sourcePhase.bubbleShellProfile(for: sphereSize),
+            to: targetPhase.bubbleShellProfile(for: sphereSize),
+            progress: clampedProgress
+        )
     }
 }
 
@@ -65,6 +121,7 @@ private struct BubbleWaveClock {
 private struct BubbleAnimatedSurfaceLayer: View {
     let renderState: BubbleRenderState
     let waveClock: BubbleWaveClock
+    let phaseMorph: BubblePhaseMorph
 
     var body: some View {
         Group {
@@ -85,16 +142,16 @@ private struct BubbleAnimatedSurfaceLayer: View {
         let glowExpansion = 0.44 + (sin(wavePhase * 0.42) + 1) * 0.16
 
         ZStack {
-            BubbleGlowBackdrop(phase: renderState.phase, glowExpansion: glowExpansion)
+            BubbleGlowBackdrop(phaseMorph: phaseMorph, glowExpansion: glowExpansion)
 
             BubbleLiquidLayer(
-                phase: renderState.phase,
+                phaseMorph: phaseMorph,
                 progress: renderState.progress(at: date),
                 isFinalDisplayedSecond: renderState.isFinalDisplayedSecond(at: date),
                 wavePhase: wavePhase,
                 glowExpansion: glowExpansion
             )
-            .mask(BubbleGlassShape(phase: renderState.phase))
+            .mask(phaseMorph.shape)
         }
     }
 }
@@ -255,13 +312,14 @@ private struct BubbleTimerTextLabel: View {
 private struct BubbleGlassBackdrop: View {
     @Environment(\.colorScheme) private var colorScheme
 
-    let phase: SessionPhase
+    let phaseMorph: BubblePhaseMorph
     let sphereSize: CGFloat
 
     var body: some View {
         let isDark = colorScheme == .dark
-        let bubbleShape = BubbleGlassShape(phase: phase)
-        let profile = phase.bubbleShellProfile(for: sphereSize)
+        let phase = phaseMorph.targetPhase
+        let bubbleShape = phaseMorph.shape
+        let profile = phaseMorph.shellProfile(for: sphereSize)
 
         ZStack {
             if isDark {
@@ -388,6 +446,41 @@ private struct BubbleGlassBackdrop: View {
                 .blur(radius: isDark ? 16 : 12)
                 .offset(profile.lowerCausticOffset)
                 .mask(bubbleShape)
+
+            Ellipse()
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            Color.white.opacity(isDark ? 0.09 : 0.12),
+                            Color.clear
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .frame(width: profile.innerLensSize.width, height: profile.innerLensSize.height)
+                .blur(radius: isDark ? 12 : 14)
+                .rotationEffect(.degrees(profile.innerLensRotation))
+                .offset(profile.innerLensOffset)
+                .mask(bubbleShape)
+
+            Ellipse()
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            Color.white.opacity(isDark ? 0.05 : 0.07),
+                            phase.tintColor.opacity(isDark ? 0.08 : 0.05),
+                            Color.clear
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
+                .frame(width: profile.sideRefractionSize.width, height: profile.sideRefractionSize.height)
+                .blur(radius: isDark ? 10 : 11)
+                .rotationEffect(.degrees(profile.sideRefractionRotation))
+                .offset(profile.sideRefractionOffset)
+                .mask(bubbleShape)
         }
         .shadow(color: phase.shadowColor.opacity(isDark ? 0.045 : 0.01), radius: isDark ? 18 : 8, y: isDark ? 9 : 3)
         .shadow(color: Color.white.opacity(isDark ? 0.03 : 0.08), radius: isDark ? 7 : 8, y: -3)
@@ -398,13 +491,14 @@ private struct BubbleGlassBackdrop: View {
 private struct BubbleGlassRimOverlay: View {
     @Environment(\.colorScheme) private var colorScheme
 
-    let phase: SessionPhase
+    let phaseMorph: BubblePhaseMorph
     let sphereSize: CGFloat
 
     var body: some View {
         let isDark = colorScheme == .dark
-        let bubbleShape = BubbleGlassShape(phase: phase)
-        let profile = phase.bubbleShellProfile(for: sphereSize)
+        let phase = phaseMorph.targetPhase
+        let bubbleShape = phaseMorph.shape
+        let profile = phaseMorph.shellProfile(for: sphereSize)
 
         ZStack {
             bubbleShape
@@ -516,8 +610,67 @@ private struct BubbleShellProfile {
     let outerGlowOffset: CGSize
     let depthPoolSize: CGSize
     let depthPoolOffset: CGSize
+    let innerLensSize: CGSize
+    let innerLensOffset: CGSize
+    let innerLensRotation: Double
+    let sideRefractionSize: CGSize
+    let sideRefractionOffset: CGSize
+    let sideRefractionRotation: Double
     let waveAmplitudeBase: Double
     let waveAmplitudeRange: Double
+}
+
+private extension BubbleShellProfile {
+    static func interpolated(
+        from source: BubbleShellProfile,
+        to target: BubbleShellProfile,
+        progress: CGFloat
+    ) -> BubbleShellProfile {
+        BubbleShellProfile(
+            upperSpecularSize: interpolate(source.upperSpecularSize, target.upperSpecularSize, progress),
+            upperSpecularOffset: interpolate(source.upperSpecularOffset, target.upperSpecularOffset, progress),
+            upperSpecularRotation: interpolate(source.upperSpecularRotation, target.upperSpecularRotation, progress),
+            shoulderSpecularSize: interpolate(source.shoulderSpecularSize, target.shoulderSpecularSize, progress),
+            shoulderSpecularOffset: interpolate(source.shoulderSpecularOffset, target.shoulderSpecularOffset, progress),
+            shoulderSpecularRotation: interpolate(source.shoulderSpecularRotation, target.shoulderSpecularRotation, progress),
+            lowerCausticSize: interpolate(source.lowerCausticSize, target.lowerCausticSize, progress),
+            lowerCausticOffset: interpolate(source.lowerCausticOffset, target.lowerCausticOffset, progress),
+            outerGlowSize: interpolate(source.outerGlowSize, target.outerGlowSize, progress),
+            outerGlowOffset: interpolate(source.outerGlowOffset, target.outerGlowOffset, progress),
+            depthPoolSize: interpolate(source.depthPoolSize, target.depthPoolSize, progress),
+            depthPoolOffset: interpolate(source.depthPoolOffset, target.depthPoolOffset, progress),
+            innerLensSize: interpolate(source.innerLensSize, target.innerLensSize, progress),
+            innerLensOffset: interpolate(source.innerLensOffset, target.innerLensOffset, progress),
+            innerLensRotation: interpolate(source.innerLensRotation, target.innerLensRotation, progress),
+            sideRefractionSize: interpolate(source.sideRefractionSize, target.sideRefractionSize, progress),
+            sideRefractionOffset: interpolate(source.sideRefractionOffset, target.sideRefractionOffset, progress),
+            sideRefractionRotation: interpolate(source.sideRefractionRotation, target.sideRefractionRotation, progress),
+            waveAmplitudeBase: interpolate(source.waveAmplitudeBase, target.waveAmplitudeBase, progress),
+            waveAmplitudeRange: interpolate(source.waveAmplitudeRange, target.waveAmplitudeRange, progress)
+        )
+    }
+}
+
+private func interpolate(_ source: CGSize, _ target: CGSize, _ progress: CGFloat) -> CGSize {
+    CGSize(
+        width: interpolate(source.width, target.width, progress),
+        height: interpolate(source.height, target.height, progress)
+    )
+}
+
+private func interpolate(_ source: CGPoint, _ target: CGPoint, _ progress: CGFloat) -> CGPoint {
+    CGPoint(
+        x: interpolate(source.x, target.x, progress),
+        y: interpolate(source.y, target.y, progress)
+    )
+}
+
+private func interpolate(_ source: CGFloat, _ target: CGFloat, _ progress: CGFloat) -> CGFloat {
+    source + ((target - source) * progress)
+}
+
+private func interpolate(_ source: Double, _ target: Double, _ progress: CGFloat) -> Double {
+    source + ((target - source) * Double(progress))
 }
 
 private extension SessionPhase {
@@ -537,6 +690,12 @@ private extension SessionPhase {
                 outerGlowOffset: CGSize(width: 0, height: sphereSize * 0.45),
                 depthPoolSize: CGSize(width: sphereSize * 0.75, height: sphereSize * 0.23),
                 depthPoolOffset: CGSize(width: 0, height: sphereSize * 0.34),
+                innerLensSize: CGSize(width: sphereSize * 0.44, height: sphereSize * 0.28),
+                innerLensOffset: CGSize(width: sphereSize * 0.03, height: -sphereSize * 0.10),
+                innerLensRotation: 10,
+                sideRefractionSize: CGSize(width: sphereSize * 0.20, height: sphereSize * 0.42),
+                sideRefractionOffset: CGSize(width: sphereSize * 0.20, height: -sphereSize * 0.04),
+                sideRefractionRotation: 14,
                 waveAmplitudeBase: 2.8,
                 waveAmplitudeRange: 1.15
             )
@@ -554,6 +713,12 @@ private extension SessionPhase {
                 outerGlowOffset: CGSize(width: -sphereSize * 0.02, height: sphereSize * 0.44),
                 depthPoolSize: CGSize(width: sphereSize * 0.78, height: sphereSize * 0.24),
                 depthPoolOffset: CGSize(width: -sphereSize * 0.03, height: sphereSize * 0.34),
+                innerLensSize: CGSize(width: sphereSize * 0.48, height: sphereSize * 0.30),
+                innerLensOffset: CGSize(width: -sphereSize * 0.02, height: -sphereSize * 0.06),
+                innerLensRotation: -8,
+                sideRefractionSize: CGSize(width: sphereSize * 0.24, height: sphereSize * 0.40),
+                sideRefractionOffset: CGSize(width: sphereSize * 0.23, height: sphereSize * 0.02),
+                sideRefractionRotation: 24,
                 waveAmplitudeBase: 2.5,
                 waveAmplitudeRange: 1.05
             )
@@ -571,6 +736,12 @@ private extension SessionPhase {
                 outerGlowOffset: CGSize(width: sphereSize * 0.03, height: sphereSize * 0.44),
                 depthPoolSize: CGSize(width: sphereSize * 0.79, height: sphereSize * 0.24),
                 depthPoolOffset: CGSize(width: sphereSize * 0.03, height: sphereSize * 0.34),
+                innerLensSize: CGSize(width: sphereSize * 0.50, height: sphereSize * 0.29),
+                innerLensOffset: CGSize(width: sphereSize * 0.05, height: -sphereSize * 0.08),
+                innerLensRotation: 6,
+                sideRefractionSize: CGSize(width: sphereSize * 0.22, height: sphereSize * 0.41),
+                sideRefractionOffset: CGSize(width: sphereSize * 0.17, height: 0),
+                sideRefractionRotation: 8,
                 waveAmplitudeBase: 2.55,
                 waveAmplitudeRange: 1.08
             )
@@ -579,7 +750,26 @@ private extension SessionPhase {
 }
 
 private struct BubbleGlassShape: Shape {
-    let phase: SessionPhase
+    let sourcePhase: SessionPhase
+    let targetPhase: SessionPhase
+    var progress: CGFloat = 1
+
+    init(phase: SessionPhase) {
+        sourcePhase = phase
+        targetPhase = phase
+        progress = 1
+    }
+
+    init(sourcePhase: SessionPhase, targetPhase: SessionPhase, progress: CGFloat) {
+        self.sourcePhase = sourcePhase
+        self.targetPhase = targetPhase
+        self.progress = progress
+    }
+
+    var animatableData: CGFloat {
+        get { progress }
+        set { progress = newValue }
+    }
 
     func path(in rect: CGRect) -> Path {
         guard rect.width.isFinite,
@@ -590,184 +780,129 @@ private struct BubbleGlassShape: Shape {
         }
 
         let insetRect = rect.insetBy(dx: 0.9, dy: 0.9)
+        let geometry = BubbleShapeGeometry.interpolated(
+            from: sourcePhase.bubbleShapeGeometry,
+            to: targetPhase.bubbleShapeGeometry,
+            progress: max(0, min(progress, 1))
+        )
 
-        switch phase {
-        case .focus:
-            return focusPath(in: insetRect)
-        case .shortBreak:
-            return shortBreakPath(in: insetRect)
-        case .longBreak:
-            return longBreakPath(in: insetRect)
+        return geometry.path(in: insetRect)
+    }
+}
+
+private struct BubbleShapeGeometry {
+    let start: CGPoint
+    let segments: [BubbleShapeCurveSegment]
+
+    func path(in rect: CGRect) -> Path {
+        guard !segments.isEmpty else { return Path() }
+
+        var path = Path()
+        path.move(to: scaled(start, in: rect))
+
+        for segment in segments {
+            path.addCurve(
+                to: scaled(segment.end, in: rect),
+                control1: scaled(segment.control1, in: rect),
+                control2: scaled(segment.control2, in: rect)
+            )
         }
-    }
 
-    private func focusPath(in rect: CGRect) -> Path {
-        let minX = rect.minX
-        let minY = rect.minY
-        let width = rect.width
-        let height = rect.height
-
-        var path = Path()
-        path.move(to: CGPoint(x: minX + width * 0.49, y: minY + height * 0.01))
-        path.addCurve(
-            to: CGPoint(x: minX + width * 0.86, y: minY + height * 0.08),
-            control1: CGPoint(x: minX + width * 0.68, y: minY - height * 0.01),
-            control2: CGPoint(x: minX + width * 0.79, y: minY + height * 0.00)
-        )
-        path.addCurve(
-            to: CGPoint(x: minX + width * 0.99, y: minY + height * 0.48),
-            control1: CGPoint(x: minX + width * 0.96, y: minY + height * 0.18),
-            control2: CGPoint(x: minX + width * 1.01, y: minY + height * 0.31)
-        )
-        path.addCurve(
-            to: CGPoint(x: minX + width * 0.86, y: minY + height * 0.92),
-            control1: CGPoint(x: minX + width * 0.99, y: minY + height * 0.73),
-            control2: CGPoint(x: minX + width * 0.96, y: minY + height * 0.87)
-        )
-        path.addCurve(
-            to: CGPoint(x: minX + width * 0.50, y: minY + height * 1.00),
-            control1: CGPoint(x: minX + width * 0.75, y: minY + height * 0.99),
-            control2: CGPoint(x: minX + width * 0.61, y: minY + height * 1.00)
-        )
-        path.addCurve(
-            to: CGPoint(x: minX + width * 0.13, y: minY + height * 0.92),
-            control1: CGPoint(x: minX + width * 0.38, y: minY + height * 0.99),
-            control2: CGPoint(x: minX + width * 0.25, y: minY + height * 0.98)
-        )
-        path.addCurve(
-            to: CGPoint(x: minX + width * 0.01, y: minY + height * 0.49),
-            control1: CGPoint(x: minX + width * 0.03, y: minY + height * 0.87),
-            control2: CGPoint(x: minX - width * 0.01, y: minY + height * 0.71)
-        )
-        path.addCurve(
-            to: CGPoint(x: minX + width * 0.10, y: minY + height * 0.09),
-            control1: CGPoint(x: minX + width * 0.01, y: minY + height * 0.28),
-            control2: CGPoint(x: minX + width * 0.01, y: minY + height * 0.15)
-        )
-        path.addCurve(
-            to: CGPoint(x: minX + width * 0.49, y: minY + height * 0.01),
-            control1: CGPoint(x: minX + width * 0.20, y: minY + height * 0.00),
-            control2: CGPoint(x: minX + width * 0.33, y: minY - height * 0.01)
-        )
         path.closeSubpath()
         return path
     }
 
-    private func shortBreakPath(in rect: CGRect) -> Path {
-        let minX = rect.minX
-        let minY = rect.minY
-        let width = rect.width
-        let height = rect.height
-
-        var path = Path()
-        path.move(to: CGPoint(x: minX + width * 0.49, y: minY + height * 0.02))
-        path.addCurve(
-            to: CGPoint(x: minX + width * 0.81, y: minY + height * 0.12),
-            control1: CGPoint(x: minX + width * 0.63, y: minY - height * 0.01),
-            control2: CGPoint(x: minX + width * 0.75, y: minY + height * 0.04)
+    static func interpolated(
+        from source: BubbleShapeGeometry,
+        to target: BubbleShapeGeometry,
+        progress: CGFloat
+    ) -> BubbleShapeGeometry {
+        BubbleShapeGeometry(
+            start: interpolate(source.start, target.start, progress),
+            segments: zip(source.segments, target.segments).map { sourceSegment, targetSegment in
+                BubbleShapeCurveSegment(
+                    control1: interpolate(sourceSegment.control1, targetSegment.control1, progress),
+                    control2: interpolate(sourceSegment.control2, targetSegment.control2, progress),
+                    end: interpolate(sourceSegment.end, targetSegment.end, progress)
+                )
+            }
         )
-        path.addCurve(
-            to: CGPoint(x: minX + width * 0.93, y: minY + height * 0.34),
-            control1: CGPoint(x: minX + width * 0.88, y: minY + height * 0.18),
-            control2: CGPoint(x: minX + width * 0.94, y: minY + height * 0.24)
-        )
-        path.addCurve(
-            to: CGPoint(x: minX + width * 0.99, y: minY + height * 0.67),
-            control1: CGPoint(x: minX + width * 0.97, y: minY + height * 0.46),
-            control2: CGPoint(x: minX + width * 1.01, y: minY + height * 0.57)
-        )
-        path.addCurve(
-            to: CGPoint(x: minX + width * 0.53, y: minY + height * 1.00),
-            control1: CGPoint(x: minX + width * 0.95, y: minY + height * 0.85),
-            control2: CGPoint(x: minX + width * 0.72, y: minY + height * 0.94)
-        )
-        path.addCurve(
-            to: CGPoint(x: minX + width * 0.15, y: minY + height * 0.81),
-            control1: CGPoint(x: minX + width * 0.40, y: minY + height * 1.01),
-            control2: CGPoint(x: minX + width * 0.25, y: minY + height * 0.92)
-        )
-        path.addCurve(
-            to: CGPoint(x: minX + width * 0.00, y: minY + height * 0.52),
-            control1: CGPoint(x: minX + width * 0.05, y: minY + height * 0.69),
-            control2: CGPoint(x: minX - width * 0.03, y: minY + height * 0.61)
-        )
-        path.addCurve(
-            to: CGPoint(x: minX + width * 0.05, y: minY + height * 0.20),
-            control1: CGPoint(x: minX + width * 0.01, y: minY + height * 0.41),
-            control2: CGPoint(x: minX - width * 0.01, y: minY + height * 0.30)
-        )
-        path.addCurve(
-            to: CGPoint(x: minX + width * 0.49, y: minY + height * 0.02),
-            control1: CGPoint(x: minX + width * 0.11, y: minY + height * 0.08),
-            control2: CGPoint(x: minX + width * 0.28, y: minY + height * 0.02)
-        )
-        path.closeSubpath()
-        return path
     }
 
-    private func longBreakPath(in rect: CGRect) -> Path {
-        let minX = rect.minX
-        let minY = rect.minY
-        let width = rect.width
-        let height = rect.height
+    private func scaled(_ point: CGPoint, in rect: CGRect) -> CGPoint {
+        CGPoint(
+            x: rect.minX + (rect.width * point.x),
+            y: rect.minY + (rect.height * point.y)
+        )
+    }
+}
 
-        var path = Path()
-        path.move(to: CGPoint(x: minX + width * 0.49, y: minY + height * 0.02))
-        path.addCurve(
-            to: CGPoint(x: minX + width * 0.84, y: minY + height * 0.08),
-            control1: CGPoint(x: minX + width * 0.66, y: minY + height * 0.00),
-            control2: CGPoint(x: minX + width * 0.78, y: minY + height * 0.01)
-        )
-        path.addCurve(
-            to: CGPoint(x: minX + width * 0.94, y: minY + height * 0.28),
-            control1: CGPoint(x: minX + width * 0.90, y: minY + height * 0.13),
-            control2: CGPoint(x: minX + width * 0.93, y: minY + height * 0.18)
-        )
-        path.addCurve(
-            to: CGPoint(x: minX + width * 0.99, y: minY + height * 0.60),
-            control1: CGPoint(x: minX + width * 0.98, y: minY + height * 0.38),
-            control2: CGPoint(x: minX + width * 1.01, y: minY + height * 0.49)
-        )
-        path.addCurve(
-            to: CGPoint(x: minX + width * 0.86, y: minY + height * 0.84),
-            control1: CGPoint(x: minX + width * 0.98, y: minY + height * 0.74),
-            control2: CGPoint(x: minX + width * 0.92, y: minY + height * 0.81)
-        )
-        path.addCurve(
-            to: CGPoint(x: minX + width * 0.53, y: minY + height * 1.00),
-            control1: CGPoint(x: minX + width * 0.77, y: minY + height * 0.91),
-            control2: CGPoint(x: minX + width * 0.64, y: minY + height * 1.00)
-        )
-        path.addCurve(
-            to: CGPoint(x: minX + width * 0.16, y: minY + height * 0.86),
-            control1: CGPoint(x: minX + width * 0.39, y: minY + height * 1.00),
-            control2: CGPoint(x: minX + width * 0.22, y: minY + height * 0.93)
-        )
-        path.addCurve(
-            to: CGPoint(x: minX + width * 0.00, y: minY + height * 0.48),
-            control1: CGPoint(x: minX + width * 0.05, y: minY + height * 0.73),
-            control2: CGPoint(x: minX - width * 0.03, y: minY + height * 0.60)
-        )
-        path.addCurve(
-            to: CGPoint(x: minX + width * 0.49, y: minY + height * 0.02),
-            control1: CGPoint(x: minX + width * 0.03, y: minY + height * 0.20),
-            control2: CGPoint(x: minX + width * 0.24, y: minY + height * 0.02)
-        )
-        path.closeSubpath()
-        return path
+private struct BubbleShapeCurveSegment {
+    let control1: CGPoint
+    let control2: CGPoint
+    let end: CGPoint
+}
+
+private extension SessionPhase {
+    var bubbleShapeGeometry: BubbleShapeGeometry {
+        switch self {
+        case .focus:
+            return BubbleShapeGeometry(
+                start: CGPoint(x: 0.49, y: 0.01),
+                segments: [
+                    .init(control1: CGPoint(x: 0.68, y: -0.01), control2: CGPoint(x: 0.79, y: 0.00), end: CGPoint(x: 0.86, y: 0.08)),
+                    .init(control1: CGPoint(x: 0.96, y: 0.18), control2: CGPoint(x: 1.01, y: 0.31), end: CGPoint(x: 0.99, y: 0.48)),
+                    .init(control1: CGPoint(x: 0.99, y: 0.73), control2: CGPoint(x: 0.96, y: 0.87), end: CGPoint(x: 0.86, y: 0.92)),
+                    .init(control1: CGPoint(x: 0.75, y: 0.99), control2: CGPoint(x: 0.61, y: 1.00), end: CGPoint(x: 0.50, y: 1.00)),
+                    .init(control1: CGPoint(x: 0.38, y: 0.99), control2: CGPoint(x: 0.25, y: 0.98), end: CGPoint(x: 0.13, y: 0.92)),
+                    .init(control1: CGPoint(x: 0.03, y: 0.87), control2: CGPoint(x: -0.01, y: 0.71), end: CGPoint(x: 0.01, y: 0.49)),
+                    .init(control1: CGPoint(x: 0.01, y: 0.28), control2: CGPoint(x: 0.01, y: 0.15), end: CGPoint(x: 0.10, y: 0.09)),
+                    .init(control1: CGPoint(x: 0.20, y: 0.00), control2: CGPoint(x: 0.33, y: -0.01), end: CGPoint(x: 0.49, y: 0.01))
+                ]
+            )
+        case .shortBreak:
+            return BubbleShapeGeometry(
+                start: CGPoint(x: 0.49, y: 0.02),
+                segments: [
+                    .init(control1: CGPoint(x: 0.63, y: -0.01), control2: CGPoint(x: 0.75, y: 0.04), end: CGPoint(x: 0.81, y: 0.12)),
+                    .init(control1: CGPoint(x: 0.88, y: 0.18), control2: CGPoint(x: 0.94, y: 0.24), end: CGPoint(x: 0.93, y: 0.34)),
+                    .init(control1: CGPoint(x: 0.97, y: 0.46), control2: CGPoint(x: 1.01, y: 0.57), end: CGPoint(x: 0.99, y: 0.67)),
+                    .init(control1: CGPoint(x: 0.95, y: 0.85), control2: CGPoint(x: 0.72, y: 0.94), end: CGPoint(x: 0.53, y: 1.00)),
+                    .init(control1: CGPoint(x: 0.40, y: 1.01), control2: CGPoint(x: 0.25, y: 0.92), end: CGPoint(x: 0.15, y: 0.81)),
+                    .init(control1: CGPoint(x: 0.05, y: 0.69), control2: CGPoint(x: -0.03, y: 0.61), end: CGPoint(x: 0.00, y: 0.52)),
+                    .init(control1: CGPoint(x: 0.01, y: 0.41), control2: CGPoint(x: -0.01, y: 0.30), end: CGPoint(x: 0.05, y: 0.20)),
+                    .init(control1: CGPoint(x: 0.11, y: 0.08), control2: CGPoint(x: 0.28, y: 0.02), end: CGPoint(x: 0.49, y: 0.02))
+                ]
+            )
+        case .longBreak:
+            return BubbleShapeGeometry(
+                start: CGPoint(x: 0.49, y: 0.02),
+                segments: [
+                    .init(control1: CGPoint(x: 0.66, y: 0.00), control2: CGPoint(x: 0.78, y: 0.01), end: CGPoint(x: 0.84, y: 0.08)),
+                    .init(control1: CGPoint(x: 0.90, y: 0.13), control2: CGPoint(x: 0.93, y: 0.18), end: CGPoint(x: 0.94, y: 0.28)),
+                    .init(control1: CGPoint(x: 0.98, y: 0.38), control2: CGPoint(x: 1.01, y: 0.49), end: CGPoint(x: 0.99, y: 0.60)),
+                    .init(control1: CGPoint(x: 0.98, y: 0.74), control2: CGPoint(x: 0.92, y: 0.81), end: CGPoint(x: 0.86, y: 0.84)),
+                    .init(control1: CGPoint(x: 0.77, y: 0.91), control2: CGPoint(x: 0.64, y: 1.00), end: CGPoint(x: 0.53, y: 1.00)),
+                    .init(control1: CGPoint(x: 0.39, y: 1.00), control2: CGPoint(x: 0.22, y: 0.93), end: CGPoint(x: 0.16, y: 0.86)),
+                    .init(control1: CGPoint(x: 0.05, y: 0.73), control2: CGPoint(x: -0.03, y: 0.60), end: CGPoint(x: 0.00, y: 0.48)),
+                    .init(control1: CGPoint(x: 0.03, y: 0.20), control2: CGPoint(x: 0.24, y: 0.02), end: CGPoint(x: 0.49, y: 0.02))
+                ]
+            )
+        }
     }
 }
 
 private struct BubbleGlowBackdrop: View {
     @Environment(\.colorScheme) private var colorScheme
 
-    let phase: SessionPhase
+    let phaseMorph: BubblePhaseMorph
     let glowExpansion: Double
 
     var body: some View {
         let glow = glowExpansion.isFinite ? max(0, glowExpansion) : 0
-        let bubbleShape = BubbleGlassShape(phase: phase)
-        let profile = phase.bubbleShellProfile(for: FocusScreenLayout.bubbleDiameter)
+        let phase = phaseMorph.targetPhase
+        let bubbleShape = phaseMorph.shape
+        let profile = phaseMorph.shellProfile(for: FocusScreenLayout.bubbleDiameter)
 
         ZStack {
             bubbleShape
@@ -858,14 +993,19 @@ private struct BubbleGlowBackdrop: View {
 private struct BubbleLiquidLayer: View {
     @Environment(\.colorScheme) private var colorScheme
 
-    let phase: SessionPhase
+    let phaseMorph: BubblePhaseMorph
     let progress: Double
     let isFinalDisplayedSecond: Bool
     let wavePhase: Double
     let glowExpansion: Double
 
+    private var phase: SessionPhase {
+        phaseMorph.targetPhase
+    }
+
     var body: some View {
-        let profile = phase.bubbleShellProfile(for: FocusScreenLayout.bubbleDiameter)
+        let phase = phaseMorph.targetPhase
+        let profile = phaseMorph.shellProfile(for: FocusScreenLayout.bubbleDiameter)
         let normalizedProgress = max(0, min(progress, 1))
         let baseFillRatio = min(0.987, 0.12 + pow(normalizedProgress, 1.22) * 0.86)
         let terminalBoost = isFinalDisplayedSecond ? 0.052 : 0
@@ -881,7 +1021,7 @@ private struct BubbleLiquidLayer: View {
             }
 
             let sphereRect = CGRect(origin: .zero, size: canvasSize)
-            let spherePath = BubbleGlassShape(phase: phase).path(in: sphereRect)
+            let spherePath = phaseMorph.shape.path(in: sphereRect)
             let waterlineY = sphereRect.maxY - sphereRect.height * CGFloat(visualFillRatio)
 
             guard waterlineY.isFinite else { return }
