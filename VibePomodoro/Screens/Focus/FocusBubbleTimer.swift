@@ -89,7 +89,7 @@ private struct BubbleAnimatedSurfaceLayer: View {
                 wavePhase: wavePhase,
                 glowExpansion: glowExpansion
             )
-            .mask(BubbleGlassShape())
+            .mask(BubbleGlassShape(phase: renderState.phase))
         }
     }
 }
@@ -257,19 +257,20 @@ private struct BubbleGlassShell: View {
 
     var body: some View {
         let isDark = colorScheme == .dark
+        let bubbleShape = BubbleGlassShape(phase: phase)
 
         ZStack {
             if isDark {
-                BubbleGlassShape()
+                bubbleShape
                     .fill(.thinMaterial)
 
-                BubbleGlassShape()
+                bubbleShape
                     .fill(Color.white.opacity(0.045))
 
-                BubbleGlassShape()
+                bubbleShape
                     .fill(phase.glassTint.opacity(0.12))
 
-                BubbleGlassShape()
+                bubbleShape
                     .fill(
                         RadialGradient(
                             colors: [
@@ -282,7 +283,7 @@ private struct BubbleGlassShell: View {
                         )
                     )
 
-                BubbleGlassShape()
+                bubbleShape
                     .fill(
                         LinearGradient(
                             colors: [
@@ -295,10 +296,10 @@ private struct BubbleGlassShell: View {
                         )
                     )
 
-                BubbleGlassShape()
+                bubbleShape
                     .stroke(Color.white.opacity(0.42), lineWidth: 1)
 
-                BubbleGlassShape()
+                bubbleShape
                     .stroke(
                         LinearGradient(
                             colors: [
@@ -313,7 +314,7 @@ private struct BubbleGlassShell: View {
                     )
                     .blur(radius: 0.35)
 
-                BubbleGlassShape()
+                bubbleShape
                     .fill(
                         LinearGradient(
                             colors: [
@@ -325,7 +326,7 @@ private struct BubbleGlassShell: View {
                         )
                     )
                     .mask {
-                        BubbleGlassShape()
+                        bubbleShape
                             .stroke(lineWidth: 10)
                     }
 
@@ -334,15 +335,15 @@ private struct BubbleGlassShell: View {
                     .frame(width: sphereSize * 0.34, height: sphereSize * 0.06)
                     .blur(radius: 10)
                     .offset(y: sphereSize * 0.38)
-                    .mask(BubbleGlassShape())
+                    .mask(bubbleShape)
             } else {
-                BubbleGlassShape()
+                bubbleShape
                     .fill(Color(red: 0.90, green: 0.91, blue: 0.93).opacity(0.235))
 
-                BubbleGlassShape()
+                bubbleShape
                     .fill(Color.white.opacity(0.052))
 
-                BubbleGlassShape()
+                bubbleShape
                     .fill(
                         LinearGradient(
                             colors: [
@@ -355,7 +356,7 @@ private struct BubbleGlassShell: View {
                         )
                     )
 
-                BubbleGlassShape()
+                bubbleShape
                     .fill(
                         RadialGradient(
                             colors: [
@@ -384,9 +385,9 @@ private struct BubbleGlassShell: View {
                     .frame(width: sphereSize * 0.40, height: sphereSize * 0.20)
                     .blur(radius: 14)
                     .offset(x: -sphereSize * 0.16, y: -sphereSize * 0.30)
-                    .mask(BubbleGlassShape())
+                    .mask(bubbleShape)
 
-                BubbleGlassShape()
+                bubbleShape
                     .fill(
                         LinearGradient(
                             colors: [
@@ -400,7 +401,7 @@ private struct BubbleGlassShell: View {
                         )
                     )
 
-                BubbleGlassShape()
+                bubbleShape
                     .fill(
                         RadialGradient(
                             colors: [
@@ -414,10 +415,10 @@ private struct BubbleGlassShell: View {
                         )
                     )
 
-                BubbleGlassShape()
+                bubbleShape
                     .stroke(Color.white.opacity(0.72), lineWidth: 1.15)
 
-                BubbleGlassShape()
+                bubbleShape
                     .stroke(
                         LinearGradient(
                             colors: [
@@ -432,7 +433,7 @@ private struct BubbleGlassShell: View {
                     )
                     .blur(radius: 0.25)
 
-                BubbleGlassShape()
+                bubbleShape
                     .fill(
                         LinearGradient(
                             colors: [
@@ -444,11 +445,11 @@ private struct BubbleGlassShell: View {
                         )
                     )
                     .mask {
-                        BubbleGlassShape()
+                        bubbleShape
                             .stroke(lineWidth: 10)
                     }
 
-                BubbleGlassShape()
+                bubbleShape
                     .fill(
                         LinearGradient(
                             colors: [
@@ -460,7 +461,7 @@ private struct BubbleGlassShell: View {
                         )
                     )
                     .mask {
-                        BubbleGlassShape()
+                        bubbleShape
                             .stroke(lineWidth: 12)
                     }
 
@@ -469,7 +470,7 @@ private struct BubbleGlassShell: View {
                     .frame(width: sphereSize * 0.36, height: sphereSize * 0.07)
                     .blur(radius: 11)
                     .offset(y: sphereSize * 0.34)
-                    .mask(BubbleGlassShape())
+                    .mask(bubbleShape)
             }
         }
         .drawingGroup(opaque: false, colorMode: .linear)
@@ -480,6 +481,8 @@ private struct BubbleGlassShell: View {
 }
 
 private struct BubbleGlassShape: Shape {
+    let phase: SessionPhase
+
     func path(in rect: CGRect) -> Path {
         guard rect.width.isFinite,
               rect.height.isFinite,
@@ -488,7 +491,172 @@ private struct BubbleGlassShape: Shape {
             return Path()
         }
 
-        return Path(ellipseIn: rect.insetBy(dx: 0.9, dy: 0.9))
+        let insetRect = rect.insetBy(dx: 0.9, dy: 0.9)
+
+        switch phase {
+        case .focus:
+            return focusPath(in: insetRect)
+        case .shortBreak:
+            return shortBreakPath(in: insetRect)
+        case .longBreak:
+            return longBreakPath(in: insetRect)
+        }
+    }
+
+    private func focusPath(in rect: CGRect) -> Path {
+        let minX = rect.minX
+        let minY = rect.minY
+        let width = rect.width
+        let height = rect.height
+
+        var path = Path()
+        path.move(to: CGPoint(x: minX + width * 0.49, y: minY + height * 0.01))
+        path.addCurve(
+            to: CGPoint(x: minX + width * 0.86, y: minY + height * 0.08),
+            control1: CGPoint(x: minX + width * 0.68, y: minY - height * 0.01),
+            control2: CGPoint(x: minX + width * 0.79, y: minY + height * 0.00)
+        )
+        path.addCurve(
+            to: CGPoint(x: minX + width * 0.99, y: minY + height * 0.48),
+            control1: CGPoint(x: minX + width * 0.96, y: minY + height * 0.18),
+            control2: CGPoint(x: minX + width * 1.01, y: minY + height * 0.31)
+        )
+        path.addCurve(
+            to: CGPoint(x: minX + width * 0.86, y: minY + height * 0.92),
+            control1: CGPoint(x: minX + width * 0.99, y: minY + height * 0.73),
+            control2: CGPoint(x: minX + width * 0.96, y: minY + height * 0.87)
+        )
+        path.addCurve(
+            to: CGPoint(x: minX + width * 0.50, y: minY + height * 0.99),
+            control1: CGPoint(x: minX + width * 0.75, y: minY + height * 0.98),
+            control2: CGPoint(x: minX + width * 0.61, y: minY + height * 1.00)
+        )
+        path.addCurve(
+            to: CGPoint(x: minX + width * 0.13, y: minY + height * 0.92),
+            control1: CGPoint(x: minX + width * 0.38, y: minY + height * 0.99),
+            control2: CGPoint(x: minX + width * 0.25, y: minY + height * 0.98)
+        )
+        path.addCurve(
+            to: CGPoint(x: minX + width * 0.01, y: minY + height * 0.49),
+            control1: CGPoint(x: minX + width * 0.03, y: minY + height * 0.87),
+            control2: CGPoint(x: minX - width * 0.01, y: minY + height * 0.71)
+        )
+        path.addCurve(
+            to: CGPoint(x: minX + width * 0.10, y: minY + height * 0.09),
+            control1: CGPoint(x: minX + width * 0.01, y: minY + height * 0.28),
+            control2: CGPoint(x: minX + width * 0.01, y: minY + height * 0.15)
+        )
+        path.addCurve(
+            to: CGPoint(x: minX + width * 0.49, y: minY + height * 0.01),
+            control1: CGPoint(x: minX + width * 0.20, y: minY + height * 0.00),
+            control2: CGPoint(x: minX + width * 0.33, y: minY - height * 0.01)
+        )
+        path.closeSubpath()
+        return path
+    }
+
+    private func shortBreakPath(in rect: CGRect) -> Path {
+        let minX = rect.minX
+        let minY = rect.minY
+        let width = rect.width
+        let height = rect.height
+
+        var path = Path()
+        path.move(to: CGPoint(x: minX + width * 0.49, y: minY + height * 0.02))
+        path.addCurve(
+            to: CGPoint(x: minX + width * 0.81, y: minY + height * 0.12),
+            control1: CGPoint(x: minX + width * 0.63, y: minY - height * 0.01),
+            control2: CGPoint(x: minX + width * 0.75, y: minY + height * 0.04)
+        )
+        path.addCurve(
+            to: CGPoint(x: minX + width * 0.93, y: minY + height * 0.34),
+            control1: CGPoint(x: minX + width * 0.88, y: minY + height * 0.18),
+            control2: CGPoint(x: minX + width * 0.94, y: minY + height * 0.24)
+        )
+        path.addCurve(
+            to: CGPoint(x: minX + width * 0.99, y: minY + height * 0.67),
+            control1: CGPoint(x: minX + width * 0.97, y: minY + height * 0.46),
+            control2: CGPoint(x: minX + width * 1.01, y: minY + height * 0.57)
+        )
+        path.addCurve(
+            to: CGPoint(x: minX + width * 0.53, y: minY + height * 0.98),
+            control1: CGPoint(x: minX + width * 0.95, y: minY + height * 0.83),
+            control2: CGPoint(x: minX + width * 0.72, y: minY + height * 0.90)
+        )
+        path.addCurve(
+            to: CGPoint(x: minX + width * 0.15, y: minY + height * 0.77),
+            control1: CGPoint(x: minX + width * 0.41, y: minY + height * 1.00),
+            control2: CGPoint(x: minX + width * 0.26, y: minY + height * 0.88)
+        )
+        path.addCurve(
+            to: CGPoint(x: minX + width * 0.00, y: minY + height * 0.52),
+            control1: CGPoint(x: minX + width * 0.05, y: minY + height * 0.69),
+            control2: CGPoint(x: minX - width * 0.03, y: minY + height * 0.61)
+        )
+        path.addCurve(
+            to: CGPoint(x: minX + width * 0.05, y: minY + height * 0.20),
+            control1: CGPoint(x: minX + width * 0.01, y: minY + height * 0.41),
+            control2: CGPoint(x: minX - width * 0.01, y: minY + height * 0.30)
+        )
+        path.addCurve(
+            to: CGPoint(x: minX + width * 0.49, y: minY + height * 0.02),
+            control1: CGPoint(x: minX + width * 0.11, y: minY + height * 0.08),
+            control2: CGPoint(x: minX + width * 0.28, y: minY + height * 0.02)
+        )
+        path.closeSubpath()
+        return path
+    }
+
+    private func longBreakPath(in rect: CGRect) -> Path {
+        let minX = rect.minX
+        let minY = rect.minY
+        let width = rect.width
+        let height = rect.height
+
+        var path = Path()
+        path.move(to: CGPoint(x: minX + width * 0.49, y: minY + height * 0.02))
+        path.addCurve(
+            to: CGPoint(x: minX + width * 0.84, y: minY + height * 0.08),
+            control1: CGPoint(x: minX + width * 0.66, y: minY + height * 0.00),
+            control2: CGPoint(x: minX + width * 0.78, y: minY + height * 0.01)
+        )
+        path.addCurve(
+            to: CGPoint(x: minX + width * 0.94, y: minY + height * 0.28),
+            control1: CGPoint(x: minX + width * 0.90, y: minY + height * 0.13),
+            control2: CGPoint(x: minX + width * 0.93, y: minY + height * 0.18)
+        )
+        path.addCurve(
+            to: CGPoint(x: minX + width * 0.99, y: minY + height * 0.60),
+            control1: CGPoint(x: minX + width * 0.98, y: minY + height * 0.38),
+            control2: CGPoint(x: minX + width * 1.01, y: minY + height * 0.49)
+        )
+        path.addCurve(
+            to: CGPoint(x: minX + width * 0.86, y: minY + height * 0.84),
+            control1: CGPoint(x: minX + width * 0.98, y: minY + height * 0.74),
+            control2: CGPoint(x: minX + width * 0.92, y: minY + height * 0.81)
+        )
+        path.addCurve(
+            to: CGPoint(x: minX + width * 0.53, y: minY + height * 0.98),
+            control1: CGPoint(x: minX + width * 0.77, y: minY + height * 0.89),
+            control2: CGPoint(x: minX + width * 0.64, y: minY + height * 0.98)
+        )
+        path.addCurve(
+            to: CGPoint(x: minX + width * 0.16, y: minY + height * 0.82),
+            control1: CGPoint(x: minX + width * 0.39, y: minY + height * 0.99),
+            control2: CGPoint(x: minX + width * 0.22, y: minY + height * 0.91)
+        )
+        path.addCurve(
+            to: CGPoint(x: minX + width * 0.00, y: minY + height * 0.48),
+            control1: CGPoint(x: minX + width * 0.05, y: minY + height * 0.73),
+            control2: CGPoint(x: minX - width * 0.03, y: minY + height * 0.60)
+        )
+        path.addCurve(
+            to: CGPoint(x: minX + width * 0.49, y: minY + height * 0.02),
+            control1: CGPoint(x: minX + width * 0.03, y: minY + height * 0.20),
+            control2: CGPoint(x: minX + width * 0.24, y: minY + height * 0.02)
+        )
+        path.closeSubpath()
+        return path
     }
 }
 
@@ -500,9 +668,10 @@ private struct BubbleGlowBackdrop: View {
 
     var body: some View {
         let glow = glowExpansion.isFinite ? max(0, glowExpansion) : 0
+        let bubbleShape = BubbleGlassShape(phase: phase)
 
         ZStack {
-            BubbleGlassShape()
+            bubbleShape
                 .stroke(
                     phase.shadowColor.opacity(
                         clampedOpacity(
@@ -516,7 +685,7 @@ private struct BubbleGlowBackdrop: View {
                 .blur(radius: colorScheme == .dark ? 7.5 : 5.5)
                 .scaleEffect(colorScheme == .dark ? 1.026 : 1.02)
 
-            BubbleGlassShape()
+            bubbleShape
                 .stroke(
                     Color.white.opacity(
                         clampedOpacity(
@@ -606,7 +775,7 @@ private struct BubbleLiquidLayer: View {
             }
 
             let sphereRect = CGRect(origin: .zero, size: canvasSize)
-            let spherePath = BubbleGlassShape().path(in: sphereRect)
+            let spherePath = BubbleGlassShape(phase: phase).path(in: sphereRect)
             let waterlineY = sphereRect.maxY - sphereRect.height * CGFloat(visualFillRatio)
 
             guard waterlineY.isFinite else { return }
