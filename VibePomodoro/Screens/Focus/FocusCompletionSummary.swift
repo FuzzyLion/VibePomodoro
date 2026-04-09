@@ -557,12 +557,18 @@ private struct FocusCompletionDoneButton: View {
                 .font(.system(size: 19, weight: .semibold))
                 .tracking(-0.18)
                 .minimumScaleFactor(0.92)
-                .foregroundStyle(.primary)
+                .foregroundStyle(doneForegroundColor)
                 .frame(maxWidth: .infinity, minHeight: 56)
         }
         .buttonStyle(.glassProminent)
         .tint(doneTint)
         .buttonBorderShape(.capsule)
+    }
+
+    private var doneForegroundColor: Color {
+        colorScheme == .light
+            ? FocusControlColors.lightProminentButtonForeground
+            : .primary
     }
 
     private var doneTint: Color {

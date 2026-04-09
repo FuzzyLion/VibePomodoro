@@ -245,7 +245,6 @@ struct FocusScreen: View {
 
     private var canEnterImmersiveMode: Bool {
         completionSummaryState == nil
-            && store.currentRunState == .running
             && store.selectedTab == .focus
             && scenePhase == .active
             && !isVoiceOverRunning
@@ -253,8 +252,8 @@ struct FocusScreen: View {
 
     private var shouldKeepImmersiveMode: Bool {
         completionSummaryState == nil
-            && store.currentRunState == .running
             && store.selectedTab == .focus
+            && scenePhase == .active
             && !isVoiceOverRunning
     }
 

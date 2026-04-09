@@ -1,5 +1,17 @@
 import SwiftUI
 
+enum FocusControlColors {
+    static func statusTitleColor(for colorScheme: ColorScheme) -> Color {
+        colorScheme == .dark
+            ? VibePalette.warmBackground.opacity(0.92)
+            : VibePalette.labelPrimary.opacity(0.84)
+    }
+
+    static var lightProminentButtonForeground: Color {
+        VibePalette.labelPrimary.opacity(0.68)
+    }
+}
+
 struct FocusStatusTitle: View {
     @Environment(\.colorScheme) private var colorScheme
 
@@ -14,7 +26,7 @@ struct FocusStatusTitle: View {
                 .shadow(color: phase.shadowColor.opacity(colorScheme == .dark ? 0.20 : 0.14), radius: 3)
 
             Text(displayText)
-                .font(.system(size: 17, weight: .semibold, design: .default))
+                .font(.system(size: 18, weight: .semibold, design: .default))
                 .tracking(-0.2)
                 .lineLimit(1)
                 .minimumScaleFactor(0.84)
@@ -29,9 +41,7 @@ struct FocusStatusTitle: View {
     }
 
     private var titleColor: Color {
-        colorScheme == .dark
-            ? VibePalette.warmBackground.opacity(0.92)
-            : VibePalette.labelPrimary.opacity(0.84)
+        FocusControlColors.statusTitleColor(for: colorScheme)
     }
 }
 
@@ -193,6 +203,8 @@ struct FocusBottomSecondaryButton: View {
 struct FocusPrimaryControlButton: View {
     @Environment(\.colorScheme) private var colorScheme
 
+    private static let elevatedContrastTitles: Set<String> = ["Pause", "Resume", "Start", "Start Again"]
+
     let title: String
     let systemImage: String
     let action: () -> Void
@@ -209,7 +221,7 @@ struct FocusPrimaryControlButton: View {
                     .lineLimit(1)
                     .minimumScaleFactor(0.88)
             }
-            .foregroundStyle(.primary)
+            .foregroundStyle(primaryForegroundColor)
             .frame(
                 minWidth: FocusScreenLayout.bottomPrimaryButtonMinWidth,
                 maxWidth: .infinity,
@@ -225,6 +237,14 @@ struct FocusPrimaryControlButton: View {
         .zIndex(4)
     }
 
+    private var primaryForegroundColor: Color {
+        if colorScheme == .light, Self.elevatedContrastTitles.contains(title) {
+            return FocusControlColors.lightProminentButtonForeground
+        }
+
+        return .primary
+    }
+
     private var primaryTint: Color {
         switch title {
         case "Pause":
@@ -234,7 +254,7 @@ struct FocusPrimaryControlButton: View {
         case "Resume", "Start", "Start Again":
             return colorScheme == .dark
                 ? VibePalette.softJade.opacity(0.22)
-                : VibePalette.softMistDeep.opacity(0.18)
+                : VibePalette.softMistDeep.opacity(0.24)
         default:
             return colorScheme == .dark
                 ? VibePalette.amberGold.opacity(0.52)
