@@ -16,8 +16,9 @@ struct BubbleTimerView: View {
         )
 
         ZStack {
-            BubbleGlassShell(phase: renderState.phase, sphereSize: sphereSize)
+            BubbleGlassBackdrop(phase: renderState.phase, sphereSize: sphereSize)
             BubbleAnimatedSurfaceLayer(renderState: renderState, waveClock: waveClock)
+            BubbleGlassRimOverlay(phase: renderState.phase, sphereSize: sphereSize)
             if showsForegroundContent {
                 BubbleForegroundContent(renderState: renderState)
             }
@@ -37,6 +38,10 @@ struct BubbleTimerView: View {
                 self.waveAnimationStart = nil
             }
         }
+        .onChange(of: renderState.phase) { _, _ in
+            accumulatedWaveTime = 0
+            waveAnimationStart = renderState.isAnimating ? .now : nil
+        }
     }
 }
 
@@ -53,7 +58,7 @@ private struct BubbleWaveClock {
             animatedDuration = 0
         }
 
-        return (accumulatedWaveTime + animatedDuration) * 1.15 * .pi
+        return (accumulatedWaveTime + animatedDuration) * 0.44 * .pi
     }
 }
 
@@ -77,7 +82,7 @@ private struct BubbleAnimatedSurfaceLayer: View {
     @ViewBuilder
     private func animatedSurface(at date: Date) -> some View {
         let wavePhase = waveClock.phase(at: date)
-        let glowExpansion = 0.52 + (sin(wavePhase * 0.75) + 1) * 0.24
+        let glowExpansion = 0.44 + (sin(wavePhase * 0.42) + 1) * 0.16
 
         ZStack {
             BubbleGlowBackdrop(phase: renderState.phase, glowExpansion: glowExpansion)
@@ -133,9 +138,9 @@ private struct BubbleTimerDigitsView: View {
                 .foregroundStyle(
                     LinearGradient(
                         colors: [
-                            Color(red: 0.56, green: 0.57, blue: 0.60),
-                            Color(red: 0.46, green: 0.47, blue: 0.50),
-                            Color(red: 0.31, green: 0.32, blue: 0.35)
+                            Color(red: 0.47, green: 0.48, blue: 0.51),
+                            Color(red: 0.36, green: 0.37, blue: 0.40),
+                            Color(red: 0.24, green: 0.25, blue: 0.28)
                         ],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
@@ -146,8 +151,8 @@ private struct BubbleTimerDigitsView: View {
                         .foregroundStyle(
                             LinearGradient(
                                 colors: [
-                                    Color.white.opacity(0.30),
-                                    Color.white.opacity(0.09),
+                                    Color.white.opacity(0.18),
+                                    Color.white.opacity(0.05),
                                     Color.clear
                                 ],
                                 startPoint: .top,
@@ -158,22 +163,21 @@ private struct BubbleTimerDigitsView: View {
                 }
                 .overlay {
                     textLabel
-                        .foregroundStyle(Color.white.opacity(0.10))
-                        .blur(radius: 0.32)
+                        .foregroundStyle(Color.white.opacity(0.06))
+                        .blur(radius: 0.24)
                         .mask(alignment: .top) {
                             Rectangle()
-                                .frame(height: 14)
+                                .frame(height: 10)
                         }
                 }
-                .drawingGroup(opaque: false, colorMode: .linear)
         } else {
             textLabel
                 .foregroundStyle(
                     LinearGradient(
                         colors: [
                             Color.white.opacity(0.98),
-                            Color.white.opacity(0.84),
-                            renderState.phase.glassTint.opacity(0.38)
+                            Color.white.opacity(0.88),
+                            renderState.phase.glassTint.opacity(0.26)
                         ],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
@@ -184,8 +188,8 @@ private struct BubbleTimerDigitsView: View {
                         .foregroundStyle(
                             LinearGradient(
                                 colors: [
-                                    Color.white.opacity(0.34),
-                                    Color.white.opacity(0.10),
+                                    Color.white.opacity(0.24),
+                                    Color.white.opacity(0.07),
                                     Color.clear
                                 ],
                                 startPoint: .top,
@@ -196,14 +200,13 @@ private struct BubbleTimerDigitsView: View {
                 }
                 .overlay {
                     textLabel
-                        .foregroundStyle(Color.white.opacity(0.12))
-                        .blur(radius: 0.45)
+                        .foregroundStyle(Color.white.opacity(0.08))
+                        .blur(radius: 0.36)
                         .mask(alignment: .top) {
                             Rectangle()
-                                .frame(height: 14)
+                                .frame(height: 10)
                         }
                 }
-                .drawingGroup(opaque: false, colorMode: .linear)
         }
     }
 }
@@ -249,7 +252,7 @@ private struct BubbleTimerTextLabel: View {
     }
 }
 
-private struct BubbleGlassShell: View {
+private struct BubbleGlassBackdrop: View {
     @Environment(\.colorScheme) private var colorScheme
 
     let phase: SessionPhase
@@ -258,6 +261,7 @@ private struct BubbleGlassShell: View {
     var body: some View {
         let isDark = colorScheme == .dark
         let bubbleShape = BubbleGlassShape(phase: phase)
+        let profile = phase.bubbleShellProfile(for: sphereSize)
 
         ZStack {
             if isDark {
@@ -265,16 +269,73 @@ private struct BubbleGlassShell: View {
                     .fill(.thinMaterial)
 
                 bubbleShape
-                    .fill(Color.white.opacity(0.045))
+                    .fill(Color.white.opacity(0.028))
 
                 bubbleShape
-                    .fill(phase.glassTint.opacity(0.12))
+                    .fill(phase.glassTint.opacity(0.11))
+
+                bubbleShape
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                Color.white.opacity(0.10),
+                                Color.clear,
+                                Color.black.opacity(0.08)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
 
                 bubbleShape
                     .fill(
                         RadialGradient(
                             colors: [
-                                Color.white.opacity(0.21),
+                                Color.white.opacity(0.09),
+                                Color.clear
+                            ],
+                            center: .top,
+                            startRadius: 0,
+                            endRadius: sphereSize * 0.44
+                        )
+                    )
+
+                bubbleShape
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                Color.clear,
+                                Color.black.opacity(0.07)
+                            ],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+            } else {
+                bubbleShape
+                    .fill(Color(red: 0.90, green: 0.91, blue: 0.93).opacity(0.215))
+
+                bubbleShape
+                    .fill(Color.white.opacity(0.048))
+
+                bubbleShape
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                Color.white.opacity(0.15),
+                                Color(red: 0.92, green: 0.93, blue: 0.95).opacity(0.12),
+                                phase.tintColor.opacity(0.020)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+
+                bubbleShape
+                    .fill(
+                        RadialGradient(
+                            colors: [
+                                Color.white.opacity(0.18),
                                 Color.clear
                             ],
                             center: .topLeading,
@@ -287,114 +348,9 @@ private struct BubbleGlassShell: View {
                     .fill(
                         LinearGradient(
                             colors: [
+                                Color.white.opacity(0.08),
                                 Color.clear,
-                                Color.white.opacity(0.018),
-                                Color.black.opacity(0.024)
-                            ],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                    )
-
-                bubbleShape
-                    .stroke(Color.white.opacity(0.42), lineWidth: 1)
-
-                bubbleShape
-                    .stroke(
-                        LinearGradient(
-                            colors: [
-                                Color.white.opacity(0.34),
-                                Color.white.opacity(0.06),
-                                Color.clear
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        ),
-                        lineWidth: 1.15
-                    )
-                    .blur(radius: 0.35)
-
-                bubbleShape
-                    .fill(
-                        LinearGradient(
-                            colors: [
-                                Color.white.opacity(0.16),
-                                Color.clear
-                            ],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                    )
-                    .mask {
-                        bubbleShape
-                            .stroke(lineWidth: 10)
-                    }
-
-                Ellipse()
-                    .fill(phase.shadowColor.opacity(0.07))
-                    .frame(width: sphereSize * 0.34, height: sphereSize * 0.06)
-                    .blur(radius: 10)
-                    .offset(y: sphereSize * 0.38)
-                    .mask(bubbleShape)
-            } else {
-                bubbleShape
-                    .fill(Color(red: 0.90, green: 0.91, blue: 0.93).opacity(0.235))
-
-                bubbleShape
-                    .fill(Color.white.opacity(0.052))
-
-                bubbleShape
-                    .fill(
-                        LinearGradient(
-                            colors: [
-                                Color.white.opacity(0.15),
-                                Color(red: 0.92, green: 0.93, blue: 0.95).opacity(0.17),
-                                phase.tintColor.opacity(0.016)
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-
-                bubbleShape
-                    .fill(
-                        RadialGradient(
-                            colors: [
-                                Color.white.opacity(0.23),
-                                Color.white.opacity(0.085),
-                                Color.clear
-                            ],
-                            center: .topLeading,
-                            startRadius: 0,
-                            endRadius: sphereSize * 0.76
-                        )
-                    )
-
-                Ellipse()
-                    .fill(
-                        RadialGradient(
-                            colors: [
-                                Color.white.opacity(0.085),
-                                Color.clear
-                            ],
-                            center: .center,
-                            startRadius: 0,
-                            endRadius: sphereSize * 0.24
-                        )
-                    )
-                    .frame(width: sphereSize * 0.40, height: sphereSize * 0.20)
-                    .blur(radius: 14)
-                    .offset(x: -sphereSize * 0.16, y: -sphereSize * 0.30)
-                    .mask(bubbleShape)
-
-                bubbleShape
-                    .fill(
-                        LinearGradient(
-                            colors: [
-                                Color(red: 0.90, green: 0.91, blue: 0.93).opacity(0.105),
-                                Color.white.opacity(0.030),
-                                Color.clear,
-                                Color.clear
+                                Color.black.opacity(0.02)
                             ],
                             startPoint: .top,
                             endPoint: .bottom
@@ -405,78 +361,220 @@ private struct BubbleGlassShell: View {
                     .fill(
                         RadialGradient(
                             colors: [
-                                Color(red: 0.88, green: 0.89, blue: 0.91).opacity(0.09),
-                                phase.tintColor.opacity(0.020),
+                                Color(red: 0.88, green: 0.89, blue: 0.91).opacity(0.06),
+                                phase.tintColor.opacity(0.028),
                                 Color.clear
                             ],
                             center: .bottom,
                             startRadius: sphereSize * 0.10,
-                            endRadius: sphereSize * 0.54
+                            endRadius: sphereSize * 0.50
                         )
                     )
-
-                bubbleShape
-                    .stroke(Color.white.opacity(0.72), lineWidth: 1.15)
-
-                bubbleShape
-                    .stroke(
-                        LinearGradient(
-                            colors: [
-                                Color.white.opacity(0.54),
-                                Color(red: 0.84, green: 0.86, blue: 0.90).opacity(0.20),
-                                Color.black.opacity(0.05)
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        ),
-                        lineWidth: 1.4
-                    )
-                    .blur(radius: 0.25)
-
-                bubbleShape
-                    .fill(
-                        LinearGradient(
-                            colors: [
-                                Color.white.opacity(0.16),
-                                Color.clear
-                            ],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                    )
-                    .mask {
-                        bubbleShape
-                            .stroke(lineWidth: 10)
-                    }
-
-                bubbleShape
-                    .fill(
-                        LinearGradient(
-                            colors: [
-                                Color.clear,
-                                Color.black.opacity(0.022)
-                            ],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                    )
-                    .mask {
-                        bubbleShape
-                            .stroke(lineWidth: 12)
-                    }
-
-                Ellipse()
-                    .fill(Color.white.opacity(0.018))
-                    .frame(width: sphereSize * 0.36, height: sphereSize * 0.07)
-                    .blur(radius: 11)
-                    .offset(y: sphereSize * 0.34)
-                    .mask(bubbleShape)
             }
+
+            Ellipse()
+                .fill(
+                    RadialGradient(
+                        colors: [
+                            phase.tintColor.opacity(isDark ? 0.08 : 0.05),
+                            Color.clear
+                        ],
+                        center: .center,
+                        startRadius: 0,
+                        endRadius: profile.lowerCausticSize.width * 0.48
+                    )
+                )
+                .frame(width: profile.lowerCausticSize.width, height: profile.lowerCausticSize.height)
+                .blur(radius: isDark ? 16 : 12)
+                .offset(profile.lowerCausticOffset)
+                .mask(bubbleShape)
         }
-        .drawingGroup(opaque: false, colorMode: .linear)
-        .shadow(color: phase.shadowColor.opacity(isDark ? 0.052 : 0.005), radius: isDark ? 18 : 8, y: isDark ? 9 : 3)
-        .shadow(color: Color.white.opacity(isDark ? 0.06 : 0.10), radius: isDark ? 8 : 9, y: -3)
+        .shadow(color: phase.shadowColor.opacity(isDark ? 0.045 : 0.01), radius: isDark ? 18 : 8, y: isDark ? 9 : 3)
+        .shadow(color: Color.white.opacity(isDark ? 0.03 : 0.08), radius: isDark ? 7 : 8, y: -3)
         .allowsHitTesting(false)
+    }
+}
+
+private struct BubbleGlassRimOverlay: View {
+    @Environment(\.colorScheme) private var colorScheme
+
+    let phase: SessionPhase
+    let sphereSize: CGFloat
+
+    var body: some View {
+        let isDark = colorScheme == .dark
+        let bubbleShape = BubbleGlassShape(phase: phase)
+        let profile = phase.bubbleShellProfile(for: sphereSize)
+
+        ZStack {
+            bubbleShape
+                .stroke(Color.white.opacity(isDark ? 0.30 : 0.68), lineWidth: isDark ? 1.0 : 1.15)
+
+            bubbleShape
+                .stroke(
+                    LinearGradient(
+                        colors: [
+                            Color.white.opacity(isDark ? 0.26 : 0.40),
+                            Color.white.opacity(isDark ? 0.06 : 0.14),
+                            Color.black.opacity(isDark ? 0.12 : 0.04)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: isDark ? 1.25 : 1.35
+                )
+                .blur(radius: isDark ? 0.26 : 0.22)
+
+            bubbleShape
+                .stroke(Color.black.opacity(isDark ? 0.26 : 0.06), lineWidth: isDark ? 0.72 : 0.58)
+                .blur(radius: isDark ? 0.24 : 0.16)
+                .offset(y: isDark ? 0.9 : 0.7)
+
+            Ellipse()
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            Color.white.opacity(isDark ? 0.20 : 0.28),
+                            Color.white.opacity(isDark ? 0.05 : 0.10),
+                            Color.clear
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
+                .frame(width: profile.upperSpecularSize.width, height: profile.upperSpecularSize.height)
+                .blur(radius: isDark ? 7 : 9)
+                .rotationEffect(.degrees(profile.upperSpecularRotation))
+                .offset(profile.upperSpecularOffset)
+                .mask(bubbleShape)
+
+            Ellipse()
+                .fill(
+                    RadialGradient(
+                        colors: [
+                            Color.white.opacity(isDark ? 0.11 : 0.15),
+                            Color.clear
+                        ],
+                        center: .center,
+                        startRadius: 0,
+                        endRadius: profile.shoulderSpecularSize.width * 0.52
+                    )
+                )
+                .frame(width: profile.shoulderSpecularSize.width, height: profile.shoulderSpecularSize.height)
+                .blur(radius: isDark ? 6 : 8)
+                .rotationEffect(.degrees(profile.shoulderSpecularRotation))
+                .offset(profile.shoulderSpecularOffset)
+                .mask(bubbleShape)
+
+            bubbleShape
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            Color.white.opacity(isDark ? 0.12 : 0.16),
+                            Color.clear
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
+                .mask {
+                    bubbleShape
+                        .stroke(lineWidth: isDark ? 8 : 10)
+                }
+
+            Ellipse()
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            Color.white.opacity(isDark ? 0.12 : 0.10),
+                            phase.tintColor.opacity(isDark ? 0.10 : 0.06),
+                            Color.clear
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
+                .frame(width: profile.lowerCausticSize.width, height: profile.lowerCausticSize.height)
+                .blur(radius: isDark ? 10 : 9)
+                .offset(profile.lowerCausticOffset)
+                .mask(bubbleShape)
+        }
+        .allowsHitTesting(false)
+    }
+}
+
+private struct BubbleShellProfile {
+    let upperSpecularSize: CGSize
+    let upperSpecularOffset: CGSize
+    let upperSpecularRotation: Double
+    let shoulderSpecularSize: CGSize
+    let shoulderSpecularOffset: CGSize
+    let shoulderSpecularRotation: Double
+    let lowerCausticSize: CGSize
+    let lowerCausticOffset: CGSize
+    let outerGlowSize: CGSize
+    let outerGlowOffset: CGSize
+    let depthPoolSize: CGSize
+    let depthPoolOffset: CGSize
+    let waveAmplitudeBase: Double
+    let waveAmplitudeRange: Double
+}
+
+private extension SessionPhase {
+    func bubbleShellProfile(for sphereSize: CGFloat) -> BubbleShellProfile {
+        switch self {
+        case .focus:
+            return BubbleShellProfile(
+                upperSpecularSize: CGSize(width: sphereSize * 0.40, height: sphereSize * 0.24),
+                upperSpecularOffset: CGSize(width: -sphereSize * 0.10, height: -sphereSize * 0.30),
+                upperSpecularRotation: -18,
+                shoulderSpecularSize: CGSize(width: sphereSize * 0.22, height: sphereSize * 0.18),
+                shoulderSpecularOffset: CGSize(width: -sphereSize * 0.29, height: -sphereSize * 0.13),
+                shoulderSpecularRotation: -24,
+                lowerCausticSize: CGSize(width: sphereSize * 0.40, height: sphereSize * 0.13),
+                lowerCausticOffset: CGSize(width: 0, height: sphereSize * 0.33),
+                outerGlowSize: CGSize(width: sphereSize * 0.61, height: sphereSize * 0.15),
+                outerGlowOffset: CGSize(width: 0, height: sphereSize * 0.45),
+                depthPoolSize: CGSize(width: sphereSize * 0.75, height: sphereSize * 0.23),
+                depthPoolOffset: CGSize(width: 0, height: sphereSize * 0.34),
+                waveAmplitudeBase: 2.8,
+                waveAmplitudeRange: 1.15
+            )
+        case .shortBreak:
+            return BubbleShellProfile(
+                upperSpecularSize: CGSize(width: sphereSize * 0.38, height: sphereSize * 0.22),
+                upperSpecularOffset: CGSize(width: -sphereSize * 0.14, height: -sphereSize * 0.27),
+                upperSpecularRotation: -28,
+                shoulderSpecularSize: CGSize(width: sphereSize * 0.21, height: sphereSize * 0.17),
+                shoulderSpecularOffset: CGSize(width: -sphereSize * 0.33, height: -sphereSize * 0.06),
+                shoulderSpecularRotation: -32,
+                lowerCausticSize: CGSize(width: sphereSize * 0.44, height: sphereSize * 0.14),
+                lowerCausticOffset: CGSize(width: -sphereSize * 0.02, height: sphereSize * 0.34),
+                outerGlowSize: CGSize(width: sphereSize * 0.66, height: sphereSize * 0.16),
+                outerGlowOffset: CGSize(width: -sphereSize * 0.02, height: sphereSize * 0.44),
+                depthPoolSize: CGSize(width: sphereSize * 0.78, height: sphereSize * 0.24),
+                depthPoolOffset: CGSize(width: -sphereSize * 0.03, height: sphereSize * 0.34),
+                waveAmplitudeBase: 2.5,
+                waveAmplitudeRange: 1.05
+            )
+        case .longBreak:
+            return BubbleShellProfile(
+                upperSpecularSize: CGSize(width: sphereSize * 0.42, height: sphereSize * 0.23),
+                upperSpecularOffset: CGSize(width: -sphereSize * 0.08, height: -sphereSize * 0.28),
+                upperSpecularRotation: -14,
+                shoulderSpecularSize: CGSize(width: sphereSize * 0.22, height: sphereSize * 0.17),
+                shoulderSpecularOffset: CGSize(width: -sphereSize * 0.25, height: -sphereSize * 0.08),
+                shoulderSpecularRotation: -18,
+                lowerCausticSize: CGSize(width: sphereSize * 0.43, height: sphereSize * 0.14),
+                lowerCausticOffset: CGSize(width: sphereSize * 0.03, height: sphereSize * 0.35),
+                outerGlowSize: CGSize(width: sphereSize * 0.67, height: sphereSize * 0.16),
+                outerGlowOffset: CGSize(width: sphereSize * 0.03, height: sphereSize * 0.44),
+                depthPoolSize: CGSize(width: sphereSize * 0.79, height: sphereSize * 0.24),
+                depthPoolOffset: CGSize(width: sphereSize * 0.03, height: sphereSize * 0.34),
+                waveAmplitudeBase: 2.55,
+                waveAmplitudeRange: 1.08
+            )
+        }
     }
 }
 
@@ -527,8 +625,8 @@ private struct BubbleGlassShape: Shape {
             control2: CGPoint(x: minX + width * 0.96, y: minY + height * 0.87)
         )
         path.addCurve(
-            to: CGPoint(x: minX + width * 0.50, y: minY + height * 0.99),
-            control1: CGPoint(x: minX + width * 0.75, y: minY + height * 0.98),
+            to: CGPoint(x: minX + width * 0.50, y: minY + height * 1.00),
+            control1: CGPoint(x: minX + width * 0.75, y: minY + height * 0.99),
             control2: CGPoint(x: minX + width * 0.61, y: minY + height * 1.00)
         )
         path.addCurve(
@@ -579,14 +677,14 @@ private struct BubbleGlassShape: Shape {
             control2: CGPoint(x: minX + width * 1.01, y: minY + height * 0.57)
         )
         path.addCurve(
-            to: CGPoint(x: minX + width * 0.53, y: minY + height * 0.98),
-            control1: CGPoint(x: minX + width * 0.95, y: minY + height * 0.83),
-            control2: CGPoint(x: minX + width * 0.72, y: minY + height * 0.90)
+            to: CGPoint(x: minX + width * 0.53, y: minY + height * 1.00),
+            control1: CGPoint(x: minX + width * 0.95, y: minY + height * 0.85),
+            control2: CGPoint(x: minX + width * 0.72, y: minY + height * 0.94)
         )
         path.addCurve(
-            to: CGPoint(x: minX + width * 0.15, y: minY + height * 0.77),
-            control1: CGPoint(x: minX + width * 0.41, y: minY + height * 1.00),
-            control2: CGPoint(x: minX + width * 0.26, y: minY + height * 0.88)
+            to: CGPoint(x: minX + width * 0.15, y: minY + height * 0.81),
+            control1: CGPoint(x: minX + width * 0.40, y: minY + height * 1.01),
+            control2: CGPoint(x: minX + width * 0.25, y: minY + height * 0.92)
         )
         path.addCurve(
             to: CGPoint(x: minX + width * 0.00, y: minY + height * 0.52),
@@ -636,14 +734,14 @@ private struct BubbleGlassShape: Shape {
             control2: CGPoint(x: minX + width * 0.92, y: minY + height * 0.81)
         )
         path.addCurve(
-            to: CGPoint(x: minX + width * 0.53, y: minY + height * 0.98),
-            control1: CGPoint(x: minX + width * 0.77, y: minY + height * 0.89),
-            control2: CGPoint(x: minX + width * 0.64, y: minY + height * 0.98)
+            to: CGPoint(x: minX + width * 0.53, y: minY + height * 1.00),
+            control1: CGPoint(x: minX + width * 0.77, y: minY + height * 0.91),
+            control2: CGPoint(x: minX + width * 0.64, y: minY + height * 1.00)
         )
         path.addCurve(
-            to: CGPoint(x: minX + width * 0.16, y: minY + height * 0.82),
-            control1: CGPoint(x: minX + width * 0.39, y: minY + height * 0.99),
-            control2: CGPoint(x: minX + width * 0.22, y: minY + height * 0.91)
+            to: CGPoint(x: minX + width * 0.16, y: minY + height * 0.86),
+            control1: CGPoint(x: minX + width * 0.39, y: minY + height * 1.00),
+            control2: CGPoint(x: minX + width * 0.22, y: minY + height * 0.93)
         )
         path.addCurve(
             to: CGPoint(x: minX + width * 0.00, y: minY + height * 0.48),
@@ -669,6 +767,7 @@ private struct BubbleGlowBackdrop: View {
     var body: some View {
         let glow = glowExpansion.isFinite ? max(0, glowExpansion) : 0
         let bubbleShape = BubbleGlassShape(phase: phase)
+        let profile = phase.bubbleShellProfile(for: FocusScreenLayout.bubbleDiameter)
 
         ZStack {
             bubbleShape
@@ -676,29 +775,29 @@ private struct BubbleGlowBackdrop: View {
                     phase.shadowColor.opacity(
                         clampedOpacity(
                             colorScheme == .dark
-                                ? 0.045 + glow * 0.009
-                                : 0.018 + glow * 0.005
+                                ? 0.034 + glow * 0.008
+                                : 0.015 + glow * 0.004
                         )
                     ),
-                    lineWidth: colorScheme == .dark ? 13 : 11
+                    lineWidth: colorScheme == .dark ? 10.5 : 8.5
                 )
-                .blur(radius: colorScheme == .dark ? 7.5 : 5.5)
-                .scaleEffect(colorScheme == .dark ? 1.026 : 1.02)
+                .blur(radius: colorScheme == .dark ? 6.2 : 4.8)
+                .scaleEffect(colorScheme == .dark ? 1.018 : 1.014)
 
             bubbleShape
                 .stroke(
                     Color.white.opacity(
                         clampedOpacity(
                             colorScheme == .dark
-                                ? 0.020 + glow * 0.003
-                                : 0.020 + glow * 0.004
+                                ? 0.015 + glow * 0.002
+                                : 0.015 + glow * 0.003
                         )
                     ),
-                    lineWidth: colorScheme == .dark ? 4.5 : 3.5
+                    lineWidth: colorScheme == .dark ? 3.8 : 3.0
                 )
-                .blur(radius: colorScheme == .dark ? 3.2 : 3.5)
-                .scaleEffect(colorScheme == .dark ? 1.012 : 1.01)
-                .offset(y: colorScheme == .dark ? -1 : -2)
+                .blur(radius: colorScheme == .dark ? 2.8 : 3.0)
+                .scaleEffect(colorScheme == .dark ? 1.009 : 1.007)
+                .offset(y: colorScheme == .dark ? -0.6 : -1.2)
 
             Ellipse()
                 .fill(
@@ -707,41 +806,47 @@ private struct BubbleGlowBackdrop: View {
                             phase.shadowColor.opacity(
                                 clampedOpacity(
                                     colorScheme == .dark
-                                        ? 0.08 + glow * 0.05
-                                        : 0.08 + glow * 0.04
+                                        ? 0.07 + glow * 0.04
+                                        : 0.06 + glow * 0.03
                                 )
                             ),
                             phase.shadowColor.opacity(
                                 clampedOpacity(
                                     colorScheme == .dark
-                                        ? 0.024 + glow * 0.018
-                                        : 0.024 + glow * 0.015
+                                        ? 0.022 + glow * 0.014
+                                        : 0.018 + glow * 0.011
                                 )
                             ),
                             Color.clear
                         ],
                         center: .center,
                         startRadius: 8,
-                        endRadius: 100 + glow * 24
+                        endRadius: profile.outerGlowSize.width * 0.62 + glow * 16
                     )
                 )
-                .frame(width: 168 + glow * 28, height: 38 + glow * 7)
-                .blur(radius: colorScheme == .dark ? 16 + glow * 5 : 16 + glow * 4)
-                .offset(y: 126)
+                .frame(
+                    width: profile.outerGlowSize.width + glow * 18,
+                    height: profile.outerGlowSize.height + glow * 6
+                )
+                .blur(radius: colorScheme == .dark ? 15 + glow * 4 : 13 + glow * 3)
+                .offset(profile.outerGlowOffset)
 
             Ellipse()
                 .fill(
                     Color.white.opacity(
                         clampedOpacity(
                             colorScheme == .dark
-                                ? 0.06 + glow * 0.02
-                                : 0.04 + glow * 0.015
+                                ? 0.045 + glow * 0.015
+                                : 0.028 + glow * 0.010
                         )
                     )
                 )
-                .frame(width: 138 + glow * 10, height: 18 + glow * 3)
-                .blur(radius: colorScheme == .dark ? 9 : 8)
-                .offset(y: 118)
+                .frame(
+                    width: profile.outerGlowSize.width * 0.78 + glow * 8,
+                    height: profile.outerGlowSize.height * 0.44 + glow * 2
+                )
+                .blur(radius: colorScheme == .dark ? 8 : 7)
+                .offset(x: profile.outerGlowOffset.width, y: profile.outerGlowOffset.height - 8)
         }
     }
 
@@ -760,11 +865,12 @@ private struct BubbleLiquidLayer: View {
     let glowExpansion: Double
 
     var body: some View {
+        let profile = phase.bubbleShellProfile(for: FocusScreenLayout.bubbleDiameter)
         let normalizedProgress = max(0, min(progress, 1))
-        let baseFillRatio = min(0.985, 0.10 + pow(normalizedProgress, 1.18) * 0.88)
-        let terminalBoost = isFinalDisplayedSecond ? 0.048 : 0
+        let baseFillRatio = min(0.987, 0.12 + pow(normalizedProgress, 1.22) * 0.86)
+        let terminalBoost = isFinalDisplayedSecond ? 0.052 : 0
         let visualFillRatio = min(1.035, baseFillRatio + terminalBoost)
-        let amplitude = 4.2 + glowExpansion * 2.4
+        let amplitude = profile.waveAmplitudeBase + glowExpansion * profile.waveAmplitudeRange
 
         Canvas(rendersAsynchronously: true) { context, canvasSize in
             guard canvasSize.width.isFinite,
@@ -797,6 +903,18 @@ private struct BubbleLiquidLayer: View {
                 )
             )
 
+            context.fill(
+                liquidPath,
+                with: .linearGradient(
+                    Gradient(colors: [
+                        Color.clear,
+                        phase.shadowColor.opacity(colorScheme == .dark ? 0.18 : 0.10)
+                    ]),
+                    startPoint: CGPoint(x: sphereRect.midX, y: waterlineY + 8),
+                    endPoint: CGPoint(x: sphereRect.midX, y: sphereRect.maxY)
+                )
+            )
+
             let secondaryLiquidPath = WaveLiquidShape(
                 fillRatio: min(1, visualFillRatio + 0.012),
                 phase: wavePhase * 1.08 + .pi / 5,
@@ -812,22 +930,49 @@ private struct BubbleLiquidLayer: View {
                 )
             )
 
+            var depthPoolContext = context
+            depthPoolContext.clip(to: secondaryLiquidPath)
+            depthPoolContext.addFilter(.blur(radius: colorScheme == .dark ? 14 : 11))
+            depthPoolContext.fill(
+                Path(
+                    ellipseIn: CGRect(
+                        x: sphereRect.midX - (profile.depthPoolSize.width / 2) + profile.depthPoolOffset.width,
+                        y: sphereRect.midY - (profile.depthPoolSize.height / 2) + profile.depthPoolOffset.height,
+                        width: profile.depthPoolSize.width,
+                        height: profile.depthPoolSize.height
+                    )
+                ),
+                with: .radialGradient(
+                    Gradient(colors: [
+                        phase.shadowColor.opacity(colorScheme == .dark ? 0.34 : 0.18),
+                        phase.tintColor.opacity(colorScheme == .dark ? 0.18 : 0.10),
+                        Color.clear
+                    ]),
+                    center: CGPoint(
+                        x: sphereRect.midX + profile.depthPoolOffset.width * 0.18,
+                        y: sphereRect.maxY - profile.depthPoolSize.height * 0.28
+                    ),
+                    startRadius: 4,
+                    endRadius: profile.depthPoolSize.width * 0.46
+                )
+            )
+
             if colorScheme == .dark {
                 var waterlineGlowContext = context
-                waterlineGlowContext.addFilter(.blur(radius: 12))
+                waterlineGlowContext.addFilter(.blur(radius: 10))
                 waterlineGlowContext.fill(
                     Path(
                         ellipseIn: CGRect(
-                            x: sphereRect.minX + sphereRect.width * 0.10,
-                            y: waterlineY - 6,
-                            width: sphereRect.width * 0.80,
-                            height: 14
+                            x: sphereRect.minX + sphereRect.width * 0.11,
+                            y: waterlineY - 5,
+                            width: sphereRect.width * 0.78,
+                            height: 12
                         )
                     ),
                     with: .linearGradient(
                         Gradient(colors: [
-                            Color.white.opacity(0.16),
-                            Color.white.opacity(0.08),
+                            Color.white.opacity(0.14),
+                            Color.white.opacity(0.06),
                             Color.clear
                         ]),
                         startPoint: CGPoint(x: sphereRect.midX, y: waterlineY - 10),
@@ -836,7 +981,7 @@ private struct BubbleLiquidLayer: View {
                 )
             } else {
                 var waterlineGlowContext = context
-                waterlineGlowContext.addFilter(.blur(radius: 9))
+                waterlineGlowContext.addFilter(.blur(radius: 8))
                 waterlineGlowContext.fill(
                     Path(
                         ellipseIn: CGRect(
@@ -863,15 +1008,15 @@ private struct BubbleLiquidLayer: View {
     private var secondaryLiquidGradientColors: [Color] {
         if colorScheme == .dark {
             return [
-                Color.white.opacity(0.12),
-                Color.white.opacity(0.05),
+                Color.white.opacity(0.09),
+                Color.white.opacity(0.03),
                 Color.clear
             ]
         }
 
         return [
-            Color.white.opacity(0.16),
-            phase.tintColor.opacity(0.16),
+            Color.white.opacity(0.14),
+            phase.tintColor.opacity(0.12),
             Color.clear
         ]
     }
@@ -933,10 +1078,10 @@ private struct WaveLiquidShape: Shape {
         var x = startX
         while x <= endX {
             let relativeX = x / width
-            let primaryAngle = Double(relativeX) * Double.pi * 2.1 + phase
-            let secondaryAngle = Double(relativeX) * Double.pi * 4.3 + phase * 0.72
+            let primaryAngle = Double(relativeX) * Double.pi * 1.72 + phase
+            let secondaryAngle = Double(relativeX) * Double.pi * 3.34 + phase * 0.68
             let wave = CGFloat(sin(primaryAngle)) * mainAmplitude
-            let secondaryWave = CGFloat(sin(secondaryAngle)) * mainAmplitude * 0.34
+            let secondaryWave = CGFloat(sin(secondaryAngle)) * mainAmplitude * 0.24
             let y = baseY + wave + secondaryWave
             path.addLine(to: CGPoint(x: x, y: y))
             x += step
