@@ -153,7 +153,7 @@ VibePomodoro/
   - 范围选择只保留 `Week / Month / Year`
   - 页面本身不持有统计真值，只持有本地 UI 选择态 `selectedRange`
   - 当前目录内拆分为：
-    - `ProductivityScreen.swift`：页面骨架、布局常量、range toolbar 与页面 render state
+    - `ProductivityScreen.swift`：页面骨架、布局常量、icon-only range toolbar menu 与页面 render state
     - `ProductivityCardChrome.swift`：Productivity 专属玻璃卡片壳
     - `ProductivitySummarySection.swift`：顶部摘要卡与 empty note
     - `ProductivityTrendSection.swift`：趋势卡、指标枚举与自定义 `x` 轴
@@ -161,8 +161,9 @@ VibePomodoro/
 - `SettingsScreen`：
   - 直接绑定 `store.settings`
   - 设置修改只走 store 的 update/set 接口，不直接改 model 副本
+  - 设置页出现时只负责触发 store 侧 normalization，不在页面内重复维护离散档位吸附逻辑
   - 当前目录内拆分为：
-    - `SettingsScreen.swift`：页面骨架、section 排列与设置值 normalization 触发
+    - `SettingsScreen.swift`：页面骨架、section 排列与 store normalization 触发
     - `SettingsSupport.swift`：布局常量、色彩映射、`SettingsTimerField` 离散档位与辅助规则
     - `SettingsCardChrome.swift`：Settings 专属卡片壳、header 与 divider
     - `SettingsSessionRhythmSection.swift`：`Session Rhythm` 主设置卡与 stepper row
@@ -187,7 +188,7 @@ VibePomodoro/
 - `Session Rhythm` 标题上的 `Next session only` 必须保留；默认语义是：
   - 设置变更只影响下一次新 session
   - 不回写正在进行中的 session
-- 页面出现时，历史持久化的非标准时长与轮数会被吸附到最近合法值；该 normalization 不触发反馈。
+- 页面出现时，历史持久化的非标准时长与轮数会由 `PomodoroStore` 吸附到最近合法值；该 normalization 不触发反馈。
 - `Alerts` 内部当前存在明确依赖关系：
   - `Sound` 依赖 `Notifications`
   - `Sound Choice` 仅在 `Notifications` 与 `Sound` 都开启时显示
@@ -218,6 +219,13 @@ VibePomodoro/
   - 主卡是页面第一视觉锚点
   - 趋势卡应更低调，属于分析层
   - 但四张卡仍需保持同一家族感，不能做成两套独立视觉系统
+- 右上角 range 选择当前基线是 icon-only `Menu`：
+  - 菜单内显式列出 `Week / Month / Year`
+  - 当前项在右侧显示 checkmark
+  - 默认不要回退到 `Menu` 内嵌 `Picker` 的实现
+- 若点击 range menu 时控制台仍出现 `Called -[UIContextMenuInteraction updateVisibleMenuWithBlock:] while no context menu is visible.`，当前按系统层噪音处理：
+  - 只要没有伴随交互异常、状态不同步或崩溃，就不作为当前线程的优先修复项
+  - 后续只有在确认出现真实行为问题时，才重新打开这条线
 - 如果后续 thread 继续打磨 `Productivity`：
   - 以上述主卡版本为当前基线
   - 默认不要回到 `Finished sessions only` 副标题方案
@@ -811,7 +819,7 @@ MVP 不需要额外寻找开源 PNG 照片素材。
 - [VibePomodoro/Core/Store/PomodoroStore.swift](./VibePomodoro/Core/Store/PomodoroStore.swift)
   - store 主状态、对外动作入口与页面读取的派生属性
 - [VibePomodoro/Core/Store/PomodoroStore+Settings.swift](./VibePomodoro/Core/Store/PomodoroStore+Settings.swift)
-  - 设置更新、提醒开关与调节 haptics
+  - 设置更新、离散档位 normalization、提醒开关与调节 haptics
 - [VibePomodoro/Core/Store/PomodoroStore+Lifecycle.swift](./VibePomodoro/Core/Store/PomodoroStore+Lifecycle.swift)
   - scene phase 协调、runtime 副作用刷新、step 边界 timer 与 session 完成入账
 - [VibePomodoro/Core/Store/PomodoroStore+Notifications.swift](./VibePomodoro/Core/Store/PomodoroStore+Notifications.swift)
@@ -821,7 +829,7 @@ MVP 不需要额外寻找开源 PNG 照片素材。
 - [VibePomodoro/Core/Store/PomodoroStore+Productivity.swift](./VibePomodoro/Core/Store/PomodoroStore+Productivity.swift)
   - Productivity snapshot、图表桶映射、streak 计算、统计查询与历史清空动作
 - [VibePomodoro/Screens/Focus/FocusScreen.swift](./VibePomodoro/Screens/Focus/FocusScreen.swift)
-  - Focus 页页面骨架、沉浸模式状态同步与系统显隐协作
+  - Focus 页页面骨架、沉浸模式状态同步事件接线与系统显隐协作
 - [VibePomodoro/Screens/Focus/FocusRenderState.swift](./VibePomodoro/Screens/Focus/FocusRenderState.swift)
   - Focus 页 render state、时间显示态与操作可用性推导
 - [VibePomodoro/Screens/Focus/FocusLayout.swift](./VibePomodoro/Screens/Focus/FocusLayout.swift)
@@ -837,7 +845,7 @@ MVP 不需要额外寻找开源 PNG 照片素材。
 - [VibePomodoro/Screens/Focus/FocusCompletionSummary.swift](./VibePomodoro/Screens/Focus/FocusCompletionSummary.swift)
   - Focus 完成总结独立确认层、文案格式化与完成态确认 UI
 - [VibePomodoro/Screens/Productivity/ProductivityScreen.swift](./VibePomodoro/Screens/Productivity/ProductivityScreen.swift)
-  - Productivity 页页面骨架、布局常量、本地 range 选择态与 render state
+  - Productivity 页页面骨架、布局常量、本地 range 选择态、icon-only range menu 与 render state
 - [VibePomodoro/Screens/Productivity/ProductivityCardChrome.swift](./VibePomodoro/Screens/Productivity/ProductivityCardChrome.swift)
   - Productivity 专属玻璃卡片壳与卡片 chrome modifier
 - [VibePomodoro/Screens/Productivity/ProductivitySummarySection.swift](./VibePomodoro/Screens/Productivity/ProductivitySummarySection.swift)
@@ -847,7 +855,7 @@ MVP 不需要额外寻找开源 PNG 照片素材。
 - [VibePomodoro/Screens/Productivity/ProductivityChartSupport.swift](./VibePomodoro/Screens/Productivity/ProductivityChartSupport.swift)
   - Productivity 图表格式化、桶映射与数值轴计算
 - [VibePomodoro/Screens/Settings/SettingsScreen.swift](./VibePomodoro/Screens/Settings/SettingsScreen.swift)
-  - Settings 页页面骨架、section 排列与 normalization 触发
+  - Settings 页页面骨架、section 排列与 store normalization 触发
 - [VibePomodoro/Screens/Settings/SettingsSupport.swift](./VibePomodoro/Screens/Settings/SettingsSupport.swift)
   - Settings 布局常量、色彩映射、离散档位规则与辅助逻辑
 - [VibePomodoro/Screens/Settings/SettingsCardChrome.swift](./VibePomodoro/Screens/Settings/SettingsCardChrome.swift)

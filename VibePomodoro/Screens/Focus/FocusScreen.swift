@@ -86,46 +86,37 @@ struct FocusScreen: View {
             .frame(width: proxy.size.width, height: proxy.size.height, alignment: .top)
             .statusBarHidden(shouldHideSystemOverlays)
             .persistentSystemOverlays(shouldHideSystemOverlays ? .hidden : .visible)
-            .onAppear {
-                syncVoiceOverState()
-                syncCompletionSummary(with: store.activeSession)
-                syncImmersiveState()
-                syncBubbleAnchor(layout: layout, containerFrame: containerFrame)
-                syncImmersiveVisualState()
-            }
+            .onAppear(perform: {
+                handleAppearance(layout: layout, containerFrame: containerFrame)
+            })
             .onChange(of: layout.bubbleAnchorSignature) { _, _ in
-                syncBubbleAnchor(layout: layout, containerFrame: containerFrame)
+                handleBubbleAnchorSignatureChange(layout: layout, containerFrame: containerFrame)
             }
             .onChange(of: isImmersive) { _, _ in
-                syncBubbleAnchor(layout: layout, containerFrame: containerFrame)
-                syncImmersiveVisualState()
+                handleImmersiveStateChange(layout: layout, containerFrame: containerFrame)
             }
             .onChange(of: isRestoringImmersiveLayout) { _, _ in
-                syncBubbleAnchor(layout: layout, containerFrame: containerFrame)
+                handleImmersiveLayoutRestoreChange(layout: layout, containerFrame: containerFrame)
             }
             .onChange(of: store.activeSession?.id) { _, _ in
-                syncCompletionSummary(with: store.activeSession)
-                syncImmersiveState()
+                handleSessionStateChange()
             }
             .onChange(of: store.activeSession?.runState) { _, _ in
-                syncCompletionSummary(with: store.activeSession)
-                syncImmersiveState()
+                handleSessionStateChange()
             }
             .onChange(of: store.selectedTab) { _, _ in
-                syncImmersiveState()
+                handleSelectedTabChange()
             }
             .onChange(of: scenePhase) { _, _ in
-                syncCompletionSummary(with: store.activeSession)
-                syncImmersiveState()
+                handleScenePhaseChange()
             }
             .onReceive(NotificationCenter.default.publisher(for: UIAccessibility.voiceOverStatusDidChangeNotification)) { _ in
-                syncVoiceOverState()
-                syncImmersiveState()
+                handleVoiceOverStatusChange()
             }
             .alert("Finish session early?", isPresented: $isShowingFinishConfirmation) {
                 Button("Cancel", role: .cancel) {}
                 Button("Finish session early") {
-                    store.finishSessionEarly()
+                    finishSessionEarly()
                 }
             } message: {
                 Text("This will end the current session and show the completion summary.")
@@ -158,6 +149,55 @@ struct FocusScreen: View {
         }
 
         toggleImmersiveMode(force: true)
+    }
+
+    private func handleAppearance(layout: FocusScreenLayout, containerFrame: CGRect) {
+        syncVoiceOverState()
+        syncCompletionSummary(with: store.activeSession)
+        syncImmersiveState()
+        syncBubbleAnchor(layout: layout, containerFrame: containerFrame)
+        syncImmersiveVisualState()
+    }
+
+    private func handleBubbleAnchorSignatureChange(
+        layout: FocusScreenLayout,
+        containerFrame: CGRect
+    ) {
+        syncBubbleAnchor(layout: layout, containerFrame: containerFrame)
+    }
+
+    private func handleImmersiveStateChange(
+        layout: FocusScreenLayout,
+        containerFrame: CGRect
+    ) {
+        syncBubbleAnchor(layout: layout, containerFrame: containerFrame)
+        syncImmersiveVisualState()
+    }
+
+    private func handleImmersiveLayoutRestoreChange(
+        layout: FocusScreenLayout,
+        containerFrame: CGRect
+    ) {
+        syncBubbleAnchor(layout: layout, containerFrame: containerFrame)
+    }
+
+    private func handleSessionStateChange() {
+        syncCompletionSummary(with: store.activeSession)
+        syncImmersiveState()
+    }
+
+    private func handleSelectedTabChange() {
+        syncImmersiveState()
+    }
+
+    private func handleScenePhaseChange() {
+        syncCompletionSummary(with: store.activeSession)
+        syncImmersiveState()
+    }
+
+    private func handleVoiceOverStatusChange() {
+        syncVoiceOverState()
+        syncImmersiveState()
     }
 
     private func toggleImmersiveMode(force newValue: Bool? = nil) {
@@ -343,6 +383,10 @@ struct FocusScreen: View {
 
     private func requestFinishConfirmation() {
         isShowingFinishConfirmation = true
+    }
+
+    private func finishSessionEarly() {
+        store.finishSessionEarly()
     }
 
     private func handleCompletionDismissal() {

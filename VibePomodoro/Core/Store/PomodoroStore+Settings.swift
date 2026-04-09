@@ -1,6 +1,28 @@
 import UIKit
 
 extension PomodoroStore {
+    func normalizeSettingsIfNeeded() {
+        let normalizedFocus = SettingsTimerField.focus.value(in: settings)
+        if settings.focusMinutes != normalizedFocus {
+            updateFocusMinutes(normalizedFocus, fireFeedback: false)
+        }
+
+        let normalizedShortBreak = SettingsTimerField.shortBreak.value(in: settings)
+        if settings.shortBreakMinutes != normalizedShortBreak {
+            updateShortBreakMinutes(normalizedShortBreak, fireFeedback: false)
+        }
+
+        let normalizedLongBreak = SettingsTimerField.longBreak.value(in: settings)
+        if settings.longBreakMinutes != normalizedLongBreak {
+            updateLongBreakMinutes(normalizedLongBreak, fireFeedback: false)
+        }
+
+        let normalizedRounds = SettingsTimerField.rounds.value(in: settings)
+        if settings.targetRounds != normalizedRounds {
+            updateTargetRounds(normalizedRounds, fireFeedback: false)
+        }
+    }
+
     func updateFocusMinutes(_ minutes: Int, fireFeedback: Bool = true) {
         guard settings.focusMinutes != minutes else { return }
         settings.focusMinutes = minutes
