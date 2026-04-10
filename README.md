@@ -181,7 +181,7 @@ VibePomodoro/
   - `Session Rhythm` 作为主设置卡
   - `Alerts / Display / Other` 作为同一家族下的次级设置卡
 - `Session Rhythm` 使用离散档位，不提供自由输入：
-  - `Focus`：`15...90`，每 `5` 分钟一档
+  - `Focus`：临时保留 `1` 分钟测试档位，并保留正式档位 `15...90`、每 `5` 分钟一档；`1` 分钟只用于 QA / 动画调试，发布前需要移除
   - `Short Break`：`5 / 10`
   - `Long Break`：`15 / 20 / 30`
   - `Rounds`：`1...10`
@@ -230,6 +230,19 @@ VibePomodoro/
   - 以上述主卡版本为当前基线
   - 默认不要回到 `Finished sessions only` 副标题方案
   - 默认不要采用“更紧上半区 + 手动两行标题断句 + 明显收窄主卡与趋势卡间距”的那一版试验稿，除非线程内重新确认
+
+### 0.1.4.3 Focus BubbleTimer 当前 UI / 动画对齐备注
+
+- `FocusBubbleTimer.swift` 是当前 Focus 气泡、液面、倒计时数字和玻璃球绘制的唯一落点；后续继续打磨主气泡时，默认不要把页面专属子组件上提到 `Shared/*`
+- 气泡视觉必须继续由 `BubbleRenderState` + `Date / targetEndDate` 推导；`TimelineView` 只负责刷新显示，不成为新的计时真值
+- phase morph 需要由单一 `BubblePhaseMorph` 同步驱动外壳形状、shell profile、rim、glow、liquid tint 与外层 mask；不要让液面先切到新 phase、外壳后切到新 phase
+- phase 切换时，液体视觉态应通过 `BubbleLiquidVisualState` 从旧 render state 连续插值到新 render state；不要直接读取新 phase 的液面进度来绘制第一帧
+- 液体层只保留外层 `.mask(phaseMorph.shape)` 作为最终裁剪；不要在 `Canvas` 内部再用另一份 shape path 做二次 clip，避免 mask 与液面使用不同动画时钟导致边缘错位
+- 液面终段填充当前基线是：结束前常规液面最多到 `0.94`，最后约 `2.8s` 基于 `remainingDuration(at:)` 用 smoothstep 连续插值到 `1.08`，让 `00:01 -> 00:00` 看起来接近灌满但不突然跳变
+- 不要恢复早期 `terminalBoost` 或 `timeText == "00:00"` 的离散填充方案；前者会导致最后几秒提前灌满，后者会导致 `00:01` 仍留大洞而 `00:00` 突然全满
+- 当前时间文案使用 rounded seconds，因此显示 `00:01` 并不等价于真实剩余时间正好 `1.0s`；液面终段动画应优先依赖连续 remaining duration，而不是依赖文案字符串
+- 终段 cue 可以收束 glow 和底部深度池，但不应把波幅压到接近静止；最后几秒水面仍应保留轻微运动
+- 深色模式下不要恢复大面积内部白雾或横向白光；暗色气泡应依靠柔和水线、边缘折射、底部 glow 与低透明度层次表达材质
 
 ### 0.1.5 功能应该放在哪里
 
