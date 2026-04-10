@@ -36,6 +36,10 @@ VibePomodoro/
 │   │   ├── FocusChrome.swift
 │   │   ├── FocusControls.swift
 │   │   ├── FocusBubbleTimer.swift
+│   │   ├── FocusBubbleTimerDigits.swift
+│   │   ├── FocusBubbleTimerGeometry.swift
+│   │   ├── FocusBubbleTimerGlass.swift
+│   │   ├── FocusBubbleTimerSurface.swift
 │   │   └── FocusCompletionSummary.swift
 │   ├── Productivity/
 │   │   ├── ProductivityScreen.swift
@@ -143,7 +147,11 @@ VibePomodoro/
     - `FocusScreenSupport.swift`：bubble 几何计算、chrome 可见性与沉浸模式辅助规则
     - `FocusChrome.swift`：Focus 页面 chrome 组合、操作层装配与 page content 骨架
     - `FocusControls.swift`：状态条、session 条、次级按钮与胶囊玻璃壳
-    - `FocusBubbleTimer.swift`：气泡、液面动画、时间数字与玻璃球绘制
+    - `FocusBubbleTimer.swift`：气泡主入口、phase morph 与液体视觉态过渡编排
+    - `FocusBubbleTimerDigits.swift`：倒计时数字与前景内容绘制
+    - `FocusBubbleTimerGeometry.swift`：气泡 shell profile、shape geometry 与插值支撑
+    - `FocusBubbleTimerGlass.swift`：玻璃背板与 rim overlay 绘制
+    - `FocusBubbleTimerSurface.swift`：液面动画、glow、Canvas 绘制与波形路径
     - `FocusCompletionSummary.swift`：session 完成总结 overlay 与格式化显示
   - 页面内只做显示层拆分，不能自建 session 状态机
   - 计时数字按 `1Hz` 刷新，气泡动画按低帧率刷新，仅在 `Focus` tab 可见且 session 运行时激活
@@ -233,7 +241,7 @@ VibePomodoro/
 
 ### 0.1.4.3 Focus BubbleTimer 当前 UI / 动画对齐备注
 
-- `FocusBubbleTimer.swift` 是当前 Focus 气泡、液面、倒计时数字和玻璃球绘制的唯一落点；后续继续打磨主气泡时，默认不要把页面专属子组件上提到 `Shared/*`
+- `FocusBubbleTimer*.swift` 是当前 Focus 气泡、液面、倒计时数字和玻璃球绘制的页面内落点；后续继续打磨主气泡时，默认不要把页面专属子组件上提到 `Shared/*`
 - 气泡视觉必须继续由 `BubbleRenderState` + `Date / targetEndDate` 推导；`TimelineView` 只负责刷新显示，不成为新的计时真值
 - phase morph 需要由单一 `BubblePhaseMorph` 同步驱动外壳形状、shell profile、rim、glow、liquid tint 与外层 mask；不要让液面先切到新 phase、外壳后切到新 phase
 - phase 切换时，液体视觉态应通过 `BubbleLiquidVisualState` 从旧 render state 连续插值到新 render state；不要直接读取新 phase 的液面进度来绘制第一帧
@@ -857,7 +865,15 @@ MVP 不需要额外寻找开源 PNG 照片素材。
 - [VibePomodoro/Screens/Focus/FocusControls.swift](./VibePomodoro/Screens/Focus/FocusControls.swift)
   - Focus 页状态条、session 条、次级按钮与胶囊玻璃控件
 - [VibePomodoro/Screens/Focus/FocusBubbleTimer.swift](./VibePomodoro/Screens/Focus/FocusBubbleTimer.swift)
-  - Focus 气泡、液面动画、倒计时数字刷新与玻璃球绘制
+  - Focus 气泡主入口、phase morph 与液体视觉态过渡编排
+- [VibePomodoro/Screens/Focus/FocusBubbleTimerDigits.swift](./VibePomodoro/Screens/Focus/FocusBubbleTimerDigits.swift)
+  - Focus 气泡倒计时数字刷新与前景内容绘制
+- [VibePomodoro/Screens/Focus/FocusBubbleTimerGeometry.swift](./VibePomodoro/Screens/Focus/FocusBubbleTimerGeometry.swift)
+  - Focus 气泡 shell profile、shape geometry 与插值支撑
+- [VibePomodoro/Screens/Focus/FocusBubbleTimerGlass.swift](./VibePomodoro/Screens/Focus/FocusBubbleTimerGlass.swift)
+  - Focus 气泡玻璃背板与 rim overlay 绘制
+- [VibePomodoro/Screens/Focus/FocusBubbleTimerSurface.swift](./VibePomodoro/Screens/Focus/FocusBubbleTimerSurface.swift)
+  - Focus 气泡液面动画、glow、Canvas 绘制与波形路径
 - [VibePomodoro/Screens/Focus/FocusCompletionSummary.swift](./VibePomodoro/Screens/Focus/FocusCompletionSummary.swift)
   - Focus 完成总结独立确认层、文案格式化与完成态确认 UI
 - [VibePomodoro/Screens/Productivity/ProductivityScreen.swift](./VibePomodoro/Screens/Productivity/ProductivityScreen.swift)
