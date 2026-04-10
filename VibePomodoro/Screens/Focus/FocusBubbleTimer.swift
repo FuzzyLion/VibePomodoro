@@ -11,13 +11,19 @@ struct BubbleTimerView: View {
     @State private var morphSourcePhase: SessionPhase = .focus
     @State private var morphTargetPhase: SessionPhase = .focus
     @State private var morphProgress: CGFloat = 1
+    @State private var previousRenderState: BubbleRenderState?
+    @State private var liquidSourceVisuals = BubbleLiquidVisualState()
 
     var body: some View {
         let sphereSize = FocusScreenLayout.bubbleDiameter
+        let isPendingPhaseTransition = previousRenderState != nil && renderState.phase != morphTargetPhase
+        let effectiveLiquidSourceVisuals = isPendingPhaseTransition
+            ? BubbleLiquidVisualState(renderState: previousRenderState ?? renderState, at: .now)
+            : liquidSourceVisuals
         let phaseMorph = BubblePhaseMorph(
-            sourcePhase: morphSourcePhase,
-            targetPhase: morphTargetPhase,
-            progress: morphProgress
+            sourcePhase: isPendingPhaseTransition ? morphTargetPhase : morphSourcePhase,
+            targetPhase: isPendingPhaseTransition ? renderState.phase : morphTargetPhase,
+            progress: isPendingPhaseTransition ? 0 : morphProgress
         )
         let waveClock = BubbleWaveClock(
             accumulatedWaveTime: accumulatedWaveTime,
@@ -30,7 +36,8 @@ struct BubbleTimerView: View {
             BubbleAnimatedSurfaceLayer(
                 renderState: renderState,
                 waveClock: waveClock,
-                phaseMorph: phaseMorph
+                phaseMorph: phaseMorph,
+                liquidSourceVisuals: effectiveLiquidSourceVisuals
             )
             BubbleGlassRimOverlay(phaseMorph: phaseMorph, sphereSize: sphereSize)
             if showsForegroundContent {
@@ -39,9 +46,11 @@ struct BubbleTimerView: View {
         }
         .frame(width: sphereSize, height: sphereSize)
         .onAppear {
+            previousRenderState = renderState
             morphSourcePhase = renderState.phase
             morphTargetPhase = renderState.phase
             morphProgress = 1
+            liquidSourceVisuals = BubbleLiquidVisualState(renderState: renderState, at: .now)
             if renderState.isAnimating && waveAnimationStart == nil {
                 waveAnimationStart = .now
             }
@@ -55,21 +64,33 @@ struct BubbleTimerView: View {
                 self.waveAnimationStart = nil
             }
         }
-        .onChange(of: renderState.phase) { oldValue, newValue in
-            accumulatedWaveTime = 0
-            waveAnimationStart = renderState.isAnimating ? .now : nil
+        .onChange(of: renderState) { oldValue, newValue in
+            defer {
+                previousRenderState = newValue
+            }
 
-            guard oldValue != newValue else { return }
+            guard oldValue.phase != newValue.phase else { return }
+
+            let now = Date.now
+            let oldTargetVisuals = BubbleLiquidVisualState(renderState: oldValue, at: now)
+            liquidSourceVisuals = BubbleLiquidVisualState.interpolated(
+                from: liquidSourceVisuals,
+                to: oldTargetVisuals,
+                progress: morphProgress
+            )
+            accumulatedWaveTime = 0
+            waveAnimationStart = newValue.isAnimating ? .now : nil
 
             if reduceMotion {
-                morphSourcePhase = newValue
-                morphTargetPhase = newValue
+                morphSourcePhase = newValue.phase
+                morphTargetPhase = newValue.phase
                 morphProgress = 1
+                liquidSourceVisuals = BubbleLiquidVisualState(renderState: newValue, at: now)
                 return
             }
 
             morphSourcePhase = morphTargetPhase
-            morphTargetPhase = newValue
+            morphTargetPhase = newValue.phase
             morphProgress = 0
 
             withAnimation(FocusScreenLayout.phaseMorphAnimation) {
@@ -96,11 +117,53 @@ private struct BubblePhaseMorph: Equatable {
         )
     }
 
+    var visualPhase: SessionPhase {
+        clampedProgress < 0.5 ? sourcePhase : targetPhase
+    }
+
     func shellProfile(for sphereSize: CGFloat) -> BubbleShellProfile {
         BubbleShellProfile.interpolated(
             from: sourcePhase.bubbleShellProfile(for: sphereSize),
             to: targetPhase.bubbleShellProfile(for: sphereSize),
             progress: clampedProgress
+        )
+    }
+}
+
+private struct BubbleLiquidVisualState: Equatable {
+    let fillRatio: Double
+    let stepBoundaryCueProgress: Double
+
+    init(fillRatio: Double = 0.12, stepBoundaryCueProgress: Double = 0) {
+        self.fillRatio = fillRatio
+        self.stepBoundaryCueProgress = stepBoundaryCueProgress
+    }
+
+    init(renderState: BubbleRenderState, at date: Date) {
+        let normalizedProgress = max(0, min(renderState.progress(at: date), 1))
+        let preCompletionFillRatio = min(0.94, 0.12 + pow(normalizedProgress, 1.28) * 0.82)
+        let remainingDuration = renderState.remainingDuration(at: date)
+        let clampedRemainingDuration = remainingDuration.isFinite ? max(0, remainingDuration) : 0
+        let finalFillWindow: TimeInterval = 2
+        let finalFillProgress = max(0, min(1, 1 - clampedRemainingDuration / finalFillWindow))
+        let easedFinalFillProgress = finalFillProgress * finalFillProgress * (3 - (2 * finalFillProgress))
+
+        fillRatio = interpolate(preCompletionFillRatio, 1.08, easedFinalFillProgress)
+        stepBoundaryCueProgress = renderState.stepBoundaryCueProgress(at: date)
+    }
+
+    static func interpolated(
+        from source: BubbleLiquidVisualState,
+        to target: BubbleLiquidVisualState,
+        progress: CGFloat
+    ) -> BubbleLiquidVisualState {
+        BubbleLiquidVisualState(
+            fillRatio: interpolate(source.fillRatio, target.fillRatio, progress),
+            stepBoundaryCueProgress: interpolate(
+                source.stepBoundaryCueProgress,
+                target.stepBoundaryCueProgress,
+                progress
+            )
         )
     }
 }
@@ -126,6 +189,7 @@ private struct BubbleAnimatedSurfaceLayer: View {
     let renderState: BubbleRenderState
     let waveClock: BubbleWaveClock
     let phaseMorph: BubblePhaseMorph
+    let liquidSourceVisuals: BubbleLiquidVisualState
 
     var body: some View {
         Group {
@@ -144,22 +208,25 @@ private struct BubbleAnimatedSurfaceLayer: View {
     private func animatedSurface(at date: Date) -> some View {
         let wavePhase = waveClock.phase(at: date)
         let glowExpansion = 0.44 + (sin(wavePhase * 0.42) + 1) * 0.16
-        let stepBoundaryCueProgress = renderState.stepBoundaryCueProgress(at: date)
+        let targetLiquidVisuals = BubbleLiquidVisualState(renderState: renderState, at: date)
+        let liquidVisuals = BubbleLiquidVisualState.interpolated(
+            from: liquidSourceVisuals,
+            to: targetLiquidVisuals,
+            progress: phaseMorph.clampedProgress
+        )
 
         ZStack {
             BubbleGlowBackdrop(
                 phaseMorph: phaseMorph,
                 glowExpansion: glowExpansion,
-                stepBoundaryCueProgress: stepBoundaryCueProgress
+                stepBoundaryCueProgress: liquidVisuals.stepBoundaryCueProgress
             )
 
             BubbleLiquidLayer(
                 phaseMorph: phaseMorph,
-                progress: renderState.progress(at: date),
-                isFinalDisplayedSecond: renderState.isFinalDisplayedSecond(at: date),
+                visuals: liquidVisuals,
                 wavePhase: wavePhase,
-                glowExpansion: glowExpansion,
-                stepBoundaryCueProgress: stepBoundaryCueProgress
+                glowExpansion: glowExpansion
             )
             .mask(phaseMorph.shape)
         }
@@ -338,7 +405,7 @@ private struct BubbleGlassBackdrop: View {
 
     var body: some View {
         let isDark = colorScheme == .dark
-        let phase = phaseMorph.targetPhase
+        let phase = phaseMorph.visualPhase
         let bubbleShape = phaseMorph.shape
         let profile = phaseMorph.shellProfile(for: sphereSize)
 
@@ -573,7 +640,7 @@ private struct BubbleGlassRimOverlay: View {
 
     var body: some View {
         let isDark = colorScheme == .dark
-        let phase = phaseMorph.targetPhase
+        let phase = phaseMorph.visualPhase
         let bubbleShape = phaseMorph.shape
         let profile = phaseMorph.shellProfile(for: sphereSize)
 
@@ -979,7 +1046,7 @@ private struct BubbleGlowBackdrop: View {
     var body: some View {
         let glow = glowExpansion.isFinite ? max(0, glowExpansion) : 0
         let cue = stepBoundaryCueProgress.isFinite ? max(0, min(stepBoundaryCueProgress, 1)) : 0
-        let phase = phaseMorph.targetPhase
+        let phase = phaseMorph.visualPhase
         let bubbleShape = phaseMorph.shape
         let profile = phaseMorph.shellProfile(for: FocusScreenLayout.bubbleDiameter)
         let gatheredGlowWidth = profile.outerGlowSize.width * (1 - cue * 0.16)
@@ -1079,25 +1146,20 @@ private struct BubbleLiquidLayer: View {
     @Environment(\.colorScheme) private var colorScheme
 
     let phaseMorph: BubblePhaseMorph
-    let progress: Double
-    let isFinalDisplayedSecond: Bool
+    let visuals: BubbleLiquidVisualState
     let wavePhase: Double
     let glowExpansion: Double
-    let stepBoundaryCueProgress: Double
 
     private var phase: SessionPhase {
-        phaseMorph.targetPhase
+        phaseMorph.visualPhase
     }
 
     var body: some View {
-        let phase = phaseMorph.targetPhase
+        let phase = phaseMorph.visualPhase
         let profile = phaseMorph.shellProfile(for: FocusScreenLayout.bubbleDiameter)
-        let normalizedProgress = max(0, min(progress, 1))
-        let boundaryCue = max(0, min(stepBoundaryCueProgress, 1))
-        let baseFillRatio = min(0.987, 0.12 + pow(normalizedProgress, 1.22) * 0.86)
-        let terminalBoost = isFinalDisplayedSecond ? 0.052 : 0
-        let visualFillRatio = min(1.035, baseFillRatio + terminalBoost)
-        let amplitude = (profile.waveAmplitudeBase + glowExpansion * profile.waveAmplitudeRange) * (1 - boundaryCue * 0.24)
+        let boundaryCue = max(0, min(visuals.stepBoundaryCueProgress, 1))
+        let visualFillRatio = max(0, min(visuals.fillRatio, 1.08))
+        let amplitude = (profile.waveAmplitudeBase + glowExpansion * profile.waveAmplitudeRange) * (1 - boundaryCue * 0.08)
         let gatheredDepthPoolSize = CGSize(
             width: profile.depthPoolSize.width * (1 - boundaryCue * 0.12),
             height: profile.depthPoolSize.height * (1 - boundaryCue * 0.18)
@@ -1116,12 +1178,9 @@ private struct BubbleLiquidLayer: View {
             }
 
             let sphereRect = CGRect(origin: .zero, size: canvasSize)
-            let spherePath = phaseMorph.shape.path(in: sphereRect)
             let waterlineY = sphereRect.maxY - sphereRect.height * CGFloat(visualFillRatio)
 
             guard waterlineY.isFinite else { return }
-
-            context.clip(to: spherePath)
 
             let liquidPath = WaveLiquidShape(
                 fillRatio: visualFillRatio,
@@ -1151,9 +1210,9 @@ private struct BubbleLiquidLayer: View {
             )
 
             let secondaryLiquidPath = WaveLiquidShape(
-                fillRatio: min(1, visualFillRatio + 0.012),
+                fillRatio: min(1.08, visualFillRatio + 0.012),
                 phase: wavePhase * 1.08 + .pi / 5,
-                amplitude: amplitude * (0.55 - boundaryCue * 0.10)
+                amplitude: amplitude * (0.55 - boundaryCue * 0.04)
             ).path(in: sphereRect)
 
             context.fill(
@@ -1298,7 +1357,7 @@ private struct WaveLiquidShape: Shape {
             return Path()
         }
 
-        let clampedFill = max(0, min(fillRatio, 1))
+        let clampedFill = max(0, min(fillRatio, 1.08))
         let baseY = rect.height * (1 - clampedFill)
         let mainAmplitude = min(rect.height * 0.06, amplitude)
         let width = rect.width
