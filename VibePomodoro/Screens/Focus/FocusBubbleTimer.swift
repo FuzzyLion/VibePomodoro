@@ -45,57 +45,67 @@ struct BubbleTimerView: View {
             }
         }
         .frame(width: sphereSize, height: sphereSize)
-        .onAppear {
-            previousRenderState = renderState
-            morphSourcePhase = renderState.phase
-            morphTargetPhase = renderState.phase
-            morphProgress = 1
-            liquidSourceVisuals = BubbleLiquidVisualState(renderState: renderState, at: .now)
-            if renderState.isAnimating && waveAnimationStart == nil {
-                waveAnimationStart = .now
-            }
-        }
+        .onAppear(perform: handleAppear)
         .onChange(of: renderState.isAnimating) { _, newValue in
-            let now = Date.now
-            if newValue {
-                waveAnimationStart = now
-            } else if let waveAnimationStart {
-                accumulatedWaveTime += now.timeIntervalSince(waveAnimationStart)
-                self.waveAnimationStart = nil
-            }
+            handleAnimationStateChange(isAnimating: newValue)
         }
         .onChange(of: renderState) { oldValue, newValue in
-            defer {
-                previousRenderState = newValue
-            }
+            handleRenderStateChange(from: oldValue, to: newValue)
+        }
+    }
 
-            guard oldValue.phase != newValue.phase else { return }
+    private func handleAppear() {
+        previousRenderState = renderState
+        morphSourcePhase = renderState.phase
+        morphTargetPhase = renderState.phase
+        morphProgress = 1
+        liquidSourceVisuals = BubbleLiquidVisualState(renderState: renderState, at: .now)
+        if renderState.isAnimating && waveAnimationStart == nil {
+            waveAnimationStart = .now
+        }
+    }
 
-            let now = Date.now
-            let oldTargetVisuals = BubbleLiquidVisualState(renderState: oldValue, at: now)
-            liquidSourceVisuals = BubbleLiquidVisualState.interpolated(
-                from: liquidSourceVisuals,
-                to: oldTargetVisuals,
-                progress: morphProgress
-            )
-            accumulatedWaveTime = 0
-            waveAnimationStart = newValue.isAnimating ? .now : nil
+    private func handleAnimationStateChange(isAnimating: Bool) {
+        let now = Date.now
+        if isAnimating {
+            waveAnimationStart = now
+        } else if let waveAnimationStart {
+            accumulatedWaveTime += now.timeIntervalSince(waveAnimationStart)
+            self.waveAnimationStart = nil
+        }
+    }
 
-            if reduceMotion {
-                morphSourcePhase = newValue.phase
-                morphTargetPhase = newValue.phase
-                morphProgress = 1
-                liquidSourceVisuals = BubbleLiquidVisualState(renderState: newValue, at: now)
-                return
-            }
+    private func handleRenderStateChange(from oldValue: BubbleRenderState, to newValue: BubbleRenderState) {
+        defer {
+            previousRenderState = newValue
+        }
 
-            morphSourcePhase = morphTargetPhase
+        guard oldValue.phase != newValue.phase else { return }
+
+        let now = Date.now
+        let oldTargetVisuals = BubbleLiquidVisualState(renderState: oldValue, at: now)
+        liquidSourceVisuals = BubbleLiquidVisualState.interpolated(
+            from: liquidSourceVisuals,
+            to: oldTargetVisuals,
+            progress: morphProgress
+        )
+        accumulatedWaveTime = 0
+        waveAnimationStart = newValue.isAnimating ? .now : nil
+
+        if reduceMotion {
+            morphSourcePhase = newValue.phase
             morphTargetPhase = newValue.phase
-            morphProgress = 0
+            morphProgress = 1
+            liquidSourceVisuals = BubbleLiquidVisualState(renderState: newValue, at: now)
+            return
+        }
 
-            withAnimation(FocusScreenLayout.phaseMorphAnimation) {
-                morphProgress = 1
-            }
+        morphSourcePhase = morphTargetPhase
+        morphTargetPhase = newValue.phase
+        morphProgress = 0
+
+        withAnimation(FocusScreenLayout.phaseMorphAnimation) {
+            morphProgress = 1
         }
     }
 }
