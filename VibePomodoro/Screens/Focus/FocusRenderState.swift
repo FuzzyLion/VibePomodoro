@@ -37,6 +37,15 @@ struct BubbleRenderState: Equatable {
         timeText(at: now) == "00:01"
     }
 
+    func stepBoundaryCueProgress(at now: Date) -> Double {
+        guard shouldTickSeconds, targetEndDate != nil else { return 0 }
+
+        let cueWindow: TimeInterval = 3
+        let clampedRemaining = min(max(remainingDuration(at: now), 0), cueWindow)
+        let normalized = 1 - (clampedRemaining / cueWindow)
+        return normalized * normalized * (3 - (2 * normalized))
+    }
+
     private static func formattedTime(_ duration: TimeInterval) -> String {
         let totalSeconds = max(0, Int(duration.rounded()))
         let minutes = totalSeconds / 60

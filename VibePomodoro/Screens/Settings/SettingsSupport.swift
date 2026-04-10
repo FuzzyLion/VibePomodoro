@@ -117,7 +117,8 @@ enum SettingsTimerField: String, CaseIterable, Identifiable {
     var allowedValues: [Int] {
         switch self {
         case .focus:
-            return Array(stride(from: 15, through: 90, by: 5))
+            // Temporary QA hook: keep a 1 minute focus option available for transition testing.
+            return [1] + Array(stride(from: 15, through: 90, by: 5))
         case .shortBreak:
             return [5, 10]
         case .longBreak:
