@@ -65,6 +65,10 @@ enum SettingsTheme {
         colorScheme == .dark ? Color.white.opacity(0.035) : Color.white.opacity(0.18)
     }
 
+    static func valuePillPressedFill(for colorScheme: ColorScheme) -> Color {
+        colorScheme == .dark ? Color.white.opacity(0.06) : Color.white.opacity(0.28)
+    }
+
     static func pickerFill(for colorScheme: ColorScheme) -> Color {
         colorScheme == .dark ? Color.white.opacity(0.035) : Color.white.opacity(0.16)
     }

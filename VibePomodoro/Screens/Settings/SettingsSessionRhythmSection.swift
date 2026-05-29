@@ -134,20 +134,15 @@ private struct SettingsExpandablePickerRow: View {
                     }
                 }
             }
-            .buttonStyle(.plain)
+            .buttonStyle(SettingsPickerDisclosureButtonStyle())
             .accessibilityLabel(title)
             .accessibilityValue(accessibilityValue)
             .accessibilityHint(isExpanded ? "Collapse picker" : "Expand picker")
             .accessibilityIdentifier(rowAccessibilityIdentifier)
 
-            if isExpanded {
-                picker
-                    .transition(.asymmetric(
-                        insertion: .opacity.combined(with: .move(edge: .top)),
-                        removal: .opacity.combined(with: .scale(scale: 0.98, anchor: .top))
-                    ))
-            }
+            pickerDrawer
         }
+        .animation(.spring(response: 0.32, dampingFraction: 0.9), value: isExpanded)
         .padding(.vertical, SettingsLayout.pickerRowVerticalPadding)
         .accessibilityElement(children: .contain)
     }
@@ -166,30 +161,10 @@ private struct SettingsExpandablePickerRow: View {
     }
 
     private var valueDisclosure: some View {
-        HStack(spacing: 8) {
-            Text(valueText)
-                .font(.system(.body, weight: .semibold))
-                .foregroundStyle(SettingsTheme.primaryTextColor(for: colorScheme))
-                .monospacedDigit()
-                .lineLimit(1)
-                .minimumScaleFactor(0.88)
-                .frame(minWidth: SettingsLayout.pickerValueMinWidth)
-
-            Image(systemName: "chevron.right")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(SettingsTheme.secondaryTextColor(for: colorScheme).opacity(0.48))
-                .rotationEffect(.degrees(isExpanded ? 90 : 0))
-        }
-        .padding(.leading, 14)
-        .padding(.trailing, 12)
-        .frame(height: SettingsLayout.pickerValuePillHeight)
-        .glassEffect(.regular.tint(SettingsTheme.valuePillFill(for: colorScheme)).interactive(), in: Capsule(style: .continuous))
-        .overlay {
-            Capsule(style: .continuous)
-                .strokeBorder(SettingsTheme.valuePillStroke(for: colorScheme), lineWidth: 1)
-        }
-        .shadow(color: Color.black.opacity(colorScheme == .dark ? 0.02 : 0.012), radius: 8, y: 3)
-        .fixedSize(horizontal: true, vertical: false)
+        SettingsPickerValueDisclosure(
+            valueText: valueText,
+            isExpanded: isExpanded
+        )
     }
 
     @ViewBuilder
@@ -205,6 +180,20 @@ private struct SettingsExpandablePickerRow: View {
                 .foregroundStyle(color)
                 .frame(width: 12, height: 12)
         }
+    }
+
+    private var pickerDrawer: some View {
+        picker
+            .padding(.top, isExpanded ? 12 : 0)
+            .opacity(isExpanded ? 1 : 0)
+            .offset(y: isExpanded ? 0 : -10)
+            .frame(
+                height: isExpanded ? SettingsLayout.expandedPickerHeight + 12 : 0,
+                alignment: .top
+            )
+            .clipped()
+            .allowsHitTesting(isExpanded)
+            .accessibilityHidden(!isExpanded)
     }
 
     private var picker: some View {
@@ -279,5 +268,68 @@ private struct SettingsExpandablePickerRow: View {
         }
         .accessibilityLabel("\(title) picker")
         .accessibilityIdentifier(pickerAccessibilityIdentifier)
+    }
+}
+
+private struct SettingsPickerValueDisclosure: View {
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.settingsPickerDisclosureIsPressed) private var isPressed
+
+    let valueText: String
+    let isExpanded: Bool
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Text(valueText)
+                .font(.system(.body, weight: .semibold))
+                .foregroundStyle(SettingsTheme.primaryTextColor(for: colorScheme))
+                .monospacedDigit()
+                .lineLimit(1)
+                .minimumScaleFactor(0.88)
+                .frame(minWidth: SettingsLayout.pickerValueMinWidth)
+
+            Image(systemName: "chevron.right")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(SettingsTheme.secondaryTextColor(for: colorScheme).opacity(0.48))
+                .rotationEffect(.degrees(isExpanded ? 90 : 0))
+        }
+        .padding(.leading, 14)
+        .padding(.trailing, 12)
+        .frame(height: SettingsLayout.pickerValuePillHeight)
+        .glassEffect(
+            .regular.tint(
+                isPressed
+                    ? SettingsTheme.valuePillPressedFill(for: colorScheme)
+                    : SettingsTheme.valuePillFill(for: colorScheme)
+            ),
+            in: Capsule(style: .continuous)
+        )
+        .overlay {
+            Capsule(style: .continuous)
+                .strokeBorder(SettingsTheme.valuePillStroke(for: colorScheme), lineWidth: 1)
+        }
+        .shadow(color: Color.black.opacity(colorScheme == .dark ? 0.02 : 0.012), radius: 8, y: 3)
+        .scaleEffect(isPressed ? 0.985 : 1)
+        .animation(.easeOut(duration: 0.12), value: isPressed)
+        .fixedSize(horizontal: true, vertical: false)
+    }
+}
+
+private struct SettingsPickerDisclosureButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .environment(\.settingsPickerDisclosureIsPressed, configuration.isPressed)
+            .contentShape(Rectangle())
+    }
+}
+
+private struct SettingsPickerDisclosureIsPressedKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
+private extension EnvironmentValues {
+    var settingsPickerDisclosureIsPressed: Bool {
+        get { self[SettingsPickerDisclosureIsPressedKey.self] }
+        set { self[SettingsPickerDisclosureIsPressedKey.self] = newValue }
     }
 }
