@@ -74,17 +74,44 @@ struct FocusCompletionBackdropBubble: View {
     let bubbleCenter: CGPoint
 
     var body: some View {
-        BubbleTimerView(
-            renderState: renderState,
-            showsForegroundContent: false
-        )
+        let bubbleShape = BubbleGlassShape(phase: renderState.phase)
+        let isDark = colorScheme == .dark
+
+        ZStack {
+            bubbleShape
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            Color.white.opacity(isDark ? 0.030 : 0.145),
+                            renderState.phase.tintColor.opacity(isDark ? 0.030 : 0.060),
+                            renderState.phase.shadowColor.opacity(isDark ? 0.018 : 0.035)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+
+            bubbleShape
+                .stroke(
+                    Color.white.opacity(isDark ? 0.12 : 0.34),
+                    lineWidth: isDark ? 0.9 : 1.0
+                )
+
+            bubbleShape
+                .stroke(
+                    renderState.phase.shadowColor.opacity(isDark ? 0.035 : 0.045),
+                    lineWidth: 10
+                )
+                .blur(radius: isDark ? 7 : 5)
+                .scaleEffect(1.012)
+        }
         .frame(
             width: FocusScreenLayout.bubbleDiameter,
             height: FocusScreenLayout.bubbleDiameter
         )
         .position(bubbleCenter)
-        .opacity(colorScheme == .dark ? 0.18 : 0.14)
-        .blur(radius: colorScheme == .dark ? 5 : 4)
+        .opacity(isDark ? 0.28 : 0.32)
+        .blur(radius: isDark ? 3.2 : 2.6)
         .frame(width: size.width, height: size.height, alignment: .center)
         .allowsHitTesting(false)
         .accessibilityHidden(true)

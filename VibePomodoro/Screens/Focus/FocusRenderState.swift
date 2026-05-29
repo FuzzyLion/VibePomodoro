@@ -68,7 +68,7 @@ struct FocusRenderState: Equatable {
     @MainActor
     static func build(store: PomodoroStore, scenePhase: ScenePhase) -> FocusRenderState {
         let session = store.activeSession
-        let phase = session?.currentPhase ?? .focus
+        let phase = displayPhase(for: session)
         let hasElapsedTime = session.map(Self.hasElapsedTime) ?? false
         let canGoBack = session.map { $0.currentStepIndex > 0 || hasElapsedTime } ?? false
         let shouldShowBackAction = session.map { session in
@@ -109,6 +109,21 @@ struct FocusRenderState: Equatable {
                 shouldTickSeconds: shouldTickSeconds
             )
         )
+    }
+
+    @MainActor
+    private static func displayPhase(for session: SessionSnapshot?) -> SessionPhase {
+        guard let session else { return .focus }
+
+        if let currentPhase = session.currentPhase {
+            return currentPhase
+        }
+
+        if session.runState == .completed {
+            return session.steps.last?.phase ?? .focus
+        }
+
+        return .focus
     }
 
     @MainActor

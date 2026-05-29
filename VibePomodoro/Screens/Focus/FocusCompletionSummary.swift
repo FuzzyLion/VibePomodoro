@@ -11,8 +11,8 @@ enum FocusCompletionMotion {
     static let contentDismissDuration: Double = 0.32
     static let actionDismissDuration: Double = 0.26
 
-    static let contentRevealDelay: UInt64 = 140_000_000
-    static let actionRevealDelay: UInt64 = 120_000_000
+    static let contentRevealDelay: UInt64 = 90_000_000
+    static let actionRevealDelay: UInt64 = 110_000_000
     static let contentDismissDelay: UInt64 = 70_000_000
     static let dismissCompletionDelay: UInt64 = 240_000_000
 
@@ -213,8 +213,6 @@ struct FocusCompletionSummaryView: View {
         }
 
         entranceTask = Task { @MainActor in
-            await Task.yield()
-
             withAnimation(FocusCompletionMotion.backdropAnimation) {
                 backdropProgress = 1
             }

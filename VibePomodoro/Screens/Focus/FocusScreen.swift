@@ -18,55 +18,66 @@ struct FocusScreen: View {
 
     var body: some View {
         GeometryReader { proxy in
+            let activeCompletionSummaryState = presentedCompletionSummaryState
+            let hasCompletionSummary = activeCompletionSummaryState != nil
+            let usesImmersiveLayout = isImmersive && !hasCompletionSummary
+            let isRestoringLayout = isRestoringImmersiveLayout && !hasCompletionSummary
+            let chromeOpacity = FocusScreenSupport.chromeOpacity(
+                hasCompletionSummary: hasCompletionSummary,
+                immersiveVisualsHidden: immersiveVisualsHidden
+            )
+            let isChromeInteractive = FocusScreenSupport.isChromeInteractive(
+                hasCompletionSummary: hasCompletionSummary,
+                immersiveVisualsHidden: immersiveVisualsHidden
+            )
+            let shouldHideSystemOverlays = FocusScreenSupport.shouldHideSystemOverlays(
+                hasCompletionSummary: hasCompletionSummary,
+                immersiveVisualsHidden: immersiveVisualsHidden
+            )
             let frameState = FocusScreenFrameState(
                 proxy: proxy,
                 store: store,
                 scenePhase: scenePhase,
                 stableBubbleAnchor: stableBubbleAnchor,
-                isImmersive: isImmersive,
-                isRestoringImmersiveLayout: isRestoringImmersiveLayout,
-                hasCompletionSummary: completionSummaryState != nil
+                isImmersive: usesImmersiveLayout,
+                isRestoringImmersiveLayout: isRestoringLayout,
+                hasCompletionSummary: hasCompletionSummary
             )
-            let pageContent = FocusPageContent(
-                renderState: frameState.renderState,
-                layout: frameState.layout,
-                size: frameState.size,
-                bubbleCenter: frameState.bubbleCenter,
-                progressDotsTopPadding: frameState.progressDotsTopPadding,
-                bottomChromeTopPadding: frameState.bottomChromeTopPadding,
-                chromeOpacity: chromeOpacity,
-                isChromeInteractive: isChromeInteractive,
-                backgroundTapAction: { location in
-                    handleScreenTap(at: location, frameState: frameState)
-                },
-                primaryAction: store.togglePrimaryAction,
-                goBackAction: store.goBackOneStep,
-                resetAction: store.resetCurrentStep,
-                requestFinishAction: requestFinishConfirmation,
-                skipAction: store.skipCurrentStep
-            )
-            .opacity(frameState.hasCompletionSummary ? 0 : 1)
-            .allowsHitTesting(!frameState.hasCompletionSummary)
-            .accessibilityHidden(frameState.hasCompletionSummary)
-
-            let completionBackdrop = FocusCompletionBackdropBubble(
-                renderState: frameState.renderState.bubble,
-                size: frameState.size,
-                bubbleCenter: frameState.bubbleCenter
-            )
-            .opacity(frameState.hasCompletionSummary ? 1 : 0)
 
             ZStack {
-                pageContent
-                completionBackdrop
+                if let activeCompletionSummaryState {
+                    FocusCompletionBackdropBubble(
+                        renderState: frameState.renderState.bubble,
+                        size: frameState.size,
+                        bubbleCenter: frameState.bubbleCenter
+                    )
 
-                if let completionSummaryState {
-                    FocusCompletionSummaryView(state: completionSummaryState) {
+                    FocusCompletionSummaryView(state: activeCompletionSummaryState) {
                         handleCompletionDismissal()
                     }
                     .zIndex(2)
+                } else {
+                    FocusPageContent(
+                        renderState: frameState.renderState,
+                        layout: frameState.layout,
+                        size: frameState.size,
+                        bubbleCenter: frameState.bubbleCenter,
+                        progressDotsTopPadding: frameState.progressDotsTopPadding,
+                        bottomChromeTopPadding: frameState.bottomChromeTopPadding,
+                        chromeOpacity: chromeOpacity,
+                        isChromeInteractive: isChromeInteractive,
+                        backgroundTapAction: { location in
+                            handleScreenTap(at: location, frameState: frameState)
+                        },
+                        primaryAction: store.togglePrimaryAction,
+                        goBackAction: store.goBackOneStep,
+                        resetAction: store.resetCurrentStep,
+                        requestFinishAction: requestFinishConfirmation,
+                        skipAction: store.skipCurrentStep
+                    )
                 }
             }
+            .animation(completionModeAnimation, value: hasCompletionSummary)
             .frame(width: frameState.size.width, height: frameState.size.height, alignment: .top)
             .statusBarHidden(shouldHideSystemOverlays)
             .persistentSystemOverlays(shouldHideSystemOverlays ? .hidden : .visible)
@@ -104,6 +115,18 @@ struct FocusScreen: View {
                 Text("This will end the current session and show the completion summary.")
             }
         }
+    }
+
+    private var presentedCompletionSummaryState: FocusCompletionSummaryState? {
+        completionSummaryState ?? FocusCompletionSummaryState(session: store.activeSession)
+    }
+
+    private var hasPresentedCompletionSummary: Bool {
+        presentedCompletionSummaryState != nil
+    }
+
+    private var completionModeAnimation: Animation? {
+        reduceMotion ? nil : FocusCompletionMotion.containerFadeInAnimation
     }
 
     private func handleScreenTap(
@@ -260,14 +283,14 @@ struct FocusScreen: View {
     }
 
     private var canEnterImmersiveMode: Bool {
-        completionSummaryState == nil
+        !hasPresentedCompletionSummary
             && store.selectedTab == .focus
             && scenePhase == .active
             && !isVoiceOverRunning
     }
 
     private var shouldKeepImmersiveMode: Bool {
-        completionSummaryState == nil
+        !hasPresentedCompletionSummary
             && store.selectedTab == .focus
             && scenePhase == .active
             && !isVoiceOverRunning
@@ -314,35 +337,14 @@ struct FocusScreen: View {
         stableBubbleAnchorContainerSize = containerFrame.size
     }
 
-    private var chromeOpacity: Double {
-        FocusScreenSupport.chromeOpacity(
-            hasCompletionSummary: completionSummaryState != nil,
-            immersiveVisualsHidden: immersiveVisualsHidden
-        )
-    }
-
-    private var isChromeInteractive: Bool {
-        FocusScreenSupport.isChromeInteractive(
-            hasCompletionSummary: completionSummaryState != nil,
-            immersiveVisualsHidden: immersiveVisualsHidden
-        )
-    }
-
-    private var shouldHideSystemOverlays: Bool {
-        FocusScreenSupport.shouldHideSystemOverlays(
-            hasCompletionSummary: completionSummaryState != nil,
-            immersiveVisualsHidden: immersiveVisualsHidden
-        )
-    }
-
     private func syncImmersiveVisualState() {
-        setImmersiveVisualsHidden(isImmersive && completionSummaryState == nil)
+        setImmersiveVisualsHidden(isImmersive && !hasPresentedCompletionSummary)
     }
 
     private func setImmersiveVisualsHidden(_ hidden: Bool) {
         let targetTabBarHidden = FocusScreenSupport.targetTabBarHidden(
             selectedTab: store.selectedTab,
-            hasCompletionSummary: completionSummaryState != nil,
+            hasCompletionSummary: hasPresentedCompletionSummary,
             immersiveVisualsHidden: hidden
         )
 
@@ -416,9 +418,9 @@ struct FocusScreen: View {
                 completionSummaryState = nil
             }
         }
+        store.dismissCompletedSession()
         setImmersiveMode(false)
         setImmersiveVisualsHidden(false)
         isShowingFinishConfirmation = false
-        store.dismissCompletedSession()
     }
 }

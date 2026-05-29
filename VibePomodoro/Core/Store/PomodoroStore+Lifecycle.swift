@@ -40,6 +40,8 @@ extension PomodoroStore {
             return
         }
 
+        let completedSession = events.contains(.sessionCompleted) ? activeSession : nil
+
         for event in events {
             switch event {
             case .phaseStarted:
@@ -48,11 +50,15 @@ extension PomodoroStore {
                 fireForegroundFeedback(type: .warning)
             case .sessionCompleted:
                 fireForegroundFeedback(type: .success)
-                storeCompletedSessionIfNeeded()
             }
         }
 
-        refreshRuntimeSideEffects()
+        guard let completedSession else {
+            refreshRuntimeSideEffects()
+            return
+        }
+
+        scheduleCompletionSideEffects(for: completedSession)
     }
 
     func syncIdleTimer() {
@@ -89,8 +95,18 @@ extension PomodoroStore {
         stepBoundaryTimer = timer
     }
 
-    private func storeCompletedSessionIfNeeded() {
-        guard let session = activeSession, session.runState == .completed else { return }
+    private func scheduleCompletionSideEffects(for session: SessionSnapshot) {
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: 50_000_000)
+            guard let self else { return }
+
+            self.storeCompletedSessionIfNeeded(from: session)
+            self.refreshRuntimeSideEffects()
+        }
+    }
+
+    private func storeCompletedSessionIfNeeded(from session: SessionSnapshot) {
+        guard session.runState == .completed else { return }
         let completedSession: CompletedSession
 
         if let existing = completedSessions.first(where: { $0.id == session.id }) {
