@@ -2,62 +2,61 @@ import SwiftUI
 
 struct SettingsAlertsSection: View {
     @EnvironmentObject private var store: PomodoroStore
+    @State private var isPresentingSoundChoice = false
 
     var body: some View {
-        SettingsCard(
-            style: .secondary(
-                contentInset: SettingsLayout.cardContentInset,
-                cornerRadius: SettingsLayout.secondaryCardCornerRadius
-            ),
-            accentOverlay: { EmptyView() }
-        ) {
-            SettingsCardHeader(title: "ALERTS")
+        VStack(alignment: .leading, spacing: SettingsLayout.sectionHeaderBottomSpacing) {
+            SettingsSectionHeader(title: "ALERTS")
 
-            VStack(spacing: 0) {
-                SettingsToggleRow(
-                    isOn: notificationsBinding,
-                    title: "Notifications"
-                )
+            SettingsCard(
+                style: .secondary(
+                    contentInset: SettingsLayout.cardContentInset,
+                    cornerRadius: SettingsLayout.secondaryCardCornerRadius
+                ),
+                accentOverlay: { EmptyView() }
+            ) {
+                VStack(spacing: 0) {
+                    SettingsToggleRow(
+                        isOn: notificationsBinding,
+                        title: "Notifications"
+                    )
 
-                SettingsDivider()
-
-                SettingsToggleRow(
-                    isOn: soundBinding,
-                    title: "Sound",
-                    subtitle: store.settings.notificationsEnabled ? nil : "Requires Notifications",
-                    disabled: !store.settings.notificationsEnabled
-                )
-
-                if store.settings.notificationsEnabled && store.settings.soundEnabled {
                     SettingsDivider()
 
-                    Menu {
-                        Picker(
-                            "Reminder Sound",
-                            selection: soundSelectionBinding
-                        ) {
-                            ForEach(SoundOption.allCases) { option in
-                                Text(option.title).tag(option)
-                            }
+                    SettingsToggleRow(
+                        isOn: soundBinding,
+                        title: "Sound",
+                        subtitle: store.settings.notificationsEnabled ? nil : "Requires Notifications",
+                        disabled: !store.settings.notificationsEnabled
+                    )
+
+                    if store.settings.notificationsEnabled && store.settings.soundEnabled {
+                        SettingsDivider()
+
+                        Button {
+                            isPresentingSoundChoice = true
+                        } label: {
+                            SettingsNavigationValueRow(
+                                title: "Sound Choice",
+                                value: store.settings.selectedSound.title
+                            )
                         }
-                    } label: {
-                        SettingsValueRow(
-                            title: "Sound Choice",
-                            value: store.settings.selectedSound.title
-                        )
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Reminder Sound")
+                        .accessibilityValue(store.settings.selectedSound.title)
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Reminder Sound")
-                    .accessibilityValue(store.settings.selectedSound.title)
+
+                    SettingsDivider()
+
+                    SettingsToggleRow(
+                        isOn: hapticsBinding,
+                        title: "Haptics"
+                    )
                 }
-
-                SettingsDivider()
-
-                SettingsToggleRow(
-                    isOn: hapticsBinding,
-                    title: "Haptics"
-                )
             }
+        }
+        .navigationDestination(isPresented: $isPresentingSoundChoice) {
+            SettingsSoundChoiceScreen()
         }
     }
 
@@ -75,13 +74,6 @@ struct SettingsAlertsSection: View {
         )
     }
 
-    private var soundSelectionBinding: Binding<SoundOption> {
-        Binding(
-            get: { store.settings.selectedSound },
-            set: store.setSelectedSound
-        )
-    }
-
     private var hapticsBinding: Binding<Bool> {
         Binding(
             get: { store.settings.hapticsEnabled },
@@ -94,20 +86,22 @@ struct SettingsDisplaySection: View {
     @EnvironmentObject private var store: PomodoroStore
 
     var body: some View {
-        SettingsCard(
-            style: .secondary(
-                contentInset: SettingsLayout.cardContentInset,
-                cornerRadius: SettingsLayout.secondaryCardCornerRadius
-            ),
-            accentOverlay: { EmptyView() }
-        ) {
-            SettingsCardHeader(title: "DISPLAY")
+        VStack(alignment: .leading, spacing: SettingsLayout.sectionHeaderBottomSpacing) {
+            SettingsSectionHeader(title: "DISPLAY")
 
-            SettingsToggleRow(
-                isOn: keepScreenOnBinding,
-                title: "Keep Screen On",
-                subtitle: "Active sessions only"
-            )
+            SettingsCard(
+                style: .secondary(
+                    contentInset: SettingsLayout.cardContentInset,
+                    cornerRadius: SettingsLayout.secondaryCardCornerRadius
+                ),
+                accentOverlay: { EmptyView() }
+            ) {
+                SettingsToggleRow(
+                    isOn: keepScreenOnBinding,
+                    title: "Keep Screen On",
+                    subtitle: "Active sessions only"
+                )
+            }
         }
     }
 
@@ -120,24 +114,64 @@ struct SettingsDisplaySection: View {
 }
 
 struct SettingsOtherSection: View {
+    @EnvironmentObject private var store: PomodoroStore
+    @State private var isShowingClearHistoryAlert = false
+
     var body: some View {
-        SettingsCard(
-            style: .secondary(
-                contentInset: SettingsLayout.cardContentInset,
-                cornerRadius: SettingsLayout.secondaryCardCornerRadius
-            ),
-            accentOverlay: { EmptyView() }
-        ) {
-            SettingsCardHeader(title: "OTHER")
+        VStack(alignment: .leading, spacing: SettingsLayout.sectionHeaderBottomSpacing) {
+            SettingsSectionHeader(title: "OTHER")
 
-            VStack(spacing: 0) {
-                SettingsPlaceholderRow(title: "Send Feedback", status: "Soon")
+            SettingsCard(
+                style: .secondary(
+                    contentInset: SettingsLayout.cardContentInset,
+                    cornerRadius: SettingsLayout.secondaryCardCornerRadius
+                ),
+                accentOverlay: { EmptyView() }
+            ) {
+                VStack(spacing: 0) {
+                    SettingsPlaceholderRow(title: "Send Feedback", status: "Soon")
 
-                SettingsDivider()
+                    SettingsDivider()
 
-                SettingsPlaceholderRow(title: "Share App", status: "Soon")
+                    SettingsPlaceholderRow(title: "Share App", status: "Soon")
+
+                    SettingsDivider()
+
+                    Button {
+                        isShowingClearHistoryAlert = true
+                    } label: {
+                        SettingsDestructiveActionRow(
+                            title: "Clear Productivity History",
+                            subtitle: hasProductivityHistory
+                                ? "Delete all completed sessions and stats"
+                                : "No history yet",
+                            disabled: !hasProductivityHistory
+                        )
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(!hasProductivityHistory)
+                    .accessibilityHint(
+                        hasProductivityHistory
+                            ? "Shows a final confirmation before deleting all completed sessions and stats."
+                            : "No completed session history to delete."
+                    )
+                }
             }
         }
+        .alert("Delete all productivity history?", isPresented: $isShowingClearHistoryAlert) {
+            Button("Cancel", role: .cancel) {}
+            Button("Delete History", role: .destructive) {
+                store.clearProductivityHistory()
+            }
+        } message: {
+            Text("This action can't be undone. Current session and timer settings will stay as they are.")
+        }
+    }
+
+    private var hasProductivityHistory: Bool {
+        !store.completedSessions.isEmpty
+            || store.productivityCache.completedSessionCount > 0
+            || !store.productivityCache.dailySummaries.isEmpty
     }
 }
 
@@ -173,7 +207,7 @@ private struct SettingsToggleRow: View {
     }
 }
 
-private struct SettingsValueRow: View {
+private struct SettingsNavigationValueRow: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
@@ -185,13 +219,13 @@ private struct SettingsValueRow: View {
             if dynamicTypeSize.isAccessibilitySize {
                 VStack(alignment: .leading, spacing: 10) {
                     titleLabel
-                    valueLabel
+                    trailingValue
                 }
             } else {
                 HStack(spacing: 14) {
                     titleLabel
                     Spacer(minLength: 12)
-                    valueLabel
+                    trailingValue
                 }
             }
         }
@@ -205,17 +239,143 @@ private struct SettingsValueRow: View {
             .foregroundStyle(SettingsTheme.primaryTextColor(for: colorScheme))
     }
 
-    private var valueLabel: some View {
-        HStack(spacing: 10) {
+    private var trailingValue: some View {
+        HStack(spacing: 8) {
             Text(value)
                 .font(.system(.body, weight: .semibold))
                 .foregroundStyle(SettingsTheme.primaryTextColor(for: colorScheme))
                 .multilineTextAlignment(.trailing)
+                .lineLimit(1)
 
-            Image(systemName: "chevron.up.chevron.down")
-                .font(.system(size: 13, weight: .semibold))
+            Image(systemName: "chevron.right")
+                .font(.system(size: 12, weight: .semibold))
                 .foregroundStyle(SettingsTheme.secondaryTextColor(for: colorScheme))
         }
+    }
+}
+
+private struct SettingsDestructiveActionRow: View {
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    let title: String
+    let subtitle: String
+    let disabled: Bool
+
+    var body: some View {
+        Group {
+            if dynamicTypeSize.isAccessibilitySize {
+                VStack(alignment: .leading, spacing: 10) {
+                    labelStack
+                    trailingIcon
+                }
+            } else {
+                HStack(spacing: 14) {
+                    labelStack
+                    Spacer(minLength: 12)
+                    trailingIcon
+                }
+            }
+        }
+        .padding(.vertical, SettingsLayout.rowVerticalPadding)
+        .contentShape(Rectangle())
+        .opacity(disabled ? 0.72 : 1)
+    }
+
+    private var labelStack: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .font(.system(.body, weight: .semibold))
+                .foregroundStyle(destructiveTextColor)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Text(subtitle)
+                .font(.system(.footnote, weight: .medium))
+                .foregroundStyle(SettingsTheme.secondaryTextColor(for: colorScheme))
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private var trailingIcon: some View {
+        Image(systemName: "trash")
+            .font(.system(size: 14, weight: .semibold))
+            .foregroundStyle(disabled ? SettingsTheme.secondaryTextColor(for: colorScheme) : destructiveTextColor)
+    }
+
+    private var destructiveTextColor: Color {
+        colorScheme == .dark ? Color.red.opacity(0.86) : Color.red.opacity(0.82)
+    }
+}
+
+private struct SettingsSoundChoiceScreen: View {
+    @EnvironmentObject private var store: PomodoroStore
+
+    private var soundOptions: [SoundOption] {
+        SoundOption.allCases
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            SettingsCard(
+                style: .secondary(
+                    contentInset: SettingsLayout.cardContentInset,
+                    cornerRadius: SettingsLayout.secondaryCardCornerRadius
+                ),
+                accentOverlay: { EmptyView() }
+            ) {
+                VStack(spacing: 0) {
+                    ForEach(Array(soundOptions.enumerated()), id: \.element.id) { index, option in
+                        Button {
+                            store.setSelectedSound(option)
+                        } label: {
+                            SettingsSoundChoiceOptionRow(
+                                title: option.title,
+                                isSelected: store.settings.selectedSound == option
+                            )
+                        }
+                        .buttonStyle(.plain)
+
+                        if index < soundOptions.count - 1 {
+                            SettingsDivider()
+                        }
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .padding(.horizontal, SettingsLayout.pageHorizontalInset)
+        .padding(.top, SettingsLayout.pageTopInset)
+        .padding(.bottom, SettingsLayout.pageBottomInset)
+        .navigationTitle("Reminder Sound")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+private struct SettingsSoundChoiceOptionRow: View {
+    @Environment(\.colorScheme) private var colorScheme
+
+    let title: String
+    let isSelected: Bool
+
+    var body: some View {
+        HStack(spacing: 14) {
+            Text(title)
+                .font(.system(.body, weight: .semibold))
+                .foregroundStyle(SettingsTheme.primaryTextColor(for: colorScheme))
+
+            Spacer(minLength: 12)
+
+            if isSelected {
+                Image(systemName: "checkmark")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(SettingsTheme.sectionAccentColor(for: colorScheme))
+            }
+        }
+        .padding(.vertical, SettingsLayout.rowVerticalPadding)
+        .contentShape(Rectangle())
     }
 }
 

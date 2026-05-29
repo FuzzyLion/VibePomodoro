@@ -18,6 +18,8 @@ struct ProductivityCardChromeStyle {
     let surfaceLightTopOpacity: Double
     let surfaceDarkBottomOpacity: Double
     let surfaceLightBottomOpacity: Double
+    let glassTintDarkOpacity: Double
+    let glassTintLightOpacity: Double
 
     static func summary(contentInset: CGFloat, cornerRadius: CGFloat) -> Self {
         ProductivityCardChromeStyle(
@@ -37,7 +39,9 @@ struct ProductivityCardChromeStyle {
             surfaceDarkTopOpacity: 0.035,
             surfaceLightTopOpacity: 0.20,
             surfaceDarkBottomOpacity: 0.01,
-            surfaceLightBottomOpacity: 0.08
+            surfaceLightBottomOpacity: 0.08,
+            glassTintDarkOpacity: 0.045,
+            glassTintLightOpacity: 0.12
         )
     }
 
@@ -59,7 +63,9 @@ struct ProductivityCardChromeStyle {
             surfaceDarkTopOpacity: 0,
             surfaceLightTopOpacity: 0,
             surfaceDarkBottomOpacity: 0,
-            surfaceLightBottomOpacity: 0
+            surfaceLightBottomOpacity: 0,
+            glassTintDarkOpacity: 0.035,
+            glassTintLightOpacity: 0.08
         )
     }
 
@@ -100,6 +106,10 @@ struct ProductivityCardChromeStyle {
             endPoint: .bottomTrailing
         )
     }
+
+    func glassTint(for colorScheme: ColorScheme) -> Color {
+        Color.white.opacity(colorScheme == .dark ? glassTintDarkOpacity : glassTintLightOpacity)
+    }
 }
 
 private struct ProductivityGlassCardModifier<AccentOverlay: View>: ViewModifier {
@@ -108,14 +118,24 @@ private struct ProductivityGlassCardModifier<AccentOverlay: View>: ViewModifier 
     let accentOverlay: AccentOverlay
 
     func body(content: Content) -> some View {
+        let shape = RoundedRectangle(cornerRadius: style.cornerRadius, style: .continuous)
+
         content
-            .background(cardBackground)
+            .background {
+                shape
+                    .fill(style.surfaceGradient(for: colorScheme))
+                    .overlay {
+                        accentOverlay
+                            .clipShape(shape)
+                    }
+            }
+            .glassEffect(.regular.tint(style.glassTint(for: colorScheme)), in: shape)
             .overlay {
-                RoundedRectangle(cornerRadius: style.cornerRadius, style: .continuous)
+                shape
                     .strokeBorder(style.borderColor(for: colorScheme), lineWidth: style.borderLineWidth)
             }
             .overlay(alignment: .top) {
-                RoundedRectangle(cornerRadius: style.cornerRadius, style: .continuous)
+                shape
                     .fill(style.topHighlightGradient(for: colorScheme))
                     .frame(height: 1)
                     .padding(.horizontal, style.highlightHorizontalInset)
@@ -125,18 +145,6 @@ private struct ProductivityGlassCardModifier<AccentOverlay: View>: ViewModifier 
                 radius: style.shadowRadius(for: colorScheme),
                 y: style.shadowYOffset(for: colorScheme)
             )
-    }
-
-    private var cardBackground: some View {
-        RoundedRectangle(cornerRadius: style.cornerRadius, style: .continuous)
-            .fill(.thinMaterial)
-            .overlay {
-                RoundedRectangle(cornerRadius: style.cornerRadius, style: .continuous)
-                    .fill(style.surfaceGradient(for: colorScheme))
-            }
-            .overlay {
-                accentOverlay
-            }
     }
 }
 

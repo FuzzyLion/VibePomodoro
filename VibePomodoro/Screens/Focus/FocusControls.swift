@@ -1,42 +1,47 @@
 import SwiftUI
 
-struct PhaseStatusBadge: View {
+enum FocusControlColors {
+    static func statusTitleColor(for colorScheme: ColorScheme) -> Color {
+        colorScheme == .dark
+            ? VibePalette.warmBackground.opacity(0.92)
+            : VibePalette.labelPrimary.opacity(0.84)
+    }
+
+    static var lightProminentButtonForeground: Color {
+        VibePalette.labelPrimary.opacity(0.68)
+    }
+}
+
+struct FocusStatusTitle: View {
     @Environment(\.colorScheme) private var colorScheme
 
     let text: String
     let phase: SessionPhase
 
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 6) {
             Circle()
                 .fill(phase.tintColor)
-                .frame(width: 8, height: 8)
-                .shadow(color: phase.shadowColor.opacity(0.18), radius: 4)
+                .frame(width: 6.5, height: 6.5)
+                .shadow(color: phase.shadowColor.opacity(colorScheme == .dark ? 0.20 : 0.14), radius: 3)
 
-            Text(text)
-                .font(.system(size: 13, weight: .semibold, design: .default))
-                .tracking(1.48)
-                .textCase(.uppercase)
+            Text(displayText)
+                .font(.system(size: 18, weight: .semibold, design: .default))
+                .tracking(-0.2)
                 .lineLimit(1)
-                .fixedSize(horizontal: true, vertical: false)
+                .minimumScaleFactor(0.84)
+                .foregroundStyle(titleColor)
         }
-        .foregroundStyle(VibePalette.glassTextStrong(for: colorScheme))
-        .padding(.horizontal, 18)
-        .padding(.vertical, 8)
-        .background {
-            GlassCapsuleShell(
-                tint: phase.glassTint.opacity(0.22),
-                darkStrokeOpacity: 0.44,
-                lightStrokeOpacity: 0.52
-            )
-        }
-        .frame(minHeight: 31.5)
-        .shadow(
-            color: Color.black.opacity(colorScheme == .dark ? 0.022 : 0.035),
-            radius: colorScheme == .dark ? 4 : 6,
-            y: 1
-        )
+        .frame(minHeight: FocusScreenLayout.topActionButtonVisualSize)
         .zIndex(4)
+    }
+
+    private var displayText: String {
+        text.lowercased().capitalized
+    }
+
+    private var titleColor: Color {
+        FocusControlColors.statusTitleColor(for: colorScheme)
     }
 }
 
@@ -46,49 +51,17 @@ enum SessionProgressNodeState: Equatable {
     case filled
 }
 
-struct SessionProgressPill: View {
-    @Environment(\.colorScheme) private var colorScheme
-
+struct SessionProgressDots: View {
     let phase: SessionPhase
     let nodeStates: [SessionProgressNodeState]
 
     var body: some View {
         HStack(spacing: 10) {
             ForEach(Array(nodeStates.enumerated()), id: \.offset) { _, state in
-                SessionProgressNode(state: state)
+                SessionProgressNode(phase: phase, state: state)
             }
         }
-        .padding(.horizontal, 28)
-        .padding(.vertical, 10)
-        .background {
-            GlassCapsuleShell(
-                tint: VibePalette.warmAmberAccent.opacity(0.05),
-                darkStrokeOpacity: 0.42,
-                lightStrokeOpacity: 0.50
-            )
-        }
-        .background {
-            Capsule(style: .continuous)
-                .fill(
-                    LinearGradient(
-                        colors: [
-                            phase.shadowColor.opacity(colorScheme == .dark ? 0.07 : 0.05),
-                            Color.clear
-                        ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-                .blur(radius: colorScheme == .dark ? 12 : 10)
-                .padding(.horizontal, -8)
-                .padding(.vertical, -6)
-        }
-        .frame(minHeight: 31.5)
-        .shadow(
-            color: Color.black.opacity(colorScheme == .dark ? 0.02 : 0.03),
-            radius: colorScheme == .dark ? 6 : 8,
-            y: colorScheme == .dark ? 1 : 2
-        )
+        .frame(minHeight: 12)
         .zIndex(4)
     }
 }
@@ -96,38 +69,52 @@ struct SessionProgressPill: View {
 private struct SessionProgressNode: View {
     @Environment(\.colorScheme) private var colorScheme
 
+    let phase: SessionPhase
     let state: SessionProgressNodeState
+
+    private let dotDiameter: CGFloat = 8.5
 
     var body: some View {
         Circle()
-            .fill(VibePalette.inactiveGlassDot(for: colorScheme))
+            .fill(inactiveFill)
             .overlay {
                 if state != .inactive {
                     Circle()
                         .fill(activeFill)
                         .mask(alignment: .leading) {
                             Rectangle()
-                                .frame(width: state == .half ? 5 : 10)
+                                .frame(width: state == .half ? dotDiameter / 2 : dotDiameter)
                         }
                 }
             }
             .overlay {
                 Circle()
-                    .stroke(Color.white.opacity(colorScheme == .dark ? 0.18 : 0.30), lineWidth: 0.4)
+                    .stroke(borderColor, lineWidth: 0.45)
             }
-            .frame(width: 9, height: 9)
+            .frame(width: dotDiameter, height: dotDiameter)
             .shadow(
                 color: state == .inactive
                     ? .clear
-                    : VibePalette.warmAmberAccent.opacity(colorScheme == .dark ? 0.22 : 0.12),
-                radius: 2.5
+                    : phase.shadowColor.opacity(colorScheme == .dark ? 0.22 : 0.13),
+                radius: 2.5,
+                y: 0.5
             )
+    }
+
+    private var inactiveFill: Color {
+        colorScheme == .dark
+            ? Color.white.opacity(0.14)
+            : VibePalette.labelSecondary.opacity(0.16)
+    }
+
+    private var borderColor: Color {
+        Color.white.opacity(colorScheme == .dark ? 0.14 : 0.28)
     }
 
     private var activeFill: AnyShapeStyle {
         AnyShapeStyle(
             LinearGradient(
-                colors: [VibePalette.warmAmberAccent, VibePalette.warmAmberAccentDeep],
+                colors: [phase.tintColor, phase.shadowColor],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )
@@ -135,113 +122,143 @@ private struct SessionProgressNode: View {
     }
 }
 
-struct SecondaryActionButton: View {
+struct FocusTopBarButton: View {
     @Environment(\.colorScheme) private var colorScheme
 
-    let title: String
     let systemImage: String
     let isEnabled: Bool
-    let glassTint: Color
+    let accessibilityLabel: String
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
-            GlassCapsuleShell(
-                tint: glassTint.opacity(colorScheme == .dark ? 0.12 : 0.10),
-                darkStrokeOpacity: 0.42,
-                lightStrokeOpacity: 0.50
+            Image(systemName: systemImage)
+                .font(.system(size: 17, weight: .medium))
+                .foregroundStyle(toolbarSymbolColor)
+                .frame(
+                    width: FocusScreenLayout.topActionButtonVisualSize,
+                    height: FocusScreenLayout.topActionButtonVisualSize
+                )
+        }
+        .buttonStyle(.glass(topBarGlass))
+        .buttonBorderShape(.circle)
+        .disabled(!isEnabled)
+        .opacity(isEnabled ? 1 : 0.34)
+        .animation(nil, value: isEnabled)
+        .accessibilityLabel(accessibilityLabel)
+        .accessibilityAddTraits(.isButton)
+        .zIndex(4)
+    }
+
+    private var toolbarSymbolColor: Color {
+        colorScheme == .dark
+            ? VibePalette.amberGold.opacity(0.86)
+            : VibePalette.warmAmberAccentDeep.opacity(0.88)
+    }
+
+    private var topBarGlass: Glass {
+        .regular
+            .tint(Color.white.opacity(colorScheme == .dark ? 0.06 : 0.12))
+    }
+}
+
+struct FocusBottomSecondaryButton: View {
+    @Environment(\.colorScheme) private var colorScheme
+
+    let systemImage: String
+    let isEnabled: Bool
+    let accessibilityLabel: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: systemImage)
+                .font(.system(size: 18, weight: .medium))
+                .foregroundStyle(secondaryIconColor.opacity(isEnabled ? 1 : 0.38))
+                .frame(
+                    width: FocusScreenLayout.bottomSecondaryButtonSize,
+                    height: FocusScreenLayout.bottomSecondaryButtonSize
+                )
+        }
+        .buttonStyle(.glass(bottomButtonGlass))
+        .buttonBorderShape(.circle)
+        .disabled(!isEnabled)
+        .accessibilityLabel(accessibilityLabel)
+        .accessibilityAddTraits(.isButton)
+        .zIndex(4)
+    }
+
+    private var secondaryIconColor: Color {
+        colorScheme == .dark
+            ? VibePalette.amberGold.opacity(0.84)
+            : VibePalette.warmAmberAccentDeep.opacity(0.88)
+    }
+
+    private var bottomButtonGlass: Glass {
+        .regular
+            .tint(Color.white.opacity(colorScheme == .dark ? 0.06 : 0.12))
+    }
+}
+
+struct FocusPrimaryControlButton: View {
+    @Environment(\.colorScheme) private var colorScheme
+
+    private static let elevatedContrastTitles: Set<String> = ["Pause", "Resume", "Start", "Start Again"]
+
+    let title: String
+    let systemImage: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 9) {
+                Image(systemName: systemImage)
+                    .font(.system(size: 15, weight: .semibold))
+
+                Text(title)
+                    .font(.system(size: 17, weight: .semibold, design: .default))
+                    .tracking(-0.18)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.88)
+            }
+            .foregroundStyle(primaryForegroundColor)
+            .frame(
+                minWidth: FocusScreenLayout.bottomPrimaryButtonMinWidth,
+                maxWidth: .infinity,
+                minHeight: FocusScreenLayout.bottomPrimaryButtonHeight,
+                maxHeight: FocusScreenLayout.bottomPrimaryButtonHeight
             )
-            .overlay {
-                HStack(spacing: 8) {
-                    Image(systemName: systemImage)
-                        .font(.system(size: 16, weight: .medium))
-
-                    Text(title)
-                        .font(.system(size: 15, weight: .semibold, design: .default))
-                        .tracking(-0.23)
-                }
-                .foregroundStyle(
-                    isEnabled
-                        ? VibePalette.glassTextSoft(for: colorScheme)
-                        : VibePalette.labelSecondary.opacity(0.68)
-                )
-            }
-            .frame(maxWidth: .infinity, minHeight: 50.5, maxHeight: 50.5)
         }
-        .buttonStyle(.plain)
-        .disabled(!isEnabled)
-        .shadow(
-            color: Color.black.opacity(colorScheme == .dark ? 0.035 : 0.03),
-            radius: colorScheme == .dark ? 3 : 4,
-            y: colorScheme == .dark ? 1 : 2
-        )
-        .opacity(isEnabled ? 1 : 0.72)
+        .buttonStyle(.glassProminent)
+        .tint(primaryTint)
+        .buttonBorderShape(.capsule)
+        .accessibilityLabel(title)
+        .accessibilityAddTraits(.isButton)
         .zIndex(4)
     }
-}
 
-private struct GlassCapsuleShell: View {
-    @Environment(\.colorScheme) private var colorScheme
-
-    let tint: Color
-    var material: Material = .thinMaterial
-    var darkStrokeOpacity: Double = 0.40
-    var lightStrokeOpacity: Double = 0.48
-
-    var body: some View {
-        Capsule(style: .continuous)
-            .fill(material)
-            .overlay {
-                Capsule(style: .continuous)
-                    .fill(colorScheme == .dark ? tint.opacity(0.72) : tint)
-            }
-            .overlay {
-                Capsule(style: .continuous)
-                    .fill(
-                        LinearGradient(
-                            colors: [
-                                Color.white.opacity(colorScheme == .dark ? 0.045 : 0.025),
-                                Color.clear
-                            ],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                    )
-            }
-            .overlay {
-                Capsule(style: .continuous)
-                    .stroke(
-                        Color.white.opacity(
-                            colorScheme == .dark ? darkStrokeOpacity * 0.84 : lightStrokeOpacity
-                        ),
-                        lineWidth: 0.9
-                    )
-            }
-    }
-}
-
-struct TertiaryActionButton: View {
-    @Environment(\.colorScheme) private var colorScheme
-
-    let title: String
-    let systemImage: String
-    let isEnabled: Bool
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            Label(title, systemImage: systemImage)
-                .font(.system(size: 14, weight: .medium, design: .default))
-                .foregroundStyle(
-                    isEnabled
-                        ? VibePalette.glassTextMedium(for: colorScheme)
-                        : VibePalette.labelSecondary.opacity(0.68)
-                )
+    private var primaryForegroundColor: Color {
+        if colorScheme == .light, Self.elevatedContrastTitles.contains(title) {
+            return FocusControlColors.lightProminentButtonForeground
         }
-        .buttonStyle(.plain)
-        .disabled(!isEnabled)
-        .padding(.top, 2)
-        .opacity(isEnabled ? 1 : 0.64)
-        .zIndex(4)
+
+        return .primary
+    }
+
+    private var primaryTint: Color {
+        switch title {
+        case "Pause":
+            return colorScheme == .dark
+                ? VibePalette.amberGold.opacity(0.58)
+                : VibePalette.warmAmberAccent.opacity(0.60)
+        case "Resume", "Start", "Start Again":
+            return colorScheme == .dark
+                ? VibePalette.softJade.opacity(0.22)
+                : VibePalette.softMistDeep.opacity(0.24)
+        default:
+            return colorScheme == .dark
+                ? VibePalette.amberGold.opacity(0.52)
+                : VibePalette.warmAmberAccent.opacity(0.54)
+        }
     }
 }

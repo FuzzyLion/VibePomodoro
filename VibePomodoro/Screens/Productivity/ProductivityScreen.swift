@@ -4,7 +4,7 @@ enum ProductivityLayout {
     static let sectionSpacing: CGFloat = 14
     static let pageHorizontalInset: CGFloat = 18
     static let pageTopInset: CGFloat = 12
-    static let pageBottomInset: CGFloat = 28
+    static let pageBottomInset: CGFloat = 60
 
     enum TrendGroup {
         static let populatedTopInset: CGFloat = 8
@@ -134,12 +134,11 @@ struct ProductivityScreen: View {
     @EnvironmentObject private var store: PomodoroStore
     @State private var selectedRange: ProductivityRange = .week
 
-    var body: some View {
-        let renderState = ProductivityRenderState.build(
-            store: store,
-            selectedRange: selectedRange
-        )
+    private var renderState: ProductivityRenderState {
+        ProductivityRenderState.build(store: store, selectedRange: selectedRange)
+    }
 
+    var body: some View {
         NavigationStack {
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: ProductivityLayout.sectionSpacing) {
@@ -182,9 +181,14 @@ private struct ProductivityRangeToolbarMenu: View {
 
     var body: some View {
         Menu {
-            Picker("Range", selection: $selectedRange) {
-                ForEach(ProductivityRange.allCases) { range in
-                    Text(range.displayTitle).tag(range)
+            ForEach(ProductivityRange.allCases) { range in
+                Button {
+                    selectRange(range)
+                } label: {
+                    ProductivityRangeMenuItemLabel(
+                        title: range.displayTitle,
+                        isSelected: selectedRange == range
+                    )
                 }
             }
         } label: {
@@ -198,5 +202,26 @@ private struct ProductivityRangeToolbarMenu: View {
 
     private var toolbarIconColor: Color {
         colorScheme == .dark ? VibePalette.warmBackground.opacity(0.92) : Color.black.opacity(0.66)
+    }
+
+    private func selectRange(_ range: ProductivityRange) {
+        selectedRange = range
+    }
+}
+
+private struct ProductivityRangeMenuItemLabel: View {
+    let title: String
+    let isSelected: Bool
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Text(title)
+
+            Spacer(minLength: 12)
+
+            if isSelected {
+                Image(systemName: "checkmark")
+            }
+        }
     }
 }

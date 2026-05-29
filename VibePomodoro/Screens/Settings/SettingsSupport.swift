@@ -3,9 +3,12 @@ import SwiftUI
 enum SettingsLayout {
     static let pageHorizontalInset: CGFloat = 18
     static let pageTopInset: CGFloat = 12
-    static let pageBottomInset: CGFloat = 28
-    static let pageSectionSpacing: CGFloat = 12
+    static let pageBottomInset: CGFloat = 60
+    static let pageSectionSpacing: CGFloat = 28
     static let cardContentInset: CGFloat = 20
+    static let cardVerticalInset: CGFloat = 4
+    static let summaryCardTopInset: CGFloat = 20
+    static let summaryCardBottomInset: CGFloat = cardVerticalInset
     static let summaryCardCornerRadius: CGFloat = 28
     static let secondaryCardCornerRadius: CGFloat = 26
     static let rowVerticalPadding: CGFloat = 14
@@ -14,7 +17,8 @@ enum SettingsLayout {
     static let controlValueWidth: CGFloat = 58
     static let controlValueHorizontalPadding: CGFloat = 8
     static let sectionTitleTracking: CGFloat = 1.0
-    static let headerBottomPadding: CGFloat = 12
+    static let cardHeaderBottomSpacing: CGFloat = 12
+    static let sectionHeaderBottomSpacing: CGFloat = 8
 }
 
 enum SettingsAdjustmentDirection {
@@ -113,7 +117,8 @@ enum SettingsTimerField: String, CaseIterable, Identifiable {
     var allowedValues: [Int] {
         switch self {
         case .focus:
-            return Array(stride(from: 15, through: 90, by: 5))
+            // Temporary QA hook: keep a 1 minute focus option available for transition testing.
+            return [1] + Array(stride(from: 15, through: 90, by: 5))
         case .shortBreak:
             return [5, 10]
         case .longBreak:

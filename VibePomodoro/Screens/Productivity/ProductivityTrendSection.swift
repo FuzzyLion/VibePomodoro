@@ -226,25 +226,36 @@ private struct ProductivityCustomXAxis: View {
     let textColor: Color
 
     var body: some View {
-        let slotWidth = plotFrame.width / CGFloat(max(buckets.count, 1))
-
-        ZStack(alignment: .topLeading) {
-            ForEach(Array(buckets.enumerated()), id: \.element.id) { index, bucket in
-                Text(ProductivityChartFormatting.xAxisLabel(for: bucket.labelDate, range: range))
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(textColor)
-                    .lineLimit(1)
-                    .minimumScaleFactor(ProductivityLayout.ChartAxis.labelMinimumScaleFactor)
-                    .frame(width: slotWidth, alignment: .center)
-                    .position(
-                        x: plotFrame.minX + slotWidth * (CGFloat(index) + 0.5),
-                        y: 8
-                    )
+        if hasValidPlotFrame {
+            ZStack(alignment: .topLeading) {
+                ForEach(Array(buckets.enumerated()), id: \.element.id) { index, bucket in
+                    Text(ProductivityChartFormatting.xAxisLabel(for: bucket.labelDate, range: range))
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(textColor)
+                        .lineLimit(1)
+                        .minimumScaleFactor(ProductivityLayout.ChartAxis.labelMinimumScaleFactor)
+                        .frame(width: slotWidth, alignment: .center)
+                        .position(
+                            x: plotFrame.minX + slotWidth * (CGFloat(index) + 0.5),
+                            y: 8
+                        )
+                }
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .allowsHitTesting(false)
-        .accessibilityHidden(true)
+    }
+
+    private var hasValidPlotFrame: Bool {
+        plotFrame.width.isFinite
+            && plotFrame.height.isFinite
+            && plotFrame.width > 0
+            && plotFrame.height > 0
+    }
+
+    private var slotWidth: CGFloat {
+        plotFrame.width / CGFloat(max(buckets.count, 1))
     }
 }
 

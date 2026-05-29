@@ -13,13 +13,34 @@ Before coding:
 VibePomodoro/
 ├── VibePomodoroApp.swift
 ├── ContentView.swift
-├── PomodoroModels.swift
-├── PomodoroStore.swift
+├── Core/
+│   ├── Engine/
+│   │   └── PomodoroEngine.swift
+│   ├── Models/
+│   │   ├── PomodoroTypes.swift
+│   │   ├── SessionModels.swift
+│   │   └── ProductivityModels.swift
+│   └── Store/
+│       ├── PomodoroStore.swift
+│       ├── PomodoroStore+Settings.swift
+│       ├── PomodoroStore+Lifecycle.swift
+│       ├── PomodoroStore+Notifications.swift
+│       ├── PomodoroStore+Persistence.swift
+│       └── PomodoroStore+Productivity.swift
 ├── Screens/
 │   ├── Focus/
 │   │   ├── FocusScreen.swift
+│   │   ├── FocusRenderState.swift
+│   │   ├── FocusLayout.swift
+│   │   ├── FocusScreenSupport.swift
+│   │   ├── FocusChrome.swift
 │   │   ├── FocusControls.swift
-│   │   └── FocusBubbleTimer.swift
+│   │   ├── FocusBubbleTimer.swift
+│   │   ├── FocusBubbleTimerDigits.swift
+│   │   ├── FocusBubbleTimerGeometry.swift
+│   │   ├── FocusBubbleTimerGlass.swift
+│   │   ├── FocusBubbleTimerSurface.swift
+│   │   └── FocusCompletionSummary.swift
 │   ├── Productivity/
 │   │   ├── ProductivityScreen.swift
 │   │   ├── ProductivityCardChrome.swift
@@ -56,13 +77,14 @@ VibePomodoro/
 ### 0.1.1 当前架构摘要
 
 - `VibePomodoroApp.swift` 创建单一 `@StateObject PomodoroStore`，并把它注入整个 app。
-- `ContentView.swift` 只负责全局背景与 `TabView`，不承载业务状态机。
-- `PomodoroModels.swift` 定义核心数据模型、统计结构和 `PomodoroEngine` 状态推进规则。
-- `PomodoroStore.swift` 是运行时唯一 source of truth，负责状态持有、持久化、通知、scene phase 协调和副作用触发。
+- `ContentView.swift` 负责全局背景、`TabView`，以及跨页面的底部导航显隐协作；不承载业务状态机。
+- `Core/Models/*` 定义核心数据模型、session 快照和 productivity 聚合结构。
+- `Core/Engine/PomodoroEngine.swift` 定义 session 状态推进规则与事件产出。
+- `Core/Store/*` 仍是运行时唯一 source of truth，但按 `主状态 / 设置 / 生命周期 / 通知 / 持久化 / 统计` 拆分职责。
 - `Screens/*` 负责页面级 UI 和页面专属子视图，不新增第二套全局状态源。
-- `Screens/Focus/*` 当前按 `页面骨架 / 页面专属控件 / 气泡计时器实现` 拆分，但仍属于同一页面边界。
+- `Screens/Focus/*` 当前按 `页面骨架 / render state / 布局 support / 页面 support / chrome 组合 / 页面专属控件 / 气泡计时器实现 / 完成总结 overlay` 拆分，但仍属于同一页面边界。
 - `Screens/Productivity/*` 当前按 `页面骨架 / 卡片玻璃壳 / 摘要区 / 趋势图区 / 图表支持逻辑` 拆分，但仍属于同一页面边界。
-- `Shared/*` 只承载跨页面复用的主题与通用 UI 外壳。
+- `Shared/*` 只承载跨页面复用的主题与通用 UI 外壳；全局背景、玻璃容器与系统底栏显隐桥接也归这里。
 
 ### 0.1.2 单一状态来源
 
@@ -106,6 +128,12 @@ VibePomodoro/
   - `Productivity` 正式统计不读取进行中的 session
   - 只有在 `.sessionCompleted` 时，才把该 session 写入 `completedSessions` 并增量更新 `productivityCache`
   - cache 缺失、版本不匹配或 session 集合不一致时，从 `completedSessions` 全量重建
+- `Focus` 沉浸模式视觉流：
+  - `FocusScreen` 在页面内维护 `isImmersive / isRestoringImmersiveLayout / immersiveVisualsHidden`
+  - 页面内 chrome 与气泡内主按钮的淡入淡出由同一个 SwiftUI 动画驱动
+  - `FocusScreen` 通过父层 binding 向 `ContentView` 发出底部导航显隐信号
+  - `ContentView` 把该信号交给 `Shared/UI/SharedShell.swift` 中的系统 `Tab Bar` 可见性桥接层
+  - 状态栏 / system overlays 仍由 `FocusScreen` 直接控制，底部导航的全局显隐则属于父层协作
 
 ### 0.1.4 页面与状态边界
 
@@ -113,9 +141,18 @@ VibePomodoro/
   - 读取 `PomodoroStore`
   - 生成 `FocusRenderState`
   - 当前目录内拆分为：
-    - `FocusScreen.swift`：render state、页面骨架、布局常量
+    - `FocusScreen.swift`：页面骨架、沉浸模式状态同步与系统显隐协作
+    - `FocusRenderState.swift`：`FocusRenderState / BubbleRenderState` 与 Focus 页显示态推导
+    - `FocusLayout.swift`：布局常量、safe area 适配与气泡 anchor support
+    - `FocusScreenSupport.swift`：bubble 几何计算、chrome 可见性与沉浸模式辅助规则
+    - `FocusChrome.swift`：Focus 页面 chrome 组合、操作层装配与 page content 骨架
     - `FocusControls.swift`：状态条、session 条、次级按钮与胶囊玻璃壳
-    - `FocusBubbleTimer.swift`：气泡、液面动画、时间数字与玻璃球绘制
+    - `FocusBubbleTimer.swift`：气泡主入口、phase morph 与液体视觉态过渡编排
+    - `FocusBubbleTimerDigits.swift`：倒计时数字与前景内容绘制
+    - `FocusBubbleTimerGeometry.swift`：气泡 shell profile、shape geometry 与插值支撑
+    - `FocusBubbleTimerGlass.swift`：玻璃背板与 rim overlay 绘制
+    - `FocusBubbleTimerSurface.swift`：液面动画、glow、Canvas 绘制与波形路径
+    - `FocusCompletionSummary.swift`：session 完成总结 overlay 与格式化显示
   - 页面内只做显示层拆分，不能自建 session 状态机
   - 计时数字按 `1Hz` 刷新，气泡动画按低帧率刷新，仅在 `Focus` tab 可见且 session 运行时激活
 - `ProductivityScreen`：
@@ -124,7 +161,7 @@ VibePomodoro/
   - 范围选择只保留 `Week / Month / Year`
   - 页面本身不持有统计真值，只持有本地 UI 选择态 `selectedRange`
   - 当前目录内拆分为：
-    - `ProductivityScreen.swift`：页面骨架、布局常量、range toolbar 与页面 render state
+    - `ProductivityScreen.swift`：页面骨架、布局常量、icon-only range toolbar menu 与页面 render state
     - `ProductivityCardChrome.swift`：Productivity 专属玻璃卡片壳
     - `ProductivitySummarySection.swift`：顶部摘要卡与 empty note
     - `ProductivityTrendSection.swift`：趋势卡、指标枚举与自定义 `x` 轴
@@ -132,8 +169,9 @@ VibePomodoro/
 - `SettingsScreen`：
   - 直接绑定 `store.settings`
   - 设置修改只走 store 的 update/set 接口，不直接改 model 副本
+  - 设置页出现时只负责触发 store 侧 normalization，不在页面内重复维护离散档位吸附逻辑
   - 当前目录内拆分为：
-    - `SettingsScreen.swift`：页面骨架、section 排列与设置值 normalization 触发
+    - `SettingsScreen.swift`：页面骨架、section 排列与 store normalization 触发
     - `SettingsSupport.swift`：布局常量、色彩映射、`SettingsTimerField` 离散档位与辅助规则
     - `SettingsCardChrome.swift`：Settings 专属卡片壳、header 与 divider
     - `SettingsSessionRhythmSection.swift`：`Session Rhythm` 主设置卡与 stepper row
@@ -151,22 +189,29 @@ VibePomodoro/
   - `Session Rhythm` 作为主设置卡
   - `Alerts / Display / Other` 作为同一家族下的次级设置卡
 - `Session Rhythm` 使用离散档位，不提供自由输入：
-  - `Focus`：`15...90`，每 `5` 分钟一档
+  - `Focus`：临时保留 `1` 分钟测试档位，并保留正式档位 `15...90`、每 `5` 分钟一档；`1` 分钟只用于 QA / 动画调试，发布前需要移除
   - `Short Break`：`5 / 10`
   - `Long Break`：`15 / 20 / 30`
   - `Rounds`：`1...10`
 - `Session Rhythm` 标题上的 `Next session only` 必须保留；默认语义是：
   - 设置变更只影响下一次新 session
   - 不回写正在进行中的 session
-- 页面出现时，历史持久化的非标准时长与轮数会被吸附到最近合法值；该 normalization 不触发反馈。
+- 页面出现时，历史持久化的非标准时长与轮数会由 `PomodoroStore` 吸附到最近合法值；该 normalization 不触发反馈。
 - `Alerts` 内部当前存在明确依赖关系：
   - `Sound` 依赖 `Notifications`
   - `Sound Choice` 仅在 `Notifications` 与 `Sound` 都开启时显示
 - `Display` 当前只承载 `Keep Screen On`，语义限定为 `Active sessions only`
-- `Other` 当前仍是占位区：
+- `Other` 当前包含占位项与维护动作：
   - `Send Feedback`
   - `Share App`
   - 两者状态都为 `Soon`
+  - `Clear Productivity History`
+- `Clear Productivity History` 的默认语义是：
+  - 只清空已完成历史统计，不影响当前进行中的 session
+  - 删除对象为 `completedSessions` 与 `productivityCache`
+  - 行入口常驻，但在没有历史数据时禁用并显示 `No history yet`
+  - 点击后直接进入最终 destructive `alert`，不再经过中间确认菜单
+  - 该行标题可保留危险语义，但辅助副标题应维持普通次级灰，避免整行过度发红
 
 ### 0.1.4.2 Productivity 当前 UI 对齐备注
 
@@ -182,10 +227,30 @@ VibePomodoro/
   - 主卡是页面第一视觉锚点
   - 趋势卡应更低调，属于分析层
   - 但四张卡仍需保持同一家族感，不能做成两套独立视觉系统
+- 右上角 range 选择当前基线是 icon-only `Menu`：
+  - 菜单内显式列出 `Week / Month / Year`
+  - 当前项在右侧显示 checkmark
+  - 默认不要回退到 `Menu` 内嵌 `Picker` 的实现
+- 若点击 range menu 时控制台仍出现 `Called -[UIContextMenuInteraction updateVisibleMenuWithBlock:] while no context menu is visible.`，当前按系统层噪音处理：
+  - 只要没有伴随交互异常、状态不同步或崩溃，就不作为当前线程的优先修复项
+  - 后续只有在确认出现真实行为问题时，才重新打开这条线
 - 如果后续 thread 继续打磨 `Productivity`：
   - 以上述主卡版本为当前基线
   - 默认不要回到 `Finished sessions only` 副标题方案
   - 默认不要采用“更紧上半区 + 手动两行标题断句 + 明显收窄主卡与趋势卡间距”的那一版试验稿，除非线程内重新确认
+
+### 0.1.4.3 Focus BubbleTimer 当前 UI / 动画对齐备注
+
+- `FocusBubbleTimer*.swift` 是当前 Focus 气泡、液面、倒计时数字和玻璃球绘制的页面内落点；后续继续打磨主气泡时，默认不要把页面专属子组件上提到 `Shared/*`
+- 气泡视觉必须继续由 `BubbleRenderState` + `Date / targetEndDate` 推导；`TimelineView` 只负责刷新显示，不成为新的计时真值
+- phase morph 需要由单一 `BubblePhaseMorph` 同步驱动外壳形状、shell profile、rim、glow、liquid tint 与外层 mask；不要让液面先切到新 phase、外壳后切到新 phase
+- phase 切换时，液体视觉态应通过 `BubbleLiquidVisualState` 从旧 render state 连续插值到新 render state；不要直接读取新 phase 的液面进度来绘制第一帧
+- 液体层只保留外层 `.mask(phaseMorph.shape)` 作为最终裁剪；不要在 `Canvas` 内部再用另一份 shape path 做二次 clip，避免 mask 与液面使用不同动画时钟导致边缘错位
+- 液面终段填充当前基线是：结束前常规液面最多到 `0.94`，最后约 `2.8s` 基于 `remainingDuration(at:)` 用 smoothstep 连续插值到 `1.08`，让 `00:01 -> 00:00` 看起来接近灌满但不突然跳变
+- 不要恢复早期 `terminalBoost` 或 `timeText == "00:00"` 的离散填充方案；前者会导致最后几秒提前灌满，后者会导致 `00:01` 仍留大洞而 `00:00` 突然全满
+- 当前时间文案使用 rounded seconds，因此显示 `00:01` 并不等价于真实剩余时间正好 `1.0s`；液面终段动画应优先依赖连续 remaining duration，而不是依赖文案字符串
+- 终段 cue 可以收束 glow 和底部深度池，但不应把波幅压到接近静止；最后几秒水面仍应保留轻微运动
+- 深色模式下不要恢复大面积内部白雾或横向白光；暗色气泡应依靠柔和水线、边缘折射、底部 glow 与低透明度层次表达材质
 
 ### 0.1.5 功能应该放在哪里
 
@@ -193,10 +258,13 @@ VibePomodoro/
   - 放对应 `Screens/<Page>/...`
 - 改跨页面主题、背景、玻璃容器、共用标题：
   - 放 `Shared/Theme` 或 `Shared/UI`
+- 改全局底部导航的显隐协作、系统 `Tab Bar` 动画桥接：
+  - 放 `ContentView.swift` 或 `Shared/UI/*`
+  - 具体页面只负责发出“是否应隐藏全局 chrome”的视觉信号
 - 改 session 规则、统计口径、step 推进、时间真值：
-  - 放 `PomodoroModels.swift` 内的 model / engine
+  - 放 `Core/Models/*` 或 `Core/Engine/PomodoroEngine.swift`
 - 改持久化、通知、scene 恢复、idle timer、副作用协调：
-  - 放 `PomodoroStore.swift`
+  - 放 `Core/Store/*`
 - 新功能开始前，默认先回答三件事：
   - 当前架构是什么
   - 这个功能应该落在哪一层
@@ -333,6 +401,8 @@ MVP 需要支持的配置项：
 - `Productivity` 的指标卡总量基于已完成 session 的聚合缓存读取
 - `Productivity` 只保留 `W / M / Y`
 - `Productivity` 的 `W / M` 图按日缓存读取，`Y` 由日缓存卷到月
+- `Clear Productivity History` 会同时清空已完成 session 归档与 Productivity 聚合缓存
+- 清空历史后，`Productivity` 应立即回到 empty state；后续新完成的 session 会从零重新累计
 - `Skip` 记录当前阶段已发生时长，但不计入额外完成轮次
 - `Reset` 会清空当前 step 已结算时长
 - `Back to last step` 会回滚相关已结算统计
@@ -428,6 +498,7 @@ MVP 需要支持的配置项：
 补充说明：
 
 - 底部导航优先采用系统 `Tab Bar` / `Navigation` 的官方 `Liquid Glass` 样式
+- `Focus` 沉浸模式下，底部导航允许通过共享壳层对系统 `Tab Bar` 做协调显隐，但语义上仍应保持“系统导航栏”的感觉，而不是改造成独立页面组件
 - 自定义组件可以做玻璃化表达，但语言必须向系统靠拢
 
 ### 4.3 三个页面的角色
@@ -538,6 +609,8 @@ MVP 中的气泡不是追求高写实的流体特效，而是：
 - 玻璃层次应强调透明和流动，而不是厚重模糊
 - 浅色模式与深色模式必须属于同一套气泡语言，只允许在亮度、透明度和对比度上做模式适配，不允许做成两种完全不同的材质性格
 - 气泡本体应是清晰可辨的透明玻璃球，需要有边缘折射、高光、内阴影和轻微 caustic
+- `Focus` 主气泡可以带一点 rounded-squircle 的几何特征来建立识别度，但整体仍应被读作“稳定的计时容器”，不是会持续表演的 blob
+- `Short Break / Long Break` 的轮廓允许比 `Focus` 更放松，但三态差异必须克制，优先守住倒计时数字的居中、稳定与可读性
 - 不使用独立的上浮气泡粒子或螺旋气泡特效，液态存在感仅由液面波浪、折射光和轻微 caustic 提供
 - 当官方 `Liquid Glass` 语义不足以复现设计稿时，可以使用 `UltraThinMaterial` 作为基底，再叠加高光、描边、内阴影和底部折射光完成定制玻璃效果
 - 倒计时接近结束时，液面在视觉上必须真正灌满球体，不允许最后一秒仍明显留白
@@ -547,8 +620,8 @@ MVP 中的气泡不是追求高写实的流体特效，而是：
 
 ### 5.3 Focus 页操作层级
 
-- 主操作：气泡内部的 `Start / Pause / Resume`
-- 次级操作：`Skip` 与 `Reset`
+- 主操作：气泡下方主控制区内的 `Start / Pause / Resume`
+- 次级操作：`Reset`、`Skip`
 - 低频操作：`Back to last step`
 
 `Back to last step` 需要保留，但应以更轻的层级出现，而不是与主控制抢同等注意力。
@@ -557,11 +630,34 @@ MVP 中的气泡不是追求高写实的流体特效，而是：
 
 - `Back to last step` 只在计时已经开始后显示
 - 当计时尚未开始时，不显示该操作
-- 气泡中的 `Start / Pause / Resume` 按钮需要固定在数字正下方的中心区域，而不是因文字阴影或材质层变化而产生明显位移
-- 如果时间数字采用玻璃化高光语言，中间控制按钮也应保持同一套克制的玻璃语义
+- 主控制区默认与气泡共轴放置，并保持“贴气泡但拉开”的关系：
+  - 它属于同一组构图
+  - 但不应紧贴气泡下沿，避免页面显得头重脚轻
+  - 当前定稿基线允许这组 controls 保持“悬浮但更低”，更接近底部 tab bar 上缘，但仍不贴底部系统栏
+- `Reset / 状态灯 + 标题 / Finish early` 顶部 chrome 只承担辅助导航语义，不得做成厚重横条：
+  - 按钮视觉尺寸应向系统 toolbar item 靠拢
+  - 标题与状态灯应明显轻于倒计时数字
+  - 顶部整体应更接近 safe area 顶部，读起来像页面 chrome，而不是第二主视觉
+- 如果时间数字采用玻璃化高光语言，主控制按钮也应保持同一套克制的玻璃语义，但不能比时间本身更抢眼
+- `Pause` 与 `Resume / Start / Start Again` 需要保留明确的视觉语气差异：
+  - `Pause` 更中性、更安静
+  - `Resume / Start / Start Again` 可以略亮或略 tinted，但不能浓到像促销 CTA
+- 主控制按钮的宽度应按较长文案预留，不允许 `Resume` 因共享宽度而显得比 `Pause` 更挤
+- 底部 `Back / Skip` 图标的粗细、重量和顶部低频按钮必须属于同一套语言，不允许出现“上方轻、下方硬”的冲突
 - 当前定稿规则：
-  - 暗色模式中央图标保持暖白渐变
-  - 浅色模式中央图标与时间数字使用同一套深灰色语言，并保持纯色，不额外叠加特效
+  - 深色模式主控制区文字与图标保持暖白系，可接受轻微分层
+  - 浅色模式主控制区文字与图标保持更克制的深色系，不额外叠加炫技特效
+- `Reset / Finish early` 与底部 `Back / Skip` 的 `.glass` 实现必须遵循同一条结构规则：
+  - 按钮本体只承载可视玻璃圆
+  - 外层 slot 单独承接 hit area 与对位
+  - 不在 glass 本体上额外叠加会和系统交互态打架的 pressed / opacity 动画
+- 底部 `Back / Pause-Resume / Skip` 三按钮需要维持明确分离：
+  - 允许共享 glass sampling region，以减少 pressed 时的采样跳变
+  - 但不允许在点击时出现流体“吸附”或视觉粘连
+  - 如果使用 `GlassEffectContainer`，必须显式压低其 merge 行为，不能让相邻按钮在交互时自动融合成连续胶囊
+- 已验证的经验结论：
+  - 底部按钮此前的闪烁主要来自相邻独立 glass 的采样不一致
+  - 后续若要继续优化，优先调整 glass 宿主结构或 container 策略，不要退回自绘假玻璃
 
 ### 5.4 Focus 页状态条与 Session 条
 
@@ -575,8 +671,33 @@ MVP 中的气泡不是追求高写实的流体特效，而是：
 - `Focus` 阶段时，当前节点显示为半节点
 - 进入 `Short Break / Long Break` 后，对应节点变为实心
 - 尚未开始的后续节点保持低对比度未激活态
+- session 条同时承担“连接气泡与底部 controls”的过渡角色：
+  - 它不应做成独立的重材质装饰条
+  - 也不应弱到只剩散点点缀
+  - 它应帮助页面从主视觉自然过渡到控制区，而不是再制造一个新的视觉中心
 
-### 5.5 不采用“拖拽圆环改时长”的原因
+### 5.5 Focus 完成总结页
+
+- `Session complete / Session finished` 需要被视为独立确认层，而不是盖在完整 Focus 页面上的普通 overlay
+- 完成总结出现时，背景只保留极淡的气泡轮廓作为情绪延续，不再保留 back、status badge、skip、reset 与底部 tab bar
+- `COMPLETE` 仍保留为内部状态语义，但完成总结出现后不再继续占据顶部可见层级
+- 正常完成时，标题下方默认不再追加解释性副文案；提前结束时才保留一条简短说明
+- 完成卡片采用上紧下松的非对称留白，避免顶部空隙过大
+- `Done` 必须是居中的窄胶囊确认动作，而不是通栏底部条
+- `Done` 的当前定稿方向：
+  - 不加图标，只保留文字动作
+  - 材质与 `Pause / Resume` 属于同一家族的系统 glass 语义，而不是单独一套自绘 material
+  - tint 保持 calm，不做高饱和完成态强调
+  - 文字密度要明显高于早期试验稿：按钮略窄、字号略大，避免“字太小而按钮太空”
+- 完成总结的动效以 calm choreography 为原则：
+  - badge 先确认
+  - 标题与卡片随后进入
+  - `Done` 最后进入
+- 离开完成总结时，动作顺序应保持同一套克制层级，但不允许出现只剩黑遮罩和背景气泡停留过久的空档
+- 仅文字组适合使用 reveal mask；带圆角的卡片和按钮在进出场中不应再被 mask 切掉边角
+- `Reduce Motion` 下取消分段 choreography，退化为简单显隐
+
+### 5.6 不采用“拖拽圆环改时长”的原因
 
 这个想法被保留为未来可能性，但不进入 MVP。
 
@@ -593,7 +714,7 @@ MVP 中的气泡不是追求高写实的流体特效，而是：
 - `End Early`
 - `Adjust Duration`
 
-### 5.6 Focus 页性能约束
+### 5.7 Focus 页性能约束
 
 - `Focus` 页在真机上不应带来持续明显发热或肉眼可见的卡顿
 - 动态刷新频率应遵循“足够顺滑，而非默认满帧”的原则；液面与波动目标约为 `15-20fps` 级别即可
@@ -608,7 +729,7 @@ MVP 中的气泡不是追求高写实的流体特效，而是：
 
 而不是在主视觉上直接拖拽修改。
 
-### 5.7 当前 Focus 性能优化策略对齐
+### 5.8 当前 Focus 性能优化策略对齐
 
 以下内容用于和后续 threads 对齐，默认视为当前有效方向：
 
@@ -626,7 +747,7 @@ MVP 中的气泡不是追求高写实的流体特效，而是：
 
 最近一次真机 `30s Activity Monitor` 对比表明，这个方向已经明显降低了 CPU、wakeups 和磁盘读取，且 thermal 仍保持 `Nominal`。
 
-### 5.8 本项目中的玻璃理解与实现原则
+### 5.9 本项目中的玻璃理解与实现原则
 
 这个项目中的“玻璃”不是把 `blur / material / shadow / mask` 一层层堆到最重，而是尽量用更少的层表达更可信的材质。
 
@@ -672,6 +793,7 @@ MVP 中的气泡不是追求高写实的流体特效，而是：
 - `Focus (25min)`：`Amber Gold`
 - `Short Break (5min)`：`Soft Mist`
 - `Long Break (15min)`：`Soft Jade`
+- 即使 `Focus` 气泡几何参考了更有性格的 Figma 轮廓，也不引入紫色主题；几何可以借鉴，phase 配色语义不能漂移
 - 颜色不是主角，明度、透明度、材质和层级才是重点
 - 色彩应用应随 phase 微调，而不是做成高饱和主题切换
 
@@ -710,18 +832,52 @@ MVP 不需要额外寻找开源 PNG 照片素材。
 
 当前代码已经开始落地以上方案，主要结构如下：
 
-- [VibePomodoro/PomodoroModels.swift](./VibePomodoro/PomodoroModels.swift)
-  - 核心模型、状态机、事件定义、Productivity 日聚合缓存模型
-- [VibePomodoro/PomodoroStore.swift](./VibePomodoro/PomodoroStore.swift)
-  - 状态管理、持久化、通知调度、session 完成后的统计入账与缓存重建
+- [VibePomodoro/Core/Models/PomodoroTypes.swift](./VibePomodoro/Core/Models/PomodoroTypes.swift)
+  - 全局 tab、session phase、run state、提醒音与 settings 基础类型
+- [VibePomodoro/Core/Models/SessionModels.swift](./VibePomodoro/Core/Models/SessionModels.swift)
+  - session step、segment、snapshot、completed session 与运行期统计
+- [VibePomodoro/Core/Models/ProductivityModels.swift](./VibePomodoro/Core/Models/ProductivityModels.swift)
+  - Productivity 日聚合缓存、自然日 summary 与 range 类型
+- [VibePomodoro/Core/Engine/PomodoroEngine.swift](./VibePomodoro/Core/Engine/PomodoroEngine.swift)
+  - 状态机推进、step 切换、reconcile 与事件定义
+- [VibePomodoro/Core/Store/PomodoroStore.swift](./VibePomodoro/Core/Store/PomodoroStore.swift)
+  - store 主状态、对外动作入口与页面读取的派生属性
+- [VibePomodoro/Core/Store/PomodoroStore+Settings.swift](./VibePomodoro/Core/Store/PomodoroStore+Settings.swift)
+  - 设置更新、离散档位 normalization、提醒开关与调节 haptics
+- [VibePomodoro/Core/Store/PomodoroStore+Lifecycle.swift](./VibePomodoro/Core/Store/PomodoroStore+Lifecycle.swift)
+  - scene phase 协调、runtime 副作用刷新、step 边界 timer 与 session 完成入账
+- [VibePomodoro/Core/Store/PomodoroStore+Notifications.swift](./VibePomodoro/Core/Store/PomodoroStore+Notifications.swift)
+  - 本地通知权限与未来 step 边界提醒调度
+- [VibePomodoro/Core/Store/PomodoroStore+Persistence.swift](./VibePomodoro/Core/Store/PomodoroStore+Persistence.swift)
+  - UserDefaults 持久化、cache 修复与编解码辅助
+- [VibePomodoro/Core/Store/PomodoroStore+Productivity.swift](./VibePomodoro/Core/Store/PomodoroStore+Productivity.swift)
+  - Productivity snapshot、图表桶映射、streak 计算、统计查询与历史清空动作
 - [VibePomodoro/Screens/Focus/FocusScreen.swift](./VibePomodoro/Screens/Focus/FocusScreen.swift)
-  - Focus 页 render state、页面骨架与布局常量
+  - Focus 页页面骨架、沉浸模式状态同步事件接线与系统显隐协作
+- [VibePomodoro/Screens/Focus/FocusRenderState.swift](./VibePomodoro/Screens/Focus/FocusRenderState.swift)
+  - Focus 页 render state、时间显示态与操作可用性推导
+- [VibePomodoro/Screens/Focus/FocusLayout.swift](./VibePomodoro/Screens/Focus/FocusLayout.swift)
+  - Focus 页布局常量、safe area 适配与气泡 anchor support
+- [VibePomodoro/Screens/Focus/FocusScreenSupport.swift](./VibePomodoro/Screens/Focus/FocusScreenSupport.swift)
+  - Focus 页 bubble 几何计算、chrome 可见性与沉浸模式辅助规则
+- [VibePomodoro/Screens/Focus/FocusChrome.swift](./VibePomodoro/Screens/Focus/FocusChrome.swift)
+  - Focus 页 page content、top/bottom chrome 组合与操作层装配
 - [VibePomodoro/Screens/Focus/FocusControls.swift](./VibePomodoro/Screens/Focus/FocusControls.swift)
   - Focus 页状态条、session 条、次级按钮与胶囊玻璃控件
 - [VibePomodoro/Screens/Focus/FocusBubbleTimer.swift](./VibePomodoro/Screens/Focus/FocusBubbleTimer.swift)
-  - Focus 气泡、液面动画、倒计时数字刷新与玻璃球绘制
+  - Focus 气泡主入口、phase morph 与液体视觉态过渡编排
+- [VibePomodoro/Screens/Focus/FocusBubbleTimerDigits.swift](./VibePomodoro/Screens/Focus/FocusBubbleTimerDigits.swift)
+  - Focus 气泡倒计时数字刷新与前景内容绘制
+- [VibePomodoro/Screens/Focus/FocusBubbleTimerGeometry.swift](./VibePomodoro/Screens/Focus/FocusBubbleTimerGeometry.swift)
+  - Focus 气泡 shell profile、shape geometry 与插值支撑
+- [VibePomodoro/Screens/Focus/FocusBubbleTimerGlass.swift](./VibePomodoro/Screens/Focus/FocusBubbleTimerGlass.swift)
+  - Focus 气泡玻璃背板与 rim overlay 绘制
+- [VibePomodoro/Screens/Focus/FocusBubbleTimerSurface.swift](./VibePomodoro/Screens/Focus/FocusBubbleTimerSurface.swift)
+  - Focus 气泡液面动画、glow、Canvas 绘制与波形路径
+- [VibePomodoro/Screens/Focus/FocusCompletionSummary.swift](./VibePomodoro/Screens/Focus/FocusCompletionSummary.swift)
+  - Focus 完成总结独立确认层、文案格式化与完成态确认 UI
 - [VibePomodoro/Screens/Productivity/ProductivityScreen.swift](./VibePomodoro/Screens/Productivity/ProductivityScreen.swift)
-  - Productivity 页页面骨架、布局常量、本地 range 选择态与 render state
+  - Productivity 页页面骨架、布局常量、本地 range 选择态、icon-only range menu 与 render state
 - [VibePomodoro/Screens/Productivity/ProductivityCardChrome.swift](./VibePomodoro/Screens/Productivity/ProductivityCardChrome.swift)
   - Productivity 专属玻璃卡片壳与卡片 chrome modifier
 - [VibePomodoro/Screens/Productivity/ProductivitySummarySection.swift](./VibePomodoro/Screens/Productivity/ProductivitySummarySection.swift)
@@ -731,7 +887,7 @@ MVP 不需要额外寻找开源 PNG 照片素材。
 - [VibePomodoro/Screens/Productivity/ProductivityChartSupport.swift](./VibePomodoro/Screens/Productivity/ProductivityChartSupport.swift)
   - Productivity 图表格式化、桶映射与数值轴计算
 - [VibePomodoro/Screens/Settings/SettingsScreen.swift](./VibePomodoro/Screens/Settings/SettingsScreen.swift)
-  - Settings 页页面骨架、section 排列与 normalization 触发
+  - Settings 页页面骨架、section 排列与 store normalization 触发
 - [VibePomodoro/Screens/Settings/SettingsSupport.swift](./VibePomodoro/Screens/Settings/SettingsSupport.swift)
   - Settings 布局常量、色彩映射、离散档位规则与辅助逻辑
 - [VibePomodoro/Screens/Settings/SettingsCardChrome.swift](./VibePomodoro/Screens/Settings/SettingsCardChrome.swift)
@@ -739,7 +895,7 @@ MVP 不需要额外寻找开源 PNG 照片素材。
 - [VibePomodoro/Screens/Settings/SettingsSessionRhythmSection.swift](./VibePomodoro/Screens/Settings/SettingsSessionRhythmSection.swift)
   - `Session Rhythm` 主设置卡、stepper row 与时长更新映射
 - [VibePomodoro/Screens/Settings/SettingsPreferenceSections.swift](./VibePomodoro/Screens/Settings/SettingsPreferenceSections.swift)
-  - `Alerts / Display / Other` 次级设置卡与共用设置行组件
+  - `Alerts / Display / Other` 次级设置卡、共用设置行组件与清空 Productivity 历史确认入口
 - [VibePomodoro/Shared/Theme/VibeTheme.swift](./VibePomodoro/Shared/Theme/VibeTheme.swift)
   - 共享主题色板与 phase UI 扩展
 - [VibePomodoro/Shared/UI/SharedShell.swift](./VibePomodoro/Shared/UI/SharedShell.swift)

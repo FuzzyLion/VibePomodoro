@@ -18,6 +18,8 @@ struct SettingsCardChromeStyle {
     let surfaceLightTopOpacity: Double
     let surfaceDarkBottomOpacity: Double
     let surfaceLightBottomOpacity: Double
+    let glassTintDarkOpacity: Double
+    let glassTintLightOpacity: Double
 
     static func summary(contentInset: CGFloat, cornerRadius: CGFloat) -> Self {
         SettingsCardChromeStyle(
@@ -37,7 +39,9 @@ struct SettingsCardChromeStyle {
             surfaceDarkTopOpacity: 0.035,
             surfaceLightTopOpacity: 0.20,
             surfaceDarkBottomOpacity: 0.01,
-            surfaceLightBottomOpacity: 0.08
+            surfaceLightBottomOpacity: 0.08,
+            glassTintDarkOpacity: 0.045,
+            glassTintLightOpacity: 0.12
         )
     }
 
@@ -59,7 +63,9 @@ struct SettingsCardChromeStyle {
             surfaceDarkTopOpacity: 0,
             surfaceLightTopOpacity: 0,
             surfaceDarkBottomOpacity: 0,
-            surfaceLightBottomOpacity: 0
+            surfaceLightBottomOpacity: 0,
+            glassTintDarkOpacity: 0.035,
+            glassTintLightOpacity: 0.08
         )
     }
 
@@ -100,6 +106,10 @@ struct SettingsCardChromeStyle {
             endPoint: .bottomTrailing
         )
     }
+
+    func glassTint(for colorScheme: ColorScheme) -> Color {
+        Color.white.opacity(colorScheme == .dark ? glassTintDarkOpacity : glassTintLightOpacity)
+    }
 }
 
 private struct SettingsGlassCardModifier<AccentOverlay: View>: ViewModifier {
@@ -108,14 +118,24 @@ private struct SettingsGlassCardModifier<AccentOverlay: View>: ViewModifier {
     let accentOverlay: AccentOverlay
 
     func body(content: Content) -> some View {
+        let shape = RoundedRectangle(cornerRadius: style.cornerRadius, style: .continuous)
+
         content
-            .background(cardBackground)
+            .background {
+                shape
+                    .fill(style.surfaceGradient(for: colorScheme))
+                    .overlay {
+                        accentOverlay
+                            .clipShape(shape)
+                    }
+            }
+            .glassEffect(.regular.tint(style.glassTint(for: colorScheme)), in: shape)
             .overlay {
-                RoundedRectangle(cornerRadius: style.cornerRadius, style: .continuous)
+                shape
                     .strokeBorder(style.borderColor(for: colorScheme), lineWidth: style.borderLineWidth)
             }
             .overlay(alignment: .top) {
-                RoundedRectangle(cornerRadius: style.cornerRadius, style: .continuous)
+                shape
                     .fill(style.topHighlightGradient(for: colorScheme))
                     .frame(height: 1)
                     .padding(.horizontal, style.highlightHorizontalInset)
@@ -125,18 +145,6 @@ private struct SettingsGlassCardModifier<AccentOverlay: View>: ViewModifier {
                 radius: style.shadowRadius(for: colorScheme),
                 y: style.shadowYOffset(for: colorScheme)
             )
-    }
-
-    private var cardBackground: some View {
-        RoundedRectangle(cornerRadius: style.cornerRadius, style: .continuous)
-            .fill(.thinMaterial)
-            .overlay {
-                RoundedRectangle(cornerRadius: style.cornerRadius, style: .continuous)
-                    .fill(style.surfaceGradient(for: colorScheme))
-            }
-            .overlay {
-                accentOverlay
-            }
     }
 }
 
@@ -160,15 +168,21 @@ struct SettingsCard<Content: View, AccentOverlay: View>: View {
     @Environment(\.colorScheme) private var colorScheme
 
     let style: SettingsCardChromeStyle
+    let topInset: CGFloat
+    let bottomInset: CGFloat
     let accentOverlay: AccentOverlay
     let content: Content
 
     init(
         style: SettingsCardChromeStyle,
+        topInset: CGFloat = SettingsLayout.cardVerticalInset,
+        bottomInset: CGFloat = SettingsLayout.cardVerticalInset,
         @ViewBuilder accentOverlay: () -> AccentOverlay,
         @ViewBuilder content: () -> Content
     ) {
         self.style = style
+        self.topInset = topInset
+        self.bottomInset = bottomInset
         self.accentOverlay = accentOverlay()
         self.content = content()
     }
@@ -177,7 +191,9 @@ struct SettingsCard<Content: View, AccentOverlay: View>: View {
         VStack(alignment: .leading, spacing: 0) {
             content
         }
-        .padding(SettingsLayout.cardContentInset)
+        .padding(.horizontal, SettingsLayout.cardContentInset)
+        .padding(.top, topInset)
+        .padding(.bottom, bottomInset)
         .settingsGlassCard(
             colorScheme: colorScheme,
             style: style
@@ -213,7 +229,51 @@ struct SettingsCardHeader: View {
                 }
             }
         }
-        .padding(.bottom, SettingsLayout.headerBottomPadding)
+        .padding(.bottom, SettingsLayout.cardHeaderBottomSpacing)
+    }
+
+    private var titleLabel: some View {
+        Text(title)
+            .font(.system(size: 12, weight: .semibold))
+            .tracking(SettingsLayout.sectionTitleTracking)
+            .foregroundStyle(SettingsTheme.sectionLabelColor(for: colorScheme))
+            .accessibilityAddTraits(.isHeader)
+    }
+
+    private func trailingLabel(_ text: String) -> some View {
+        Text(text)
+            .font(.system(.footnote, weight: .semibold))
+            .foregroundStyle(SettingsTheme.sectionAccentColor(for: colorScheme))
+    }
+}
+
+struct SettingsSectionHeader: View {
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    let title: String
+    var trailingText: String? = nil
+
+    var body: some View {
+        Group {
+            if dynamicTypeSize.isAccessibilitySize {
+                VStack(alignment: .leading, spacing: 6) {
+                    titleLabel
+                    if let trailingText {
+                        trailingLabel(trailingText)
+                    }
+                }
+            } else {
+                HStack(alignment: .firstTextBaseline, spacing: 12) {
+                    titleLabel
+                    Spacer(minLength: 12)
+                    if let trailingText {
+                        trailingLabel(trailingText)
+                    }
+                }
+            }
+        }
+        .padding(.horizontal, SettingsLayout.cardContentInset)
     }
 
     private var titleLabel: some View {
