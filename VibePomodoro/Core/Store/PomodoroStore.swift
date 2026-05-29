@@ -5,6 +5,7 @@ import SwiftUI
 @MainActor
 final class PomodoroStore: ObservableObject {
     static let openProductivityArgument = "--open-productivity"
+    static let openSettingsArgument = "--open-settings"
 
     @Published var selectedTab: AppTab = .focus
     @Published var settings: PomodoroSettings
@@ -47,6 +48,10 @@ final class PomodoroStore: ObservableObject {
     private static func initialSelectedTab() -> AppTab {
         if ProcessInfo.processInfo.arguments.contains(openProductivityArgument) {
             return .productivity
+        }
+
+        if ProcessInfo.processInfo.arguments.contains(openSettingsArgument) {
+            return .settings
         }
 
         return .focus

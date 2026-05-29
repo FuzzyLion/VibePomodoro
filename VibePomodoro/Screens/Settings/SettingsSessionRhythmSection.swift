@@ -1,10 +1,21 @@
 import SwiftUI
 
 struct SettingsSessionRhythmSection: View {
+    static let expandFocusPickerArgument = "--expand-focus-settings-picker"
+
     @EnvironmentObject private var store: PomodoroStore
     @Environment(\.colorScheme) private var colorScheme
+    @State private var expandedField = Self.initialExpandedField()
 
     private let timerFields = SettingsTimerField.allCases
+
+    private static func initialExpandedField() -> SettingsTimerField? {
+        if ProcessInfo.processInfo.arguments.contains(expandFocusPickerArgument) {
+            return .focus
+        }
+
+        return nil
+    }
 
     var body: some View {
         SettingsCard(
@@ -43,37 +54,53 @@ struct SettingsSessionRhythmSection: View {
     }
 
     private func timerRow(for field: SettingsTimerField) -> some View {
-        SettingsStepperRow(
+        SettingsExpandablePickerRow(
             indicator: field.indicator,
             title: field.title,
             valueText: field.valueText(in: store.settings),
             accessibilityValue: field.accessibilityValue(in: store.settings),
-            onDecrement: { updateTimerField(field, direction: .decrement) },
-            onIncrement: { updateTimerField(field, direction: .increment) },
-            canDecrement: field.canAdjust(in: store.settings, direction: .decrement),
-            canIncrement: field.canAdjust(in: store.settings, direction: .increment),
-            decrementLabel: "Decrease \(field.title.lowercased())",
-            incrementLabel: "Increase \(field.title.lowercased())"
+            allowedValues: field.allowedValues,
+            selectedValue: binding(for: field),
+            textForValue: field.pickerText(for:),
+            isExpanded: expandedField == field,
+            rowAccessibilityIdentifier: "settings.sessionRhythm.\(field.id)",
+            pickerAccessibilityIdentifier: "settings.sessionRhythm.\(field.id).picker",
+            toggleExpansion: {
+                withAnimation(.spring(response: 0.38, dampingFraction: 0.86)) {
+                    expandedField = expandedField == field ? nil : field
+                }
+            }
         )
     }
 
-    private func updateTimerField(_ field: SettingsTimerField, direction: SettingsAdjustmentDirection) {
-        let updatedValue = field.adjustedValue(in: store.settings, direction: direction)
+    private func binding(for field: SettingsTimerField) -> Binding<Int> {
+        Binding(
+            get: {
+                field.value(in: store.settings)
+            },
+            set: { newValue in
+                updateTimerField(field, value: newValue)
+            }
+        )
+    }
+
+    private func updateTimerField(_ field: SettingsTimerField, value: Int) {
+        guard field.allowedValues.contains(value) else { return }
 
         switch field {
         case .focus:
-            store.updateFocusMinutes(updatedValue)
+            store.updateFocusMinutes(value)
         case .shortBreak:
-            store.updateShortBreakMinutes(updatedValue)
+            store.updateShortBreakMinutes(value)
         case .longBreak:
-            store.updateLongBreakMinutes(updatedValue)
+            store.updateLongBreakMinutes(value)
         case .rounds:
-            store.updateTargetRounds(updatedValue)
+            store.updateTargetRounds(value)
         }
     }
 }
 
-private struct SettingsStepperRow: View {
+private struct SettingsExpandablePickerRow: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
@@ -81,29 +108,47 @@ private struct SettingsStepperRow: View {
     let title: String
     let valueText: String
     let accessibilityValue: String
-    let onDecrement: () -> Void
-    let onIncrement: () -> Void
-    let canDecrement: Bool
-    let canIncrement: Bool
-    let decrementLabel: String
-    let incrementLabel: String
+    let allowedValues: [Int]
+    @Binding var selectedValue: Int
+    let textForValue: (Int) -> String
+    let isExpanded: Bool
+    let rowAccessibilityIdentifier: String
+    let pickerAccessibilityIdentifier: String
+    let toggleExpansion: () -> Void
 
     var body: some View {
-        Group {
-            if dynamicTypeSize.isAccessibilitySize {
-                VStack(alignment: .leading, spacing: 12) {
-                    label
-                    controlPill
-                }
-            } else {
-                HStack(spacing: 12) {
-                    label
-                    Spacer(minLength: 8)
-                    controlPill
+        VStack(spacing: 12) {
+            Button(action: toggleExpansion) {
+                Group {
+                    if dynamicTypeSize.isAccessibilitySize {
+                        VStack(alignment: .leading, spacing: 12) {
+                            label
+                            valueDisclosure
+                        }
+                    } else {
+                        HStack(spacing: 12) {
+                            label
+                            Spacer(minLength: 8)
+                            valueDisclosure
+                        }
+                    }
                 }
             }
+            .buttonStyle(.plain)
+            .accessibilityLabel(title)
+            .accessibilityValue(accessibilityValue)
+            .accessibilityHint(isExpanded ? "Collapse picker" : "Expand picker")
+            .accessibilityIdentifier(rowAccessibilityIdentifier)
+
+            if isExpanded {
+                picker
+                    .transition(.asymmetric(
+                        insertion: .opacity.combined(with: .move(edge: .top)),
+                        removal: .opacity.combined(with: .scale(scale: 0.98, anchor: .top))
+                    ))
+            }
         }
-        .padding(.vertical, SettingsLayout.rowVerticalPadding)
+        .padding(.vertical, SettingsLayout.pickerRowVerticalPadding)
         .accessibilityElement(children: .contain)
     }
 
@@ -120,37 +165,30 @@ private struct SettingsStepperRow: View {
         }
     }
 
-    private var controlPill: some View {
-        HStack(spacing: 0) {
-            button(
-                systemImage: "minus",
-                action: onDecrement,
-                disabled: !canDecrement,
-                accessibilityLabel: decrementLabel
-            )
-
+    private var valueDisclosure: some View {
+        HStack(spacing: 8) {
             Text(valueText)
                 .font(.system(.body, weight: .semibold))
                 .foregroundStyle(SettingsTheme.primaryTextColor(for: colorScheme))
                 .monospacedDigit()
-                .frame(width: SettingsLayout.controlValueWidth)
-                .padding(.horizontal, SettingsLayout.controlValueHorizontalPadding)
-                .accessibilityLabel(title)
-                .accessibilityValue(accessibilityValue)
+                .lineLimit(1)
+                .minimumScaleFactor(0.88)
+                .frame(minWidth: SettingsLayout.pickerValueMinWidth)
 
-            button(
-                systemImage: "plus",
-                action: onIncrement,
-                disabled: !canIncrement,
-                accessibilityLabel: incrementLabel
-            )
+            Image(systemName: "chevron.right")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(SettingsTheme.secondaryTextColor(for: colorScheme).opacity(0.48))
+                .rotationEffect(.degrees(isExpanded ? 90 : 0))
         }
-        .frame(height: SettingsLayout.controlPillHeight)
-        .glassEffect(.regular.tint(SettingsTheme.controlFill(for: colorScheme)).interactive(), in: Capsule(style: .continuous))
+        .padding(.leading, 14)
+        .padding(.trailing, 12)
+        .frame(height: SettingsLayout.pickerValuePillHeight)
+        .glassEffect(.regular.tint(SettingsTheme.valuePillFill(for: colorScheme)).interactive(), in: Capsule(style: .continuous))
         .overlay {
             Capsule(style: .continuous)
-                .strokeBorder(SettingsTheme.controlStroke(for: colorScheme), lineWidth: 1)
+                .strokeBorder(SettingsTheme.valuePillStroke(for: colorScheme), lineWidth: 1)
         }
+        .shadow(color: Color.black.opacity(colorScheme == .dark ? 0.02 : 0.012), radius: 8, y: 3)
         .fixedSize(horizontal: true, vertical: false)
     }
 
@@ -169,25 +207,77 @@ private struct SettingsStepperRow: View {
         }
     }
 
-    private func button(
-        systemImage: String,
-        action: @escaping () -> Void,
-        disabled: Bool,
-        accessibilityLabel: String
-    ) -> some View {
-        Button(action: action) {
-            Image(systemName: systemImage)
-                .font(.system(size: 14, weight: .bold))
-                .foregroundStyle(
-                    disabled
-                        ? SettingsTheme.secondaryTextColor(for: colorScheme).opacity(0.5)
-                        : SettingsTheme.primaryTextColor(for: colorScheme)
-                )
-                .frame(width: SettingsLayout.controlButtonWidth, height: SettingsLayout.controlPillHeight)
-                .contentShape(Rectangle())
+    private var picker: some View {
+        Picker(title, selection: $selectedValue) {
+            ForEach(allowedValues, id: \.self) { value in
+                Text(textForValue(value))
+                    .font(.system(.title2, weight: .semibold))
+                    .monospacedDigit()
+                    .tag(value)
+            }
         }
-        .buttonStyle(.plain)
-        .disabled(disabled)
-        .accessibilityLabel(accessibilityLabel)
+        .pickerStyle(.wheel)
+        .labelsHidden()
+        .frame(maxWidth: .infinity)
+        .frame(height: SettingsLayout.expandedPickerHeight)
+        .clipped()
+        .background {
+            ZStack {
+                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                    .fill(SettingsTheme.pickerFill(for: colorScheme))
+                    .glassEffect(.regular.tint(SettingsTheme.pickerFill(for: colorScheme)), in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+
+                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                Color.black.opacity(colorScheme == .dark ? 0.035 : 0.018),
+                                Color.clear,
+                                Color.white.opacity(colorScheme == .dark ? 0.018 : 0.18)
+                            ],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .fill(SettingsTheme.pickerSelectionFill(for: colorScheme))
+                    .frame(height: 42)
+                    .padding(.horizontal, 16)
+            }
+        }
+        .overlay {
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .strokeBorder(SettingsTheme.pickerRecessStroke(for: colorScheme), lineWidth: 1)
+        }
+        .mask {
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+        }
+        .overlay(alignment: .top) {
+            LinearGradient(
+                colors: [
+                    SettingsTheme.pickerFill(for: colorScheme),
+                    Color.clear
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .frame(height: 28)
+            .allowsHitTesting(false)
+        }
+        .overlay(alignment: .bottom) {
+            LinearGradient(
+                colors: [
+                    Color.clear,
+                    SettingsTheme.pickerFill(for: colorScheme)
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .frame(height: 28)
+            .allowsHitTesting(false)
+        }
+        .accessibilityLabel("\(title) picker")
+        .accessibilityIdentifier(pickerAccessibilityIdentifier)
     }
 }

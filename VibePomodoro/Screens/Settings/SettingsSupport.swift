@@ -12,18 +12,13 @@ enum SettingsLayout {
     static let summaryCardCornerRadius: CGFloat = 28
     static let secondaryCardCornerRadius: CGFloat = 26
     static let rowVerticalPadding: CGFloat = 14
-    static let controlPillHeight: CGFloat = 44
-    static let controlButtonWidth: CGFloat = 44
-    static let controlValueWidth: CGFloat = 58
-    static let controlValueHorizontalPadding: CGFloat = 8
+    static let pickerRowVerticalPadding: CGFloat = 16
+    static let expandedPickerHeight: CGFloat = 128
+    static let pickerValuePillHeight: CGFloat = 36
+    static let pickerValueMinWidth: CGFloat = 86
     static let sectionTitleTracking: CGFloat = 1.0
     static let cardHeaderBottomSpacing: CGFloat = 12
     static let sectionHeaderBottomSpacing: CGFloat = 8
-}
-
-enum SettingsAdjustmentDirection {
-    case decrement
-    case increment
 }
 
 enum SettingsIndicator {
@@ -66,8 +61,28 @@ enum SettingsTheme {
         colorScheme == .dark ? Color.white.opacity(0.06) : Color.black.opacity(0.045)
     }
 
+    static func valuePillFill(for colorScheme: ColorScheme) -> Color {
+        colorScheme == .dark ? Color.white.opacity(0.035) : Color.white.opacity(0.18)
+    }
+
+    static func pickerFill(for colorScheme: ColorScheme) -> Color {
+        colorScheme == .dark ? Color.white.opacity(0.035) : Color.white.opacity(0.16)
+    }
+
     static func controlStroke(for colorScheme: ColorScheme) -> Color {
         colorScheme == .dark ? Color.white.opacity(0.08) : Color.white.opacity(0.22)
+    }
+
+    static func valuePillStroke(for colorScheme: ColorScheme) -> Color {
+        colorScheme == .dark ? Color.white.opacity(0.055) : Color.white.opacity(0.30)
+    }
+
+    static func pickerRecessStroke(for colorScheme: ColorScheme) -> Color {
+        colorScheme == .dark ? Color.white.opacity(0.055) : Color.white.opacity(0.26)
+    }
+
+    static func pickerSelectionFill(for colorScheme: ColorScheme) -> Color {
+        colorScheme == .dark ? Color.white.opacity(0.045) : Color.white.opacity(0.26)
     }
 }
 
@@ -132,10 +147,6 @@ enum SettingsTimerField: String, CaseIterable, Identifiable {
         allowedValues.first ?? 0
     }
 
-    var maximumValue: Int {
-        allowedValues.last ?? 0
-    }
-
     func rawValue(in settings: PomodoroSettings) -> Int {
         switch self {
         case .focus:
@@ -183,29 +194,12 @@ enum SettingsTimerField: String, CaseIterable, Identifiable {
         }
     }
 
-    func adjustedValue(in settings: PomodoroSettings, direction: SettingsAdjustmentDirection) -> Int {
-        let currentValue = value(in: settings)
-        guard let currentIndex = allowedValues.firstIndex(of: currentValue) else {
-            return currentValue
-        }
-
-        switch direction {
-        case .decrement:
-            let previousIndex = max(allowedValues.startIndex, currentIndex - 1)
-            return allowedValues[previousIndex]
-        case .increment:
-            let nextIndex = min(allowedValues.index(before: allowedValues.endIndex), currentIndex + 1)
-            return allowedValues[nextIndex]
-        }
-    }
-
-    func canAdjust(in settings: PomodoroSettings, direction: SettingsAdjustmentDirection) -> Bool {
-        let currentValue = value(in: settings)
-        switch direction {
-        case .decrement:
-            return currentValue > minimumValue
-        case .increment:
-            return currentValue < maximumValue
+    func pickerText(for value: Int) -> String {
+        switch self {
+        case .rounds:
+            return "\(value)"
+        default:
+            return "\(value) min"
         }
     }
 }
