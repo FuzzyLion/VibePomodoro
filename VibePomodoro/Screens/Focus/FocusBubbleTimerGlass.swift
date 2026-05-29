@@ -15,7 +15,8 @@ struct BubbleGlassBackdrop: View {
         ZStack {
             if isDark {
                 bubbleShape
-                    .fill(.thinMaterial)
+                    .fill(Color.clear)
+                    .glassEffect(.regular.tint(phase.glassTint.opacity(0.075)), in: bubbleShape)
 
                 bubbleShape
                     .fill(Color.white.opacity(0.016))

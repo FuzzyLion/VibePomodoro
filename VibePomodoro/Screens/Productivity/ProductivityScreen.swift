@@ -4,7 +4,7 @@ enum ProductivityLayout {
     static let sectionSpacing: CGFloat = 14
     static let pageHorizontalInset: CGFloat = 18
     static let pageTopInset: CGFloat = 12
-    static let pageBottomInset: CGFloat = 28
+    static let pageBottomInset: CGFloat = 60
 
     enum TrendGroup {
         static let populatedTopInset: CGFloat = 8

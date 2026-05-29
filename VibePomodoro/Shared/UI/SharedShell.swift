@@ -95,10 +95,7 @@ struct FloatingTabBar: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
         .frame(width: 188, height: 64)
-        .background(
-            Capsule(style: .continuous)
-                .fill(.ultraThinMaterial)
-        )
+        .glassEffect(.regular.tint(Color.white.opacity(0.10)), in: Capsule(style: .continuous))
         .overlay(
             Capsule(style: .continuous)
                 .strokeBorder(Color.white.opacity(0.34), lineWidth: 1)

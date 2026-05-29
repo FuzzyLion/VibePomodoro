@@ -3,7 +3,7 @@ import SwiftUI
 enum SettingsLayout {
     static let pageHorizontalInset: CGFloat = 18
     static let pageTopInset: CGFloat = 12
-    static let pageBottomInset: CGFloat = 28
+    static let pageBottomInset: CGFloat = 60
     static let pageSectionSpacing: CGFloat = 28
     static let cardContentInset: CGFloat = 20
     static let cardVerticalInset: CGFloat = 4

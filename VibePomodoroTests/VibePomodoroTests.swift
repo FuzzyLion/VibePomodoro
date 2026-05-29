@@ -313,14 +313,14 @@ struct VibePomodoroTests {
         let store = PomodoroStore(defaults: defaults)
         let points = store.chartPoints(for: .month, now: now)
         let todayStart = calendar.startOfDay(for: now)
-        let pointForToday = points.first(where: { calendar.startOfDay(for: $0.startDate) == todayStart })
+        let pointForToday = try #require(points.first(where: { calendar.startOfDay(for: $0.startDate) == todayStart }))
 
         #expect(points.count == 30)
         #expect(points.reduce(0) { $0 + $1.focusTime } == 90 * 60)
         #expect(points.reduce(0) { $0 + $1.breakTime } == 15 * 60)
-        #expect(pointForToday?.focusTime == 90 * 60)
-        #expect(pointForToday?.breakTime == 15 * 60)
-        #expect(pointForToday?.completedFocusCount == 1)
+        #expect(abs(pointForToday.focusTime - 90 * 60) < 0.0001)
+        #expect(abs(pointForToday.breakTime - 15 * 60) < 0.0001)
+        #expect(pointForToday.completedFocusCount == 1)
     }
 
     @Test func yearChartAggregatesDailyCacheIntoMonths() async throws {
@@ -356,8 +356,10 @@ struct VibePomodoroTests {
                 )
             ]
         )
+        var maySettings = PomodoroSettings.default
+        maySettings.focusMinutes = 20
         let maySession = makeCompletedSession(
-            settings: .default,
+            settings: maySettings,
             createdAt: try #require(calendar.date(from: DateComponents(year: 2026, month: 5, day: 2, hour: 8, minute: 0))),
             completedAt: try #require(calendar.date(from: DateComponents(year: 2026, month: 5, day: 2, hour: 8, minute: 30))),
             segments: [
@@ -381,16 +383,18 @@ struct VibePomodoroTests {
         let store = PomodoroStore(defaults: defaults)
         let points = store.chartPoints(for: .year, now: now)
         let pointsByMonth = Dictionary(uniqueKeysWithValues: points.map { (calendar.component(.month, from: $0.startDate), $0) })
+        let aprilPoint = try #require(pointsByMonth[4])
+        let mayPoint = try #require(pointsByMonth[5])
 
         #expect(points.reduce(0) { $0 + $1.focusTime } == 70 * 60)
         #expect(points.reduce(0) { $0 + $1.breakTime } == 15 * 60)
         #expect(points.reduce(0) { $0 + $1.completedFocusCount } == 3)
-        #expect(pointsByMonth[4]?.focusTime == 50 * 60)
-        #expect(pointsByMonth[4]?.breakTime == 5 * 60)
-        #expect(pointsByMonth[4]?.completedFocusCount == 2)
-        #expect(pointsByMonth[5]?.focusTime == 20 * 60)
-        #expect(pointsByMonth[5]?.breakTime == 10 * 60)
-        #expect(pointsByMonth[5]?.completedFocusCount == 1)
+        #expect(abs(aprilPoint.focusTime - 50 * 60) < 0.0001)
+        #expect(abs(aprilPoint.breakTime - 5 * 60) < 0.0001)
+        #expect(aprilPoint.completedFocusCount == 2)
+        #expect(abs(mayPoint.focusTime - 20 * 60) < 0.0001)
+        #expect(abs(mayPoint.breakTime - 10 * 60) < 0.0001)
+        #expect(mayPoint.completedFocusCount == 1)
     }
 
     @Test func weekChartAggregatesSevenDailyBuckets() async throws {
@@ -426,13 +430,13 @@ struct VibePomodoroTests {
         let store = PomodoroStore(defaults: defaults)
         let points = store.chartPoints(for: .week, now: now)
         let march18 = try #require(calendar.date(from: DateComponents(year: 2026, month: 3, day: 18)))
-        let pointForMarch18 = points.first(where: { calendar.startOfDay(for: $0.startDate) == march18 })
+        let pointForMarch18 = try #require(points.first(where: { calendar.startOfDay(for: $0.startDate) == march18 }))
 
         #expect(points.count == 7)
         #expect(points.reduce(0) { $0 + $1.focusTime } == 25 * 60)
         #expect(points.reduce(0) { $0 + $1.breakTime } == 5 * 60)
         #expect(points.reduce(0) { $0 + $1.completedFocusCount } == 1)
-        #expect(pointForMarch18?.sessionTime == 30 * 60)
+        #expect(abs(pointForMarch18.sessionTime - 30 * 60) < 0.0001)
     }
 
     @Test func completedFocusCountFallsOnCompletionDay() async throws {

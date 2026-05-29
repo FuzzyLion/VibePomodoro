@@ -18,42 +18,26 @@ struct FocusScreen: View {
 
     var body: some View {
         GeometryReader { proxy in
-            let layout = FocusScreenLayout(size: proxy.size, safeAreaInsets: proxy.safeAreaInsets)
-            let containerFrame = proxy.frame(in: .global)
-            let renderState = FocusRenderState.build(store: store, scenePhase: scenePhase)
-            let hasCompletionSummary = completionSummaryState != nil
-            let bubbleCenter = FocusScreenSupport.bubblePosition(
-                layout: layout,
-                size: proxy.size,
-                containerFrame: containerFrame,
+            let frameState = FocusScreenFrameState(
+                proxy: proxy,
+                store: store,
+                scenePhase: scenePhase,
                 stableBubbleAnchor: stableBubbleAnchor,
                 isImmersive: isImmersive,
-                isRestoringImmersiveLayout: isRestoringImmersiveLayout
-            )
-            let bottomChromeTopPadding = FocusScreenSupport.bottomChromeTopPadding(
-                layout: layout,
-                bubbleCenterY: bubbleCenter.y
-            )
-            let progressDotsTopPadding = FocusScreenSupport.progressDotsTopPadding(
-                layout: layout,
-                bubbleCenterY: bubbleCenter.y
+                isRestoringImmersiveLayout: isRestoringImmersiveLayout,
+                hasCompletionSummary: completionSummaryState != nil
             )
             let pageContent = FocusPageContent(
-                renderState: renderState,
-                layout: layout,
-                size: proxy.size,
-                bubbleCenter: bubbleCenter,
-                progressDotsTopPadding: progressDotsTopPadding,
-                bottomChromeTopPadding: bottomChromeTopPadding,
+                renderState: frameState.renderState,
+                layout: frameState.layout,
+                size: frameState.size,
+                bubbleCenter: frameState.bubbleCenter,
+                progressDotsTopPadding: frameState.progressDotsTopPadding,
+                bottomChromeTopPadding: frameState.bottomChromeTopPadding,
                 chromeOpacity: chromeOpacity,
                 isChromeInteractive: isChromeInteractive,
                 backgroundTapAction: { location in
-                    handleScreenTap(
-                        at: location,
-                        layout: layout,
-                        size: proxy.size,
-                        containerFrame: containerFrame
-                    )
+                    handleScreenTap(at: location, frameState: frameState)
                 },
                 primaryAction: store.togglePrimaryAction,
                 goBackAction: store.goBackOneStep,
@@ -61,16 +45,16 @@ struct FocusScreen: View {
                 requestFinishAction: requestFinishConfirmation,
                 skipAction: store.skipCurrentStep
             )
-            .opacity(hasCompletionSummary ? 0 : 1)
-            .allowsHitTesting(!hasCompletionSummary)
-            .accessibilityHidden(hasCompletionSummary)
+            .opacity(frameState.hasCompletionSummary ? 0 : 1)
+            .allowsHitTesting(!frameState.hasCompletionSummary)
+            .accessibilityHidden(frameState.hasCompletionSummary)
 
             let completionBackdrop = FocusCompletionBackdropBubble(
-                renderState: renderState.bubble,
-                size: proxy.size,
-                bubbleCenter: bubbleCenter
+                renderState: frameState.renderState.bubble,
+                size: frameState.size,
+                bubbleCenter: frameState.bubbleCenter
             )
-            .opacity(hasCompletionSummary ? 1 : 0)
+            .opacity(frameState.hasCompletionSummary ? 1 : 0)
 
             ZStack {
                 pageContent
@@ -83,20 +67,20 @@ struct FocusScreen: View {
                     .zIndex(2)
                 }
             }
-            .frame(width: proxy.size.width, height: proxy.size.height, alignment: .top)
+            .frame(width: frameState.size.width, height: frameState.size.height, alignment: .top)
             .statusBarHidden(shouldHideSystemOverlays)
             .persistentSystemOverlays(shouldHideSystemOverlays ? .hidden : .visible)
             .onAppear(perform: {
-                handleAppearance(layout: layout, containerFrame: containerFrame)
+                handleAppearance(frameState: frameState)
             })
-            .onChange(of: layout.bubbleAnchorSignature) { _, _ in
-                handleBubbleAnchorSignatureChange(layout: layout, containerFrame: containerFrame)
+            .onChange(of: frameState.layout.bubbleAnchorSignature) { _, _ in
+                handleBubbleAnchorSignatureChange(frameState: frameState)
             }
             .onChange(of: isImmersive) { _, _ in
-                handleImmersiveStateChange(layout: layout, containerFrame: containerFrame)
+                handleImmersiveStateChange(frameState: frameState)
             }
             .onChange(of: isRestoringImmersiveLayout) { _, _ in
-                handleImmersiveLayoutRestoreChange(layout: layout, containerFrame: containerFrame)
+                handleImmersiveLayoutRestoreChange(frameState: frameState)
             }
             .onChange(of: store.activeSession?.id) { _, _ in
                 handleSessionStateChange()
@@ -114,14 +98,24 @@ struct FocusScreen: View {
                 handleVoiceOverStatusChange()
             }
             .alert("Finish session early?", isPresented: $isShowingFinishConfirmation) {
-                Button("Cancel", role: .cancel) {}
-                Button("Finish session early") {
-                    finishSessionEarly()
-                }
+                Button("Cancel", role: .cancel, action: cancelFinishConfirmation)
+                Button("Finish session early", action: confirmFinishEarly)
             } message: {
                 Text("This will end the current session and show the completion summary.")
             }
         }
+    }
+
+    private func handleScreenTap(
+        at location: CGPoint,
+        frameState: FocusScreenFrameState
+    ) {
+        handleScreenTap(
+            at: location,
+            layout: frameState.layout,
+            size: frameState.size,
+            containerFrame: frameState.containerFrame
+        )
     }
 
     private func handleScreenTap(
@@ -151,12 +145,22 @@ struct FocusScreen: View {
         toggleImmersiveMode(force: true)
     }
 
+    private func handleAppearance(frameState: FocusScreenFrameState) {
+        handleAppearance(layout: frameState.layout, containerFrame: frameState.containerFrame)
+    }
+
     private func handleAppearance(layout: FocusScreenLayout, containerFrame: CGRect) {
         syncVoiceOverState()
         syncCompletionSummary(with: store.activeSession)
         syncImmersiveState()
         syncBubbleAnchor(layout: layout, containerFrame: containerFrame)
         syncImmersiveVisualState()
+    }
+
+    private func handleBubbleAnchorSignatureChange(
+        frameState: FocusScreenFrameState
+    ) {
+        handleBubbleAnchorSignatureChange(layout: frameState.layout, containerFrame: frameState.containerFrame)
     }
 
     private func handleBubbleAnchorSignatureChange(
@@ -167,11 +171,23 @@ struct FocusScreen: View {
     }
 
     private func handleImmersiveStateChange(
+        frameState: FocusScreenFrameState
+    ) {
+        handleImmersiveStateChange(layout: frameState.layout, containerFrame: frameState.containerFrame)
+    }
+
+    private func handleImmersiveStateChange(
         layout: FocusScreenLayout,
         containerFrame: CGRect
     ) {
         syncBubbleAnchor(layout: layout, containerFrame: containerFrame)
         syncImmersiveVisualState()
+    }
+
+    private func handleImmersiveLayoutRestoreChange(
+        frameState: FocusScreenFrameState
+    ) {
+        handleImmersiveLayoutRestoreChange(layout: frameState.layout, containerFrame: frameState.containerFrame)
     }
 
     private func handleImmersiveLayoutRestoreChange(
@@ -384,7 +400,11 @@ struct FocusScreen: View {
         isShowingFinishConfirmation = true
     }
 
-    private func finishSessionEarly() {
+    private func cancelFinishConfirmation() {
+        isShowingFinishConfirmation = false
+    }
+
+    private func confirmFinishEarly() {
         store.finishSessionEarly()
     }
 

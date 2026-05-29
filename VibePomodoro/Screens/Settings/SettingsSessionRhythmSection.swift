@@ -146,10 +146,7 @@ private struct SettingsStepperRow: View {
             )
         }
         .frame(height: SettingsLayout.controlPillHeight)
-        .background(
-            Capsule(style: .continuous)
-                .fill(SettingsTheme.controlFill(for: colorScheme))
-        )
+        .glassEffect(.regular.tint(SettingsTheme.controlFill(for: colorScheme)).interactive(), in: Capsule(style: .continuous))
         .overlay {
             Capsule(style: .continuous)
                 .strokeBorder(SettingsTheme.controlStroke(for: colorScheme), lineWidth: 1)
