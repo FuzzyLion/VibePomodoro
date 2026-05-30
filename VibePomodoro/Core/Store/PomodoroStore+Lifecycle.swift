@@ -58,7 +58,12 @@ extension PomodoroStore {
             return
         }
 
-        scheduleCompletionSideEffects(for: completedSession)
+        var transaction = Transaction()
+        transaction.disablesAnimations = true
+        withTransaction(transaction) {
+            storeCompletedSessionIfNeeded(from: completedSession)
+        }
+        refreshRuntimeSideEffects()
     }
 
     func syncIdleTimer() {
@@ -93,16 +98,6 @@ extension PomodoroStore {
         }
         timer.tolerance = min(0.25, interval * 0.05)
         stepBoundaryTimer = timer
-    }
-
-    private func scheduleCompletionSideEffects(for session: SessionSnapshot) {
-        Task { @MainActor [weak self] in
-            try? await Task.sleep(nanoseconds: 50_000_000)
-            guard let self else { return }
-
-            self.storeCompletedSessionIfNeeded(from: session)
-            self.refreshRuntimeSideEffects()
-        }
     }
 
     private func storeCompletedSessionIfNeeded(from session: SessionSnapshot) {

@@ -552,6 +552,22 @@ struct VibePomodoroTests {
         #expect(reloadedStore.activeSession == preservedActiveSession)
     }
 
+    @Test func focusDurationNormalizationRemovesQaMinuteOptionForRelease() async throws {
+        let (defaults, suiteName) = makeDefaults()
+        defer { clear(defaults, suiteName: suiteName) }
+
+        var settings = PomodoroSettings.default
+        settings.focusMinutes = 1
+        saveValue(settings, for: PomodoroStore.StorageKey.settings, defaults: defaults)
+
+        let store = PomodoroStore(defaults: defaults)
+        store.normalizeSettingsIfNeeded()
+
+        #expect(SettingsTimerField.focus.allowedValues.first == 15)
+        #expect(SettingsTimerField.focus.allowedValues.contains(1) == false)
+        #expect(store.settings.focusMinutes == 15)
+    }
+
     @Test func productivityMonthDisplayBucketsRollUpThirtyDailyPointsWithoutChangingTotals() async throws {
         let calendar = Calendar(identifier: .gregorian)
         let start = try #require(calendar.date(from: DateComponents(year: 2026, month: 2, day: 20)))

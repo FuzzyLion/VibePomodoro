@@ -6,6 +6,11 @@ import SwiftUI
 final class PomodoroStore: ObservableObject {
     static let openProductivityArgument = "--open-productivity"
     static let openSettingsArgument = "--open-settings"
+    static let resetStorageArgument = "--reset-vibe-store"
+    static let uiTestingArgument = "--ui-testing"
+    static let defaultsSuiteNameEnvironmentKey = "VIBE_DEFAULTS_SUITE"
+    static let resetStorageEnvironmentKey = "VIBE_RESET_STORE"
+    static let uiTestingEnvironmentKey = "VIBE_UI_TESTING"
 
     @Published var selectedTab: AppTab = .focus
     @Published var settings: PomodoroSettings
@@ -27,6 +32,7 @@ final class PomodoroStore: ObservableObject {
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
+        Self.resetStorageIfRequested(using: defaults)
         self.settings = Self.loadValue(for: StorageKey.settings, using: defaults) ?? .default
         self.activeSession = Self.loadValue(for: StorageKey.activeSession, using: defaults)
         self.completedSessions = Self.loadValue(for: StorageKey.completedSessions, using: defaults) ?? []
@@ -55,6 +61,34 @@ final class PomodoroStore: ObservableObject {
         }
 
         return .focus
+    }
+
+    private static func resetStorageIfRequested(using defaults: UserDefaults) {
+        guard shouldResetStorage else { return }
+
+        defaults.removeObject(forKey: StorageKey.settings)
+        defaults.removeObject(forKey: StorageKey.activeSession)
+        defaults.removeObject(forKey: StorageKey.completedSessions)
+        defaults.removeObject(forKey: StorageKey.productivityCache)
+    }
+
+    static func runtimeDefaults() -> UserDefaults {
+        guard let suiteName = ProcessInfo.processInfo.environment[defaultsSuiteNameEnvironmentKey],
+              let defaults = UserDefaults(suiteName: suiteName) else {
+            return .standard
+        }
+
+        return defaults
+    }
+
+    static var isUITestingLaunch: Bool {
+        ProcessInfo.processInfo.arguments.contains(uiTestingArgument)
+            || ProcessInfo.processInfo.environment[uiTestingEnvironmentKey] == "1"
+    }
+
+    private static var shouldResetStorage: Bool {
+        ProcessInfo.processInfo.arguments.contains(resetStorageArgument)
+            || ProcessInfo.processInfo.environment[resetStorageEnvironmentKey] == "1"
     }
 
     var currentPhase: SessionPhase {

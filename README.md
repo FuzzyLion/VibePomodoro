@@ -189,7 +189,7 @@ VibePomodoro/
   - `Session Rhythm` 作为主设置卡
   - `Alerts / Display / Other` 作为同一家族下的次级设置卡
 - `Session Rhythm` 使用离散档位，不提供自由输入：
-  - `Focus`：临时保留 `1` 分钟测试档位，并保留正式档位 `15...90`、每 `5` 分钟一档；`1` 分钟只用于 QA / 动画调试，发布前需要移除
+  - `Focus`：正式档位为 `15...90`、每 `5` 分钟一档
   - `Short Break`：`5 / 10`
   - `Long Break`：`15 / 20 / 30`
   - `Rounds`：`1...10`

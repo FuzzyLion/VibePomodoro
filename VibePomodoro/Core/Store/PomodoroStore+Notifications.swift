@@ -3,6 +3,8 @@ import UserNotifications
 
 extension PomodoroStore {
     func requestNotificationPermissionsIfNeeded() {
+        guard !Self.isUITestingLaunch else { return }
+
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { _, _ in }
     }
 

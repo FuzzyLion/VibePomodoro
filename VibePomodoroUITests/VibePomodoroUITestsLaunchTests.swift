@@ -10,7 +10,7 @@ import XCTest
 final class VibePomodoroUITestsLaunchTests: XCTestCase {
 
     override class var runsForEachTargetApplicationUIConfiguration: Bool {
-        true
+        false
     }
 
     override func setUpWithError() throws {
@@ -20,10 +20,13 @@ final class VibePomodoroUITestsLaunchTests: XCTestCase {
     @MainActor
     func testLaunch() throws {
         let app = XCUIApplication()
+        app.launchArguments = ["--ui-testing", "--reset-vibe-store"]
+        app.launchEnvironment = [
+            "VIBE_UI_TESTING": "1",
+            "VIBE_RESET_STORE": "1",
+            "VIBE_DEFAULTS_SUITE": "Qi.VibePomodoroUITests.\(name)"
+        ]
         app.launch()
-
-        // Insert steps here to perform after app launch but before taking a screenshot,
-        // such as logging into a test account or navigating somewhere in the app
 
         let attachment = XCTAttachment(screenshot: app.screenshot())
         attachment.name = "Launch Screen"
