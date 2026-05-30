@@ -19,6 +19,7 @@ final class PomodoroStore: ObservableObject {
     @Published var productivityCache: ProductivityAggregateCache
 
     let defaults: UserDefaults
+    let feedbackPlayer: ReminderFeedbackPlaying
     let encoder = JSONEncoder()
     var stepBoundaryTimer: Timer?
     var currentScenePhase: ScenePhase = .active
@@ -30,8 +31,9 @@ final class PomodoroStore: ObservableObject {
         static let productivityCache = "vibe.productivityCache"
     }
 
-    init(defaults: UserDefaults = .standard) {
+    init(defaults: UserDefaults = .standard, feedbackPlayer: ReminderFeedbackPlaying? = nil) {
         self.defaults = defaults
+        self.feedbackPlayer = feedbackPlayer ?? ReminderFeedbackPlayer()
         Self.resetStorageIfRequested(using: defaults)
         self.settings = Self.loadValue(for: StorageKey.settings, using: defaults) ?? .default
         self.activeSession = Self.loadValue(for: StorageKey.activeSession, using: defaults)
@@ -39,7 +41,7 @@ final class PomodoroStore: ObservableObject {
         self.productivityCache = Self.loadValue(for: StorageKey.productivityCache, using: defaults) ?? .empty
         self.selectedTab = Self.initialSelectedTab()
 
-        reconcileNow()
+        reconcileNow(deliverForegroundFeedback: false)
         repairProductivityCacheIfNeeded()
         syncIdleTimer()
         requestNotificationPermissionsIfNeeded()

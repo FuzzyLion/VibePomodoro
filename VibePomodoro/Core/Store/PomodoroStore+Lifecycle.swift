@@ -8,7 +8,7 @@ extension PomodoroStore {
 
         switch phase {
         case .active:
-            reconcileNow()
+            reconcileNow(deliverForegroundFeedback: false)
             syncIdleTimer()
             syncNotifications()
         case .inactive, .background:
@@ -25,16 +25,16 @@ extension PomodoroStore {
         togglePrimaryAction()
     }
 
-    func reconcileNow() {
+    func reconcileNow(deliverForegroundFeedback: Bool = true) {
         guard var session = activeSession else { return }
         let previousSession = session
         let events = PomodoroEngine.reconcile(session: &session, now: .now)
         guard session != previousSession || !events.isEmpty else { return }
         activeSession = session
-        handle(events: events)
+        handle(events: events, deliverForegroundFeedback: deliverForegroundFeedback)
     }
 
-    func handle(events: [PomodoroEvent]) {
+    func handle(events: [PomodoroEvent], deliverForegroundFeedback: Bool = true) {
         guard !events.isEmpty else {
             refreshRuntimeSideEffects()
             return
@@ -42,14 +42,15 @@ extension PomodoroStore {
 
         let completedSession = events.contains(.sessionCompleted) ? activeSession : nil
 
-        for event in events {
-            switch event {
-            case .phaseStarted:
-                fireForegroundFeedback(type: .success)
-            case .phaseCompleted:
-                fireForegroundFeedback(type: .warning)
-            case .sessionCompleted:
-                fireForegroundFeedback(type: .success)
+        if deliverForegroundFeedback {
+            let actions = ReminderFeedbackPlan.actions(
+                for: events,
+                isForeground: currentScenePhase == .active,
+                soundEnabled: settings.soundEnabled,
+                hapticsEnabled: settings.hapticsEnabled
+            )
+            if !actions.isEmpty {
+                feedbackPlayer.play(actions)
             }
         }
 
@@ -120,10 +121,4 @@ extension PomodoroStore {
         productivityCache.apply(completedSession)
     }
 
-    private func fireForegroundFeedback(type: UINotificationFeedbackGenerator.FeedbackType) {
-        guard settings.hapticsEnabled else { return }
-        let generator = UINotificationFeedbackGenerator()
-        generator.prepare()
-        generator.notificationOccurred(type)
-    }
 }

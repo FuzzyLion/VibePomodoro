@@ -13,6 +13,11 @@ Before coding:
 VibePomodoro/
 ├── VibePomodoroApp.swift
 ├── ContentView.swift
+├── Resources/
+│   └── Sounds/
+│       ├── phase-complete-pop.caf
+│       ├── next-phase-whoosh.caf
+│       └── session-complete-thud.caf
 ├── Core/
 │   ├── Engine/
 │   │   └── PomodoroEngine.swift
@@ -199,7 +204,7 @@ VibePomodoro/
 - 页面出现时，历史持久化的非标准时长与轮数会由 `PomodoroStore` 吸附到最近合法值；该 normalization 不触发反馈。
 - `Alerts` 内部当前存在明确依赖关系：
   - `Sound` 依赖 `Notifications`
-  - `Sound Choice` 仅在 `Notifications` 与 `Sound` 都开启时显示
+  - 事件声音固定映射，不提供逐项选择入口
 - `Display` 当前只承载 `Keep Screen On`，语义限定为 `Active sessions only`
 - `Other` 当前包含占位项与维护动作：
   - `Send Feedback`
@@ -369,9 +374,8 @@ MVP 需要支持的配置项：
 - `Target Rounds`
 - `Keep Screen On`
 - `Notifications`
-- `Sound Enabled`
-- `Selected Sound`
-- `Haptics Enabled`
+- `Sound`
+- `Haptics`
 
 规则：
 
@@ -417,8 +421,10 @@ MVP 需要支持的配置项：
 
 说明：
 
-- MVP 中先保留音效选择结构和提醒入口
-- 真正区分音色的自定义声音素材可以在后续版本继续补充
+- 事件声音固定映射为 `phase complete = phase-complete-pop.caf`、`next phase started = next-phase-whoosh.caf`、`session complete = session-complete-thud.caf`
+- 前台普通自动 step boundary 使用 Pop 后短延迟 Whoosh；session complete 只播放 Thud，不叠加 Pop
+- 前台 haptics 语义为 `phase complete = warning`、`next phase started = soft impact`、`session complete = success`
+- 后台和锁屏由 local notification 表达声音：普通边界用 Pop，最终完成用 Thud；不做 app-controlled haptics
 - 设置中的时间调节需要有柔和但明确的 haptics 耦合
 
 ---
@@ -833,7 +839,7 @@ MVP 不需要额外寻找开源 PNG 照片素材。
 当前代码已经开始落地以上方案，主要结构如下：
 
 - [VibePomodoro/Core/Models/PomodoroTypes.swift](./VibePomodoro/Core/Models/PomodoroTypes.swift)
-  - 全局 tab、session phase、run state、提醒音与 settings 基础类型
+  - 全局 tab、session phase、run state 与 settings 基础类型
 - [VibePomodoro/Core/Models/SessionModels.swift](./VibePomodoro/Core/Models/SessionModels.swift)
   - session step、segment、snapshot、completed session 与运行期统计
 - [VibePomodoro/Core/Models/ProductivityModels.swift](./VibePomodoro/Core/Models/ProductivityModels.swift)
@@ -845,9 +851,11 @@ MVP 不需要额外寻找开源 PNG 照片素材。
 - [VibePomodoro/Core/Store/PomodoroStore+Settings.swift](./VibePomodoro/Core/Store/PomodoroStore+Settings.swift)
   - 设置更新、离散档位 normalization、提醒开关与调节 haptics
 - [VibePomodoro/Core/Store/PomodoroStore+Lifecycle.swift](./VibePomodoro/Core/Store/PomodoroStore+Lifecycle.swift)
-  - scene phase 协调、runtime 副作用刷新、step 边界 timer 与 session 完成入账
+  - scene phase 协调、runtime 副作用刷新、step 边界 timer、前台反馈触发与 session 完成入账
 - [VibePomodoro/Core/Store/PomodoroStore+Notifications.swift](./VibePomodoro/Core/Store/PomodoroStore+Notifications.swift)
-  - 本地通知权限与未来 step 边界提醒调度
+  - 本地通知权限、未来 step 边界提醒计划与自定义通知声音调度
+- [VibePomodoro/Core/Store/ReminderFeedbackPlayer.swift](./VibePomodoro/Core/Store/ReminderFeedbackPlayer.swift)
+  - 固定提醒声音资源、前台声音播放、前台 haptics 与事件反馈计划
 - [VibePomodoro/Core/Store/PomodoroStore+Persistence.swift](./VibePomodoro/Core/Store/PomodoroStore+Persistence.swift)
   - UserDefaults 持久化、cache 修复与编解码辅助
 - [VibePomodoro/Core/Store/PomodoroStore+Productivity.swift](./VibePomodoro/Core/Store/PomodoroStore+Productivity.swift)
@@ -896,6 +904,8 @@ MVP 不需要额外寻找开源 PNG 照片素材。
   - `Session Rhythm` 主设置卡、stepper row 与时长更新映射
 - [VibePomodoro/Screens/Settings/SettingsPreferenceSections.swift](./VibePomodoro/Screens/Settings/SettingsPreferenceSections.swift)
   - `Alerts / Display / Other` 次级设置卡、共用设置行组件与清空 Productivity 历史确认入口
+- [VibePomodoro/Resources/Sounds](./VibePomodoro/Resources/Sounds)
+  - `phase-complete-pop.caf`、`next-phase-whoosh.caf`、`session-complete-thud.caf` 三个固定提醒声音素材
 - [VibePomodoro/Shared/Theme/VibeTheme.swift](./VibePomodoro/Shared/Theme/VibeTheme.swift)
   - 共享主题色板与 phase UI 扩展
 - [VibePomodoro/Shared/UI/SharedShell.swift](./VibePomodoro/Shared/UI/SharedShell.swift)

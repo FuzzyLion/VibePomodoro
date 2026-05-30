@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import SwiftUI
 import Testing
 @testable import VibePomodoro
 
@@ -668,6 +669,133 @@ struct VibePomodoroTests {
         #expect(overTwoHours.values == [0, 3_600, 7_200, 10_800])
     }
 
+    @Test func intermediateNotificationsUsePhaseCompleteSound() async throws {
+        let (defaults, suiteName) = makeDefaults()
+        defer { clear(defaults, suiteName: suiteName) }
+
+        var settings = PomodoroSettings.default
+        settings.focusMinutes = 25
+        settings.shortBreakMinutes = 5
+        settings.longBreakMinutes = 15
+        settings.targetRounds = 2
+        settings.soundEnabled = true
+
+        let start = Date(timeIntervalSince1970: 50_000)
+        let store = makeStoreWithRunningSession(settings: settings, start: start, defaults: defaults)
+        let plans = store.notificationPlans(now: start)
+
+        #expect(plans.count == 4)
+        #expect(plans.first?.soundResource == .phaseCompletePop)
+        #expect(plans.first?.soundName == "phase-complete-pop.caf")
+        #expect(plans.dropLast().allSatisfy { $0.soundResource == .phaseCompletePop })
+    }
+
+    @Test func finalNotificationUsesSessionCompleteSound() async throws {
+        let (defaults, suiteName) = makeDefaults()
+        defer { clear(defaults, suiteName: suiteName) }
+
+        var settings = PomodoroSettings.default
+        settings.focusMinutes = 25
+        settings.longBreakMinutes = 15
+        settings.targetRounds = 1
+        settings.soundEnabled = true
+
+        let start = Date(timeIntervalSince1970: 60_000)
+        let store = makeStoreWithRunningSession(settings: settings, start: start, defaults: defaults)
+        let plans = store.notificationPlans(now: start)
+
+        #expect(plans.count == 2)
+        #expect(plans.last?.soundResource == .sessionCompleteThud)
+        #expect(plans.last?.soundName == "session-complete-thud.caf")
+    }
+
+    @Test func notificationsOmitSoundWhenSoundIsDisabled() async throws {
+        let (defaults, suiteName) = makeDefaults()
+        defer { clear(defaults, suiteName: suiteName) }
+
+        var settings = PomodoroSettings.default
+        settings.targetRounds = 1
+        settings.soundEnabled = false
+
+        let start = Date(timeIntervalSince1970: 70_000)
+        let store = makeStoreWithRunningSession(settings: settings, start: start, defaults: defaults)
+        let plans = store.notificationPlans(now: start)
+
+        #expect(plans.isEmpty == false)
+        #expect(plans.allSatisfy { $0.soundResource == nil })
+        #expect(plans.allSatisfy { $0.soundName == nil })
+    }
+
+    @Test func foregroundBoundaryFeedbackUsesPopThenWhoosh() async throws {
+        let actions = ReminderFeedbackPlan.actions(
+            for: [
+                .phaseCompleted(.focus, 1),
+                .phaseStarted(.shortBreak, 1)
+            ],
+            isForeground: true,
+            soundEnabled: true,
+            hapticsEnabled: true
+        )
+
+        #expect(actions == [
+            .sound(.phaseCompletePop),
+            .haptic(.warning),
+            .delay(ReminderFeedbackPlan.nextPhaseStartDelay),
+            .sound(.nextPhaseWhoosh),
+            .haptic(.softImpact)
+        ])
+    }
+
+    @Test func foregroundSessionCompleteFeedbackUsesOnlyThudAndSuccessHaptic() async throws {
+        let actions = ReminderFeedbackPlan.actions(
+            for: [
+                .phaseCompleted(.longBreak, 1),
+                .sessionCompleted
+            ],
+            isForeground: true,
+            soundEnabled: true,
+            hapticsEnabled: true
+        )
+
+        #expect(actions == [
+            .sound(.sessionCompleteThud),
+            .haptic(.success)
+        ])
+    }
+
+    @Test func backgroundReconcileDoesNotReplayMissedForegroundFeedback() async throws {
+        let (defaults, suiteName) = makeDefaults()
+        defer { clear(defaults, suiteName: suiteName) }
+
+        var settings = PomodoroSettings.default
+        settings.focusMinutes = 15
+        settings.longBreakMinutes = 15
+        settings.targetRounds = 1
+
+        let player = RecordingReminderFeedbackPlayer()
+        let now = Date()
+        let start = now.addingTimeInterval(-(settings.focusDuration + settings.longBreakDuration + 60))
+        let store = makeStoreWithRunningSession(
+            settings: settings,
+            start: start,
+            defaults: defaults,
+            feedbackPlayer: player
+        )
+
+        store.currentScenePhase = .background
+        store.handleScenePhaseChange(.active)
+
+        #expect(store.activeSession?.runState == .completed)
+        #expect(store.completedSessions.count == 1)
+        #expect(player.playedActionBatches.isEmpty)
+    }
+
+    @Test func bundledReminderSoundResourcesExist() async throws {
+        for resource in ReminderSoundResource.allCases {
+            #expect(resource.bundleURL != nil)
+        }
+    }
+
     private func makeDefaults() -> (UserDefaults, String) {
         let suiteName = "VibePomodoroTests.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!
@@ -718,6 +846,30 @@ struct VibePomodoroTests {
             startDate: startDate,
             endDate: endDate
         )
+    }
+
+    private func makeStoreWithRunningSession(
+        settings: PomodoroSettings,
+        start: Date,
+        defaults: UserDefaults,
+        feedbackPlayer: ReminderFeedbackPlaying? = nil
+    ) -> PomodoroStore {
+        let store = PomodoroStore(defaults: defaults, feedbackPlayer: feedbackPlayer ?? RecordingReminderFeedbackPlayer())
+        store.settings = settings
+
+        var session = SessionSnapshot.makeNew(settings: settings, now: start)
+        _ = PomodoroEngine.startOrResume(session: &session, now: start)
+        store.activeSession = session
+
+        return store
+    }
+
+    private final class RecordingReminderFeedbackPlayer: ReminderFeedbackPlaying {
+        var playedActionBatches: [[ReminderFeedbackAction]] = []
+
+        func play(_ actions: [ReminderFeedbackAction]) {
+            playedActionBatches.append(actions)
+        }
     }
 
 }

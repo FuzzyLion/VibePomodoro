@@ -56,25 +56,6 @@ enum SessionRunState: String, Codable {
     case completed
 }
 
-enum SoundOption: String, Codable, CaseIterable, Identifiable {
-    case chime
-    case bell
-    case glow
-
-    var id: String { rawValue }
-
-    var title: String {
-        switch self {
-        case .chime:
-            return "Soft Chime"
-        case .bell:
-            return "Warm Bell"
-        case .glow:
-            return "Glass Glow"
-        }
-    }
-}
-
 struct PomodoroSettings: Codable, Equatable {
     var focusMinutes: Int = 25
     var shortBreakMinutes: Int = 5
@@ -84,7 +65,6 @@ struct PomodoroSettings: Codable, Equatable {
     var keepScreenOn: Bool = true
     var notificationsEnabled: Bool = true
     var soundEnabled: Bool = true
-    var selectedSound: SoundOption = .chime
     var hapticsEnabled: Bool = true
 
     var focusDuration: TimeInterval { TimeInterval(focusMinutes * 60) }

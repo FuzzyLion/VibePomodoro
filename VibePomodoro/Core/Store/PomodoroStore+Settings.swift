@@ -85,12 +85,6 @@ extension PomodoroStore {
         persist()
     }
 
-    func setSelectedSound(_ option: SoundOption) {
-        settings.selectedSound = option
-        persist()
-        syncNotifications()
-    }
-
     private func fireAdjustmentFeedback() {
         guard settings.hapticsEnabled else { return }
         let generator = UIImpactFeedbackGenerator(style: .soft)

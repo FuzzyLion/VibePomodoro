@@ -1,6 +1,18 @@
 import Foundation
 import UserNotifications
 
+struct PomodoroNotificationPlan: Equatable {
+    let identifier: String
+    let title: String
+    let body: String
+    let timeInterval: TimeInterval
+    let soundResource: ReminderSoundResource?
+
+    var soundName: String? {
+        soundResource?.notificationSoundName
+    }
+}
+
 extension PomodoroStore {
     func requestNotificationPermissionsIfNeeded() {
         guard !Self.isUITestingLaunch else { return }
@@ -12,15 +24,38 @@ extension PomodoroStore {
         let center = UNUserNotificationCenter.current()
         center.removePendingNotificationRequests(withIdentifiers: pendingNotificationIdentifiers())
 
+        let plans = notificationPlans(now: .now)
+
+        for plan in plans {
+            let content = UNMutableNotificationContent()
+            content.title = plan.title
+            content.body = plan.body
+            if let soundName = plan.soundName {
+                content.sound = UNNotificationSound(named: UNNotificationSoundName(rawValue: soundName))
+            }
+
+            let trigger = UNTimeIntervalNotificationTrigger(timeInterval: plan.timeInterval, repeats: false)
+            let request = UNNotificationRequest(
+                identifier: plan.identifier,
+                content: content,
+                trigger: trigger
+            )
+
+            center.add(request, withCompletionHandler: nil)
+        }
+    }
+
+    func notificationPlans(now: Date = .now) -> [PomodoroNotificationPlan] {
         guard settings.notificationsEnabled,
               let session = activeSession,
               session.runState == .running,
               let firstBoundary = session.targetEndDate,
               session.currentStep != nil else {
-            return
+            return []
         }
 
         var boundaryDate = firstBoundary
+        var plans: [PomodoroNotificationPlan] = []
 
         for index in session.currentStepIndex..<session.steps.count {
             let step = session.steps[index]
@@ -31,28 +66,33 @@ extension PomodoroStore {
             let nextStepIndex = index + 1
             let nextStep = session.steps.indices.contains(nextStepIndex) ? session.steps[nextStepIndex] : nil
 
-            let content = UNMutableNotificationContent()
+            let title: String
+            let body: String
             if let nextStep {
-                content.title = "\(step.phase.title) complete"
-                content.body = "\(nextStep.phase.title) begins now."
+                title = "\(step.phase.title) complete"
+                body = "\(nextStep.phase.title) begins now."
             } else {
-                content.title = "\(step.phase.title) complete"
-                content.body = "Session complete. Take a breath."
+                title = "\(step.phase.title) complete"
+                body = "Session complete. Take a breath."
             }
+
+            let soundResource: ReminderSoundResource?
             if settings.soundEnabled {
-                content.sound = .default
+                soundResource = nextStep == nil ? .sessionCompleteThud : .phaseCompletePop
+            } else {
+                soundResource = nil
             }
 
-            let interval = max(1, boundaryDate.timeIntervalSinceNow)
-            let trigger = UNTimeIntervalNotificationTrigger(timeInterval: interval, repeats: false)
-            let request = UNNotificationRequest(
+            plans.append(PomodoroNotificationPlan(
                 identifier: notificationIdentifier(for: session.id, stepIndex: index),
-                content: content,
-                trigger: trigger
-            )
-
-            center.add(request, withCompletionHandler: nil)
+                title: title,
+                body: body,
+                timeInterval: max(1, boundaryDate.timeIntervalSince(now)),
+                soundResource: soundResource
+            ))
         }
+
+        return plans
     }
 }
 

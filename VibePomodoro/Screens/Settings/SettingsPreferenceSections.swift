@@ -2,7 +2,6 @@ import SwiftUI
 
 struct SettingsAlertsSection: View {
     @EnvironmentObject private var store: PomodoroStore
-    @State private var isPresentingSoundChoice = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: SettingsLayout.sectionHeaderBottomSpacing) {
@@ -30,22 +29,6 @@ struct SettingsAlertsSection: View {
                         disabled: !store.settings.notificationsEnabled
                     )
 
-                    if store.settings.notificationsEnabled && store.settings.soundEnabled {
-                        SettingsDivider()
-
-                        Button {
-                            isPresentingSoundChoice = true
-                        } label: {
-                            SettingsNavigationValueRow(
-                                title: "Sound Choice",
-                                value: store.settings.selectedSound.title
-                            )
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("Reminder Sound")
-                        .accessibilityValue(store.settings.selectedSound.title)
-                    }
-
                     SettingsDivider()
 
                     SettingsToggleRow(
@@ -54,9 +37,6 @@ struct SettingsAlertsSection: View {
                     )
                 }
             }
-        }
-        .navigationDestination(isPresented: $isPresentingSoundChoice) {
-            SettingsSoundChoiceScreen()
         }
     }
 
@@ -207,53 +187,6 @@ private struct SettingsToggleRow: View {
     }
 }
 
-private struct SettingsNavigationValueRow: View {
-    @Environment(\.colorScheme) private var colorScheme
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-
-    let title: String
-    let value: String
-
-    var body: some View {
-        Group {
-            if dynamicTypeSize.isAccessibilitySize {
-                VStack(alignment: .leading, spacing: 10) {
-                    titleLabel
-                    trailingValue
-                }
-            } else {
-                HStack(spacing: 14) {
-                    titleLabel
-                    Spacer(minLength: 12)
-                    trailingValue
-                }
-            }
-        }
-        .padding(.vertical, SettingsLayout.rowVerticalPadding)
-        .contentShape(Rectangle())
-    }
-
-    private var titleLabel: some View {
-        Text(title)
-            .font(.system(.body, weight: .semibold))
-            .foregroundStyle(SettingsTheme.primaryTextColor(for: colorScheme))
-    }
-
-    private var trailingValue: some View {
-        HStack(spacing: 8) {
-            Text(value)
-                .font(.system(.body, weight: .semibold))
-                .foregroundStyle(SettingsTheme.primaryTextColor(for: colorScheme))
-                .multilineTextAlignment(.trailing)
-                .lineLimit(1)
-
-            Image(systemName: "chevron.right")
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(SettingsTheme.secondaryTextColor(for: colorScheme))
-        }
-    }
-}
-
 private struct SettingsDestructiveActionRow: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
@@ -304,78 +237,6 @@ private struct SettingsDestructiveActionRow: View {
 
     private var destructiveTextColor: Color {
         colorScheme == .dark ? Color.red.opacity(0.86) : Color.red.opacity(0.82)
-    }
-}
-
-private struct SettingsSoundChoiceScreen: View {
-    @EnvironmentObject private var store: PomodoroStore
-
-    private var soundOptions: [SoundOption] {
-        SoundOption.allCases
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            SettingsCard(
-                style: .secondary(
-                    contentInset: SettingsLayout.cardContentInset,
-                    cornerRadius: SettingsLayout.secondaryCardCornerRadius
-                ),
-                accentOverlay: { EmptyView() }
-            ) {
-                VStack(spacing: 0) {
-                    ForEach(Array(soundOptions.enumerated()), id: \.element.id) { index, option in
-                        Button {
-                            store.setSelectedSound(option)
-                        } label: {
-                            SettingsSoundChoiceOptionRow(
-                                title: option.title,
-                                isSelected: store.settings.selectedSound == option
-                            )
-                        }
-                        .buttonStyle(.plain)
-
-                        if index < soundOptions.count - 1 {
-                            SettingsDivider()
-                        }
-                    }
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-
-            Spacer(minLength: 0)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .padding(.horizontal, SettingsLayout.pageHorizontalInset)
-        .padding(.top, SettingsLayout.pageTopInset)
-        .padding(.bottom, SettingsLayout.pageBottomInset)
-        .navigationTitle("Reminder Sound")
-        .navigationBarTitleDisplayMode(.inline)
-    }
-}
-
-private struct SettingsSoundChoiceOptionRow: View {
-    @Environment(\.colorScheme) private var colorScheme
-
-    let title: String
-    let isSelected: Bool
-
-    var body: some View {
-        HStack(spacing: 14) {
-            Text(title)
-                .font(.system(.body, weight: .semibold))
-                .foregroundStyle(SettingsTheme.primaryTextColor(for: colorScheme))
-
-            Spacer(minLength: 12)
-
-            if isSelected {
-                Image(systemName: "checkmark")
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(SettingsTheme.sectionAccentColor(for: colorScheme))
-            }
-        }
-        .padding(.vertical, SettingsLayout.rowVerticalPadding)
-        .contentShape(Rectangle())
     }
 }
 
