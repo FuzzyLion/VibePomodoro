@@ -9,6 +9,7 @@ final class PomodoroStore: ObservableObject {
     static let resetStorageArgument = "--reset-vibe-store"
     static let uiTestingArgument = "--ui-testing"
     static let defaultsSuiteNameEnvironmentKey = "VIBE_DEFAULTS_SUITE"
+    static let productivityFixtureEnvironmentKey = "VIBE_PRODUCTIVITY_FIXTURE"
     static let resetStorageEnvironmentKey = "VIBE_RESET_STORE"
     static let uiTestingEnvironmentKey = "VIBE_UI_TESTING"
 
@@ -35,6 +36,7 @@ final class PomodoroStore: ObservableObject {
         self.defaults = defaults
         self.feedbackPlayer = feedbackPlayer ?? ReminderFeedbackPlayer()
         Self.resetStorageIfRequested(using: defaults)
+        Self.seedUITestingProductivityFixtureIfRequested(using: defaults)
         self.settings = Self.loadValue(for: StorageKey.settings, using: defaults) ?? .default
         self.activeSession = Self.loadValue(for: StorageKey.activeSession, using: defaults)
         self.completedSessions = Self.loadValue(for: StorageKey.completedSessions, using: defaults) ?? []

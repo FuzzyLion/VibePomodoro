@@ -61,18 +61,10 @@ struct ProductivitySummaryStrip: View {
     }
 
     private var metaSummaryText: String {
-        guard snapshot.completedSessionCount > 0 else {
-            return "No finished sessions yet"
-        }
-
-        let sessionsText = snapshot.completedSessionCount == 1
-            ? "1 finished session"
-            : "\(snapshot.completedSessionCount) finished sessions"
-        let focusBlocksText = snapshot.completedFocusCount == 1
-            ? "1 focus block"
-            : "\(snapshot.completedFocusCount) focus blocks"
-
-        return "\(sessionsText) • \(focusBlocksText)"
+        ProductivityValueFormatting.summaryMetaText(
+            completedSessionCount: snapshot.completedSessionCount,
+            completedFocusCount: snapshot.completedFocusCount
+        )
     }
 
     private var headerTextColor: Color {

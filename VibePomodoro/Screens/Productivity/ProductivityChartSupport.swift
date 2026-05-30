@@ -91,6 +91,21 @@ enum ProductivityValueFormatting {
         dayUnitText(max(0, streakLength))
     }
 
+    static func summaryMetaText(completedSessionCount: Int, completedFocusCount: Int) -> String {
+        guard completedSessionCount > 0 else {
+            return "No finished sessions yet"
+        }
+
+        let sessionsText = completedSessionCount == 1
+            ? "1 finished session"
+            : "\(completedSessionCount) finished sessions"
+        let focusBlocksText = completedFocusCount == 1
+            ? "1 focus block"
+            : "\(completedFocusCount) focus blocks"
+
+        return "\(sessionsText) • \(focusBlocksText)"
+    }
+
     private static func dayUnitText(_ count: Int) -> String {
         count == 1 ? "1 day" : "\(count) days"
     }
@@ -225,7 +240,7 @@ enum ProductivityChartFormatting {
     static func xAxisLabel(for date: Date, range: ProductivityRange) -> String {
         switch range {
         case .week:
-            return date.formatted(.dateTime.weekday(.abbreviated))
+            return weekAxisLabel(for: date)
         case .month:
             return monthAxisLabel(for: date)
         case .year:
@@ -237,6 +252,13 @@ enum ProductivityChartFormatting {
         let formatter = DateFormatter()
         formatter.locale = englishLocale
         formatter.dateFormat = "d MMM"
+        return formatter.string(from: date)
+    }
+
+    static func weekAxisLabel(for date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = englishLocale
+        formatter.dateFormat = "EEE"
         return formatter.string(from: date)
     }
 

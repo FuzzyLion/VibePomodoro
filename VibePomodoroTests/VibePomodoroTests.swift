@@ -631,6 +631,34 @@ struct VibePomodoroTests {
         #expect(store.settings.focusMinutes == 15)
     }
 
+    @Test func productivityEmptyCacheProducesZeroBucketsForAllRanges() async throws {
+        let (defaults, suiteName) = makeDefaults()
+        defer { clear(defaults, suiteName: suiteName) }
+
+        let store = PomodoroStore(defaults: defaults)
+        let now = try #require(Calendar(identifier: .gregorian).date(from: DateComponents(year: 2026, month: 3, day: 20, hour: 12)))
+
+        let week = store.chartPoints(for: .week, now: now)
+        let month = store.chartPoints(for: .month, now: now)
+        let year = store.chartPoints(for: .year, now: now)
+
+        #expect(week.count == 7)
+        #expect(month.count == 30)
+        #expect(year.count == 12)
+        #expect((week + month + year).allSatisfy { point in
+            point.focusTime == 0
+                && point.breakTime == 0
+                && point.completedFocusCount == 0
+        })
+    }
+
+    @Test func productivityEmptySummaryFormattingUsesZeroStateText() async throws {
+        #expect(ProductivityValueFormatting.summarySessionTimeText(0) == "0m")
+        #expect(ProductivityValueFormatting.summaryAverageFocusText(0) == "0m")
+        #expect(ProductivityValueFormatting.summaryStreakText(0) == "0d")
+        #expect(ProductivityValueFormatting.summaryMetaText(completedSessionCount: 0, completedFocusCount: 0) == "No finished sessions yet")
+    }
+
     @Test func productivityMonthDisplayBucketsRollUpThirtyDailyPointsWithoutChangingTotals() async throws {
         let calendar = Calendar(identifier: .gregorian)
         let start = try #require(calendar.date(from: DateComponents(year: 2026, month: 2, day: 20)))
@@ -652,6 +680,50 @@ struct VibePomodoroTests {
         #expect(buckets.reduce(0) { $0 + $1.completedFocusCount } == points.reduce(0) { $0 + $1.completedFocusCount })
         #expect(buckets.first?.labelDate == points.first?.startDate)
         #expect(buckets.last?.labelDate == expectedLastBucketStart)
+    }
+
+    @Test func productivityLongMonthDisplayBucketsPreserveDenseThirtyDayTotals() async throws {
+        let calendar = Calendar(identifier: .gregorian)
+        let start = try #require(calendar.date(from: DateComponents(year: 2026, month: 4, day: 1)))
+        let points = (0..<30).map { offset in
+            ProductivityChartPoint(
+                startDate: calendar.date(byAdding: .day, value: offset, to: start)!,
+                label: "",
+                focusTime: Double(12 + offset) * 60,
+                breakTime: Double((offset % 5) + 1) * 60,
+                completedFocusCount: offset.isMultiple(of: 2) ? 2 : 1
+            )
+        }
+
+        let buckets = ProductivityChartDisplay.displayBuckets(from: points, range: .month)
+
+        #expect(buckets.count == 5)
+        #expect(buckets.map(\.slotIndex) == [0, 1, 2, 3, 4])
+        #expect(buckets.reduce(0) { $0 + $1.focusTime } == points.reduce(0) { $0 + $1.focusTime })
+        #expect(buckets.reduce(0) { $0 + $1.breakTime } == points.reduce(0) { $0 + $1.breakTime })
+        #expect(buckets.reduce(0) { $0 + $1.completedFocusCount } == points.reduce(0) { $0 + $1.completedFocusCount })
+    }
+
+    @Test func productivityYearDisplayBucketsPreserveTwelveMonthTotals() async throws {
+        let calendar = Calendar(identifier: .gregorian)
+        let start = try #require(calendar.date(from: DateComponents(year: 2025, month: 6, day: 1)))
+        let points = (0..<12).map { offset in
+            ProductivityChartPoint(
+                startDate: calendar.date(byAdding: .month, value: offset, to: start)!,
+                label: "",
+                focusTime: Double(offset + 1) * 3_600,
+                breakTime: Double(offset + 2) * 1_200,
+                completedFocusCount: offset + 1
+            )
+        }
+
+        let buckets = ProductivityChartDisplay.displayBuckets(from: points, range: .year)
+
+        #expect(buckets.count == 12)
+        #expect(buckets.map(\.slotIndex) == Array(0..<12))
+        #expect(buckets.reduce(0) { $0 + $1.focusTime } == points.reduce(0) { $0 + $1.focusTime })
+        #expect(buckets.reduce(0) { $0 + $1.breakTime } == points.reduce(0) { $0 + $1.breakTime })
+        #expect(buckets.reduce(0) { $0 + $1.completedFocusCount } == points.reduce(0) { $0 + $1.completedFocusCount })
     }
 
     @Test func productivityMonthAxisLabelsUseBucketStartsWithoutOverflowingToNextDate() async throws {
@@ -716,6 +788,38 @@ struct VibePomodoroTests {
         #expect(ProductivityChartFormatting.xAxisLabel(for: buckets[2].labelDate, range: .year) == "N")
     }
 
+    @Test func productivityFormattingHandlesExtremeDurations() async throws {
+        #expect(ProductivityValueFormatting.compactDurationText(-42) == "0s")
+        #expect(ProductivityValueFormatting.compactDurationText((27 * 3_600) + (14 * 60)) == "27h 14m")
+        #expect(ProductivityValueFormatting.summarySessionTimeText(99 * 24 * 3_600 + 23 * 3_600) == "99d 23h")
+        #expect(ProductivityValueFormatting.summarySessionTimeText(100 * 24 * 3_600 + 23 * 3_600) == "100d")
+        #expect(ProductivityValueFormatting.summaryAverageFocusText(12.5) == "12h 30m")
+        #expect(ProductivityValueFormatting.summaryStreakText(-8) == "0d")
+        #expect(ProductivityValueFormatting.summaryMetaText(completedSessionCount: 24_000, completedFocusCount: 123_456) == "24000 finished sessions • 123456 focus blocks")
+    }
+
+    @Test func productivityCountAxisHandlesZeroAndLargeCounts() async throws {
+        let zero = ProductivityChartMetricKind.focusSessions.axisStyle(for: [])
+        let low = ProductivityChartMetricKind.focusSessions.axisStyle(for: [
+            makeDisplayBucket(completedFocusCount: 4)
+        ])
+        let medium = ProductivityChartMetricKind.focusSessions.axisStyle(for: [
+            makeDisplayBucket(completedFocusCount: 17)
+        ])
+        let high = ProductivityChartMetricKind.focusSessions.axisStyle(for: [
+            makeDisplayBucket(completedFocusCount: 123)
+        ])
+
+        #expect(zero.step == 1)
+        #expect(zero.upperBound == 4)
+        #expect(low.step == 1)
+        #expect(low.upperBound == 5)
+        #expect(medium.step == 5)
+        #expect(medium.upperBound == 25)
+        #expect(high.step == 10)
+        #expect(high.upperBound == 150)
+    }
+
     @Test func productivityTimeAxisUsesRequestedStepRules() async throws {
         let underHour = ProductivityChartFormatting.timeAxisStyle(for: 59 * 60)
         let underTwoHours = ProductivityChartFormatting.timeAxisStyle(for: 90 * 60)
@@ -729,6 +833,30 @@ struct VibePomodoroTests {
 
         #expect(overTwoHours.step == 3_600)
         #expect(overTwoHours.values == [0, 3_600, 7_200, 10_800])
+    }
+
+    @Test func productivityTimeAxisHandlesLargeDurations() async throws {
+        let zero = ProductivityChartFormatting.timeAxisStyle(for: 0)
+        let dayPlus = ProductivityChartFormatting.timeAxisStyle(for: 27 * 3_600 + 17 * 60)
+
+        #expect(zero.step == 1_200)
+        #expect(zero.values == [0, 1_200, 2_400, 3_600])
+        #expect(dayPlus.step == 3_600)
+        #expect(dayPlus.upperBound == 28 * 3_600)
+        #expect(dayPlus.values.last == 28.0 * 3_600)
+    }
+
+    @Test func productivityXAxisLabelsAreStableAcrossRangesAndBoundaries() async throws {
+        let calendar = Calendar(identifier: .gregorian)
+        let monday = try #require(calendar.date(from: DateComponents(year: 2026, month: 3, day: 16)))
+        let monthBoundary = try #require(calendar.date(from: DateComponents(year: 2026, month: 2, day: 27)))
+        let december = try #require(calendar.date(from: DateComponents(year: 2025, month: 12, day: 1)))
+        let january = try #require(calendar.date(from: DateComponents(year: 2026, month: 1, day: 1)))
+
+        #expect(ProductivityChartFormatting.xAxisLabel(for: monday, range: .week) == "Mon")
+        #expect(ProductivityChartFormatting.xAxisLabel(for: monthBoundary, range: .month) == "27 Feb")
+        #expect(ProductivityChartFormatting.xAxisLabel(for: december, range: .year) == "D")
+        #expect(ProductivityChartFormatting.xAxisLabel(for: january, range: .year) == "J")
     }
 
     @Test func intermediateNotificationsUseNextPhaseSound() async throws {
@@ -1098,6 +1226,24 @@ struct VibePomodoroTests {
             roundNumber: roundNumber,
             startDate: startDate,
             endDate: endDate
+        )
+    }
+
+    private func makeDisplayBucket(
+        focusTime: TimeInterval = 0,
+        breakTime: TimeInterval = 0,
+        completedFocusCount: Int = 0
+    ) -> ProductivityDisplayBucket {
+        let start = Date(timeIntervalSince1970: 123_456)
+        return ProductivityDisplayBucket(
+            slotIndex: 0,
+            startDate: start,
+            endDate: start.addingTimeInterval(86_400),
+            xDate: start.addingTimeInterval(43_200),
+            labelDate: start,
+            focusTime: focusTime,
+            breakTime: breakTime,
+            completedFocusCount: completedFocusCount
         )
     }
 
