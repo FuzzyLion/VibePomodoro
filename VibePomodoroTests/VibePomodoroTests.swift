@@ -30,14 +30,36 @@ struct VibePomodoroTests {
         _ = PomodoroEngine.startOrResume(session: &session, now: start)
 
         let skipTime = start.addingTimeInterval(5 * 60)
-        _ = PomodoroEngine.skip(session: &session, now: skipTime)
+        let events = PomodoroEngine.skip(session: &session, now: skipTime)
 
         let stats = session.statistics(now: skipTime)
 
         #expect(session.currentPhase == SessionPhase.shortBreak)
         #expect(session.runState == SessionRunState.running)
+        #expect(events == [
+            .phaseSkipped(.focus, 1),
+            .phaseStarted(.shortBreak, 1)
+        ])
         #expect(stats.focusTime == 5 * 60)
         #expect(stats.completedFocusCount == 0)
+    }
+
+    @Test func skipFinalRunningStepEmitsPhaseSkippedBeforeSessionComplete() async throws {
+        var settings = PomodoroSettings.default
+        settings.targetRounds = 1
+
+        let start = Date(timeIntervalSince1970: 2_000)
+        var session = SessionSnapshot.makeNew(settings: settings, now: start)
+        _ = PomodoroEngine.startOrResume(session: &session, now: start)
+        _ = PomodoroEngine.reconcile(session: &session, now: start.addingTimeInterval(settings.focusDuration))
+
+        let events = PomodoroEngine.skip(session: &session, now: start.addingTimeInterval(settings.focusDuration + 60))
+
+        #expect(session.runState == .completed)
+        #expect(events == [
+            .phaseSkipped(.longBreak, 1),
+            .sessionCompleted
+        ])
     }
 
     @Test func backRollsBackPreviousStepStatistics() async throws {
@@ -50,14 +72,54 @@ struct VibePomodoroTests {
 
         let breakStart = start.addingTimeInterval(settings.focusDuration)
         _ = PomodoroEngine.reconcile(session: &session, now: breakStart)
-        _ = PomodoroEngine.goBack(session: &session, now: breakStart.addingTimeInterval(60))
+        let events = PomodoroEngine.goBack(session: &session, now: breakStart.addingTimeInterval(60))
 
         let stats = session.statistics(now: breakStart.addingTimeInterval(60))
 
         #expect(session.currentPhase == SessionPhase.focus)
+        #expect(events == [
+            .phaseRewound(.focus, 1),
+            .phaseStarted(.focus, 1)
+        ])
         #expect(stats.focusTime == 0)
         #expect(stats.breakTime == 0)
         #expect(stats.completedFocusCount == 0)
+    }
+
+    @Test func resetCurrentRunningStepEmitsPhaseResetBeforePhaseStarted() async throws {
+        var settings = PomodoroSettings.default
+        settings.targetRounds = 1
+
+        let start = Date(timeIntervalSince1970: 11_000)
+        var session = SessionSnapshot.makeNew(settings: settings, now: start)
+        _ = PomodoroEngine.startOrResume(session: &session, now: start)
+
+        let events = PomodoroEngine.resetCurrentStep(session: &session, now: start.addingTimeInterval(60))
+
+        #expect(session.currentPhase == .focus)
+        #expect(session.runState == .running)
+        #expect(events == [
+            .phaseReset(.focus, 1),
+            .phaseStarted(.focus, 1)
+        ])
+    }
+
+    @Test func firstStepGoBackEmitsPhaseResetWhenReturningToCurrentStepStart() async throws {
+        var settings = PomodoroSettings.default
+        settings.targetRounds = 1
+
+        let start = Date(timeIntervalSince1970: 12_000)
+        var session = SessionSnapshot.makeNew(settings: settings, now: start)
+        _ = PomodoroEngine.startOrResume(session: &session, now: start)
+
+        let events = PomodoroEngine.goBack(session: &session, now: start.addingTimeInterval(60))
+
+        #expect(session.currentPhase == .focus)
+        #expect(session.runState == .running)
+        #expect(events == [
+            .phaseReset(.focus, 1),
+            .phaseStarted(.focus, 1)
+        ])
     }
 
     @Test func sessionCompletesOnlyAfterFinalLongBreak() async throws {
@@ -669,7 +731,7 @@ struct VibePomodoroTests {
         #expect(overTwoHours.values == [0, 3_600, 7_200, 10_800])
     }
 
-    @Test func intermediateNotificationsUsePhaseCompleteSound() async throws {
+    @Test func intermediateNotificationsUseNextPhaseSound() async throws {
         let (defaults, suiteName) = makeDefaults()
         defer { clear(defaults, suiteName: suiteName) }
 
@@ -685,9 +747,9 @@ struct VibePomodoroTests {
         let plans = store.notificationPlans(now: start)
 
         #expect(plans.count == 4)
-        #expect(plans.first?.soundResource == .phaseCompletePop)
-        #expect(plans.first?.soundName == "phase-complete-pop.caf")
-        #expect(plans.dropLast().allSatisfy { $0.soundResource == .phaseCompletePop })
+        #expect(plans.first?.soundResource == .nextPhaseWhoosh)
+        #expect(plans.first?.soundName == "next-phase-whoosh.caf")
+        #expect(plans.dropLast().allSatisfy { $0.soundResource == .nextPhaseWhoosh })
     }
 
     @Test func finalNotificationUsesSessionCompleteSound() async throws {
@@ -726,7 +788,7 @@ struct VibePomodoroTests {
         #expect(plans.allSatisfy { $0.soundName == nil })
     }
 
-    @Test func foregroundBoundaryFeedbackUsesPopThenWhoosh() async throws {
+    @Test func foregroundBoundaryFeedbackUsesForwardWhooshOnly() async throws {
         let actions = ReminderFeedbackPlan.actions(
             for: [
                 .phaseCompleted(.focus, 1),
@@ -738,9 +800,6 @@ struct VibePomodoroTests {
         )
 
         #expect(actions == [
-            .sound(.phaseCompletePop),
-            .haptic(.warning),
-            .delay(ReminderFeedbackPlan.nextPhaseStartDelay),
             .sound(.nextPhaseWhoosh),
             .haptic(.softImpact)
         ])
@@ -761,6 +820,200 @@ struct VibePomodoroTests {
             .sound(.sessionCompleteThud),
             .haptic(.success)
         ])
+    }
+
+    @Test func foregroundSkipBoundaryFeedbackUsesForwardWhooshOnly() async throws {
+        let actions = ReminderFeedbackPlan.actions(
+            for: [
+                .phaseSkipped(.focus, 1),
+                .phaseStarted(.shortBreak, 1)
+            ],
+            isForeground: true,
+            soundEnabled: true,
+            hapticsEnabled: true
+        )
+
+        #expect(actions == [
+            .sound(.nextPhaseWhoosh),
+            .haptic(.softImpact)
+        ])
+    }
+
+    @Test func foregroundSkipSessionCompleteFeedbackUsesOnlyThudAndSuccessHaptic() async throws {
+        let actions = ReminderFeedbackPlan.actions(
+            for: [
+                .phaseSkipped(.longBreak, 1),
+                .sessionCompleted
+            ],
+            isForeground: true,
+            soundEnabled: true,
+            hapticsEnabled: true
+        )
+
+        #expect(actions == [
+            .sound(.sessionCompleteThud),
+            .haptic(.success)
+        ])
+    }
+
+    @Test func foregroundPausedSkipFeedbackUsesForwardWhooshOnly() async throws {
+        let actions = ReminderFeedbackPlan.actions(
+            for: [
+                .phaseSkipped(.focus, 1)
+            ],
+            isForeground: true,
+            soundEnabled: true,
+            hapticsEnabled: true
+        )
+
+        #expect(actions == [
+            .sound(.nextPhaseWhoosh),
+            .haptic(.softImpact)
+        ])
+    }
+
+    @Test func foregroundBackFeedbackUsesPopAndRigidImpact() async throws {
+        let actions = ReminderFeedbackPlan.actions(
+            for: [
+                .phaseRewound(.focus, 1),
+                .phaseStarted(.focus, 1)
+            ],
+            isForeground: true,
+            soundEnabled: true,
+            hapticsEnabled: true
+        )
+
+        #expect(actions == [
+            .sound(.phaseCompletePop),
+            .haptic(.rigidImpact)
+        ])
+    }
+
+    @Test func foregroundResetFeedbackUsesResetSoundAndSoftImpact() async throws {
+        let actions = ReminderFeedbackPlan.actions(
+            for: [
+                .phaseReset(.focus, 1),
+                .phaseStarted(.focus, 1)
+            ],
+            isForeground: true,
+            soundEnabled: true,
+            hapticsEnabled: true
+        )
+
+        #expect(actions == [
+            .sound(.phaseResetNotification),
+            .haptic(.softImpact)
+        ])
+    }
+
+    @Test func manualStartFeedbackRemainsSilent() async throws {
+        let actions = ReminderFeedbackPlan.actions(
+            for: [
+                .phaseStarted(.focus, 1)
+            ],
+            isForeground: true,
+            soundEnabled: true,
+            hapticsEnabled: true
+        )
+
+        #expect(actions.isEmpty)
+    }
+
+    @Test func skipCurrentStepPlaysForwardWhooshFeedback() async throws {
+        let (defaults, suiteName) = makeDefaults()
+        defer { clear(defaults, suiteName: suiteName) }
+
+        var settings = PomodoroSettings.default
+        settings.targetRounds = 2
+
+        let player = RecordingReminderFeedbackPlayer()
+        let store = makeStoreWithRunningSession(
+            settings: settings,
+            start: Date(),
+            defaults: defaults,
+            feedbackPlayer: player
+        )
+
+        store.skipCurrentStep()
+
+        #expect(player.playedActionBatches == [[
+            .sound(.nextPhaseWhoosh),
+            .haptic(.softImpact)
+        ]])
+    }
+
+    @Test func skipFinalStepPlaysSessionCompleteFeedback() async throws {
+        let (defaults, suiteName) = makeDefaults()
+        defer { clear(defaults, suiteName: suiteName) }
+
+        var settings = PomodoroSettings.default
+        settings.targetRounds = 1
+
+        let start = Date(timeIntervalSince1970: 80_000)
+        var session = SessionSnapshot.makeNew(settings: settings, now: start)
+        _ = PomodoroEngine.startOrResume(session: &session, now: start)
+        _ = PomodoroEngine.reconcile(session: &session, now: start.addingTimeInterval(settings.focusDuration))
+
+        let player = RecordingReminderFeedbackPlayer()
+        let store = PomodoroStore(defaults: defaults, feedbackPlayer: player)
+        store.settings = settings
+        store.activeSession = session
+
+        store.skipCurrentStep()
+
+        #expect(store.activeSession?.runState == .completed)
+        #expect(player.playedActionBatches == [[
+            .sound(.sessionCompleteThud),
+            .haptic(.success)
+        ]])
+    }
+
+    @Test func goBackOneStepPlaysPopFeedback() async throws {
+        let (defaults, suiteName) = makeDefaults()
+        defer { clear(defaults, suiteName: suiteName) }
+
+        var settings = PomodoroSettings.default
+        settings.targetRounds = 2
+
+        let start = Date(timeIntervalSince1970: 90_000)
+        var session = SessionSnapshot.makeNew(settings: settings, now: start)
+        _ = PomodoroEngine.startOrResume(session: &session, now: start)
+        _ = PomodoroEngine.reconcile(session: &session, now: start.addingTimeInterval(settings.focusDuration))
+
+        let player = RecordingReminderFeedbackPlayer()
+        let store = PomodoroStore(defaults: defaults, feedbackPlayer: player)
+        store.settings = settings
+        store.activeSession = session
+
+        store.goBackOneStep()
+
+        #expect(player.playedActionBatches == [[
+            .sound(.phaseCompletePop),
+            .haptic(.rigidImpact)
+        ]])
+    }
+
+    @Test func resetCurrentStepPlaysResetFeedback() async throws {
+        let (defaults, suiteName) = makeDefaults()
+        defer { clear(defaults, suiteName: suiteName) }
+
+        var settings = PomodoroSettings.default
+        settings.targetRounds = 1
+
+        let player = RecordingReminderFeedbackPlayer()
+        let store = makeStoreWithRunningSession(
+            settings: settings,
+            start: Date(),
+            defaults: defaults,
+            feedbackPlayer: player
+        )
+
+        store.resetCurrentStep()
+
+        #expect(player.playedActionBatches == [[
+            .sound(.phaseResetNotification),
+            .haptic(.softImpact)
+        ]])
     }
 
     @Test func backgroundReconcileDoesNotReplayMissedForegroundFeedback() async throws {

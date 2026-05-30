@@ -5,6 +5,7 @@ import UIKit
 enum ReminderSoundResource: String, CaseIterable, Equatable {
     case phaseCompletePop = "phase-complete-pop"
     case nextPhaseWhoosh = "next-phase-whoosh"
+    case phaseResetNotification = "phase-reset-notification"
     case sessionCompleteThud = "session-complete-thud"
 
     var fileName: String {
@@ -42,6 +43,7 @@ enum ReminderHaptic: Equatable {
     case warning
     case success
     case softImpact
+    case rigidImpact
 }
 
 enum ReminderFeedbackAction: Equatable {
@@ -51,8 +53,6 @@ enum ReminderFeedbackAction: Equatable {
 }
 
 enum ReminderFeedbackPlan {
-    static let nextPhaseStartDelay: TimeInterval = 0.18
-
     static func actions(
         for events: [PomodoroEvent],
         isForeground: Bool,
@@ -70,44 +70,38 @@ enum ReminderFeedbackPlan {
             )
         }
 
-        let hasPhaseCompleted = events.contains { event in
-            if case .phaseCompleted = event {
-                return true
-            }
-            return false
-        }
-        let hasPhaseStarted = events.contains { event in
-            if case .phaseStarted = event {
-                return true
-            }
-            return false
+        if events.contains(where: { if case .phaseReset = $0 { return true }; return false }) {
+            return actions(
+                sound: .phaseResetNotification,
+                haptic: .softImpact,
+                soundEnabled: soundEnabled,
+                hapticsEnabled: hapticsEnabled
+            )
         }
 
-        guard hasPhaseCompleted else { return [] }
+        if events.contains(where: { if case .phaseRewound = $0 { return true }; return false }) {
+            return actions(
+                sound: .phaseCompletePop,
+                haptic: .rigidImpact,
+                soundEnabled: soundEnabled,
+                hapticsEnabled: hapticsEnabled
+            )
+        }
 
-        var plannedActions = actions(
-            sound: .phaseCompletePop,
-            haptic: .warning,
-            soundEnabled: soundEnabled,
-            hapticsEnabled: hapticsEnabled
-        )
-
-        if hasPhaseStarted {
-            let nextPhaseActions = actions(
+        if events.contains(where: { event in
+            if case .phaseCompleted = event { return true }
+            if case .phaseSkipped = event { return true }
+            return false
+        }) {
+            return actions(
                 sound: .nextPhaseWhoosh,
                 haptic: .softImpact,
                 soundEnabled: soundEnabled,
                 hapticsEnabled: hapticsEnabled
             )
-
-            if !plannedActions.isEmpty && !nextPhaseActions.isEmpty {
-                plannedActions.append(.delay(nextPhaseStartDelay))
-            }
-
-            plannedActions.append(contentsOf: nextPhaseActions)
         }
 
-        return plannedActions
+        return []
     }
 
     private static func actions(
@@ -185,6 +179,10 @@ final class ReminderFeedbackPlayer: ReminderFeedbackPlaying {
             generator.notificationOccurred(.success)
         case .softImpact:
             let generator = UIImpactFeedbackGenerator(style: .soft)
+            generator.prepare()
+            generator.impactOccurred(intensity: 0.55)
+        case .rigidImpact:
+            let generator = UIImpactFeedbackGenerator(style: .rigid)
             generator.prepare()
             generator.impactOccurred(intensity: 0.55)
         }

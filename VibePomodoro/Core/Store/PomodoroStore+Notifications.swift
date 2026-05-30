@@ -78,7 +78,7 @@ extension PomodoroStore {
 
             let soundResource: ReminderSoundResource?
             if settings.soundEnabled {
-                soundResource = nextStep == nil ? .sessionCompleteThud : .phaseCompletePop
+                soundResource = nextStep == nil ? .sessionCompleteThud : .nextPhaseWhoosh
             } else {
                 soundResource = nil
             }

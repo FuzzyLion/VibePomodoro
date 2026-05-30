@@ -3,6 +3,9 @@ import Foundation
 enum PomodoroEvent: Equatable {
     case phaseStarted(SessionPhase, Int)
     case phaseCompleted(SessionPhase, Int)
+    case phaseSkipped(SessionPhase, Int)
+    case phaseRewound(SessionPhase, Int)
+    case phaseReset(SessionPhase, Int)
     case sessionCompleted
 }
 
@@ -43,14 +46,15 @@ enum PomodoroEngine {
     }
 
     static func skip(session: inout SessionSnapshot, now: Date = .now) -> [PomodoroEvent] {
-        guard session.runState != .completed, session.currentStep != nil else { return [] }
+        guard session.runState != .completed, let step = session.currentStep else { return [] }
 
         let shouldContinueRunning = session.runState == .running
         if shouldContinueRunning {
             commitRunningSegment(session: &session, endDate: now)
         }
 
-        return advanceToNextStep(session: &session, startDate: now, shouldContinueRunning: shouldContinueRunning)
+        return [.phaseSkipped(step.phase, step.roundNumber)]
+            + advanceToNextStep(session: &session, startDate: now, shouldContinueRunning: shouldContinueRunning)
     }
 
     static func finishSessionEarly(session: inout SessionSnapshot, now: Date = .now) -> [PomodoroEvent] {
@@ -74,14 +78,16 @@ enum PomodoroEngine {
         session.currentSegmentStartDate = nil
         session.targetEndDate = nil
 
+        let resetEvent: [PomodoroEvent] = [.phaseReset(step.phase, step.roundNumber)]
+
         guard session.runState == .running else {
             session.runState = .idle
-            return []
+            return resetEvent
         }
 
         session.currentSegmentStartDate = now
         session.targetEndDate = now.addingTimeInterval(step.plannedDuration)
-        return [.phaseStarted(step.phase, step.roundNumber)]
+        return resetEvent + [.phaseStarted(step.phase, step.roundNumber)]
     }
 
     static func goBack(session: inout SessionSnapshot, now: Date = .now) -> [PomodoroEvent] {
@@ -101,16 +107,21 @@ enum PomodoroEngine {
         session.currentSegmentStartDate = nil
         session.targetEndDate = nil
 
+        let targetStep = session.steps[targetIndex]
+        let directionEvent: PomodoroEvent = currentIndex == targetIndex
+            ? .phaseReset(targetStep.phase, targetStep.roundNumber)
+            : .phaseRewound(targetStep.phase, targetStep.roundNumber)
+
         if shouldContinueRunning {
             session.runState = .running
             session.currentSegmentStartDate = now
-            session.targetEndDate = now.addingTimeInterval(session.steps[targetIndex].plannedDuration)
-            return [.phaseStarted(session.steps[targetIndex].phase, session.steps[targetIndex].roundNumber)]
+            session.targetEndDate = now.addingTimeInterval(targetStep.plannedDuration)
+            return [directionEvent, .phaseStarted(targetStep.phase, targetStep.roundNumber)]
         }
 
         let hasAnyElapsed = session.steps.contains { session.accumulatedDuration(for: $0) > 0 }
         session.runState = hasAnyElapsed ? .paused : .idle
-        return []
+        return [directionEvent]
     }
 
     static func reconcile(session: inout SessionSnapshot, now: Date = .now) -> [PomodoroEvent] {

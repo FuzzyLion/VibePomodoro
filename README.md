@@ -17,6 +17,7 @@ VibePomodoro/
 │   └── Sounds/
 │       ├── phase-complete-pop.caf
 │       ├── next-phase-whoosh.caf
+│       ├── phase-reset-notification.caf
 │       └── session-complete-thud.caf
 ├── Core/
 │   ├── Engine/
@@ -421,10 +422,10 @@ MVP 需要支持的配置项：
 
 说明：
 
-- 事件声音固定映射为 `phase complete = phase-complete-pop.caf`、`next phase started = next-phase-whoosh.caf`、`session complete = session-complete-thud.caf`
-- 前台普通自动 step boundary 使用 Pop 后短延迟 Whoosh；session complete 只播放 Thud，不叠加 Pop
-- 前台 haptics 语义为 `phase complete = warning`、`next phase started = soft impact`、`session complete = success`
-- 后台和锁屏由 local notification 表达声音：普通边界用 Pop，最终完成用 Thud；不做 app-controlled haptics
+- 事件声音固定映射为 `forward phase boundary = next-phase-whoosh.caf`、`back to last step = phase-complete-pop.caf`、`reset current step = phase-reset-notification.caf`、`session complete = session-complete-thud.caf`
+- 前台普通自动 step boundary 和 `Skip` 正向推进只播放 Whoosh；`Back to last step` 只播放 Pop；`Reset current step` 只播放 reset 音效；session complete 只播放 Thud
+- 前台 haptics 语义为 `forward = soft impact`、`back = rigid impact`、`reset = soft impact`、`session complete = success`
+- 后台和锁屏由 local notification 表达声音：普通边界用 Whoosh，最终完成用 Thud；不做 app-controlled haptics
 - 设置中的时间调节需要有柔和但明确的 haptics 耦合
 
 ---
@@ -905,7 +906,7 @@ MVP 不需要额外寻找开源 PNG 照片素材。
 - [VibePomodoro/Screens/Settings/SettingsPreferenceSections.swift](./VibePomodoro/Screens/Settings/SettingsPreferenceSections.swift)
   - `Alerts / Display / Other` 次级设置卡、共用设置行组件与清空 Productivity 历史确认入口
 - [VibePomodoro/Resources/Sounds](./VibePomodoro/Resources/Sounds)
-  - `phase-complete-pop.caf`、`next-phase-whoosh.caf`、`session-complete-thud.caf` 三个固定提醒声音素材
+  - `phase-complete-pop.caf`、`next-phase-whoosh.caf`、`phase-reset-notification.caf`、`session-complete-thud.caf` 四个固定提醒声音素材
 - [VibePomodoro/Shared/Theme/VibeTheme.swift](./VibePomodoro/Shared/Theme/VibeTheme.swift)
   - 共享主题色板与 phase UI 扩展
 - [VibePomodoro/Shared/UI/SharedShell.swift](./VibePomodoro/Shared/UI/SharedShell.swift)
