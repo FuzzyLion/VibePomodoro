@@ -232,6 +232,37 @@ private struct BubbleShapeGeometry {
         )
     }
 
+    static func smoothClosedLoop(
+        points: [CGPoint],
+        controlScale: CGFloat = 0.12
+    ) -> BubbleShapeGeometry {
+        guard points.count > 2 else {
+            return BubbleShapeGeometry(start: points.first ?? .zero, segments: [])
+        }
+
+        let count = points.count
+        let segments = points.indices.map { index in
+            let previous = points[(index + count - 1) % count]
+            let current = points[index]
+            let next = points[(index + 1) % count]
+            let afterNext = points[(index + 2) % count]
+
+            return BubbleShapeCurveSegment(
+                control1: CGPoint(
+                    x: current.x + ((next.x - previous.x) * controlScale),
+                    y: current.y + ((next.y - previous.y) * controlScale)
+                ),
+                control2: CGPoint(
+                    x: next.x - ((afterNext.x - current.x) * controlScale),
+                    y: next.y - ((afterNext.y - current.y) * controlScale)
+                ),
+                end: next
+            )
+        }
+
+        return BubbleShapeGeometry(start: points[0], segments: segments)
+    }
+
     private func scaled(_ point: CGPoint, in rect: CGRect) -> CGPoint {
         CGPoint(
             x: rect.minX + (rect.width * point.x),
@@ -250,47 +281,38 @@ private extension SessionPhase {
     var bubbleShapeGeometry: BubbleShapeGeometry {
         switch self {
         case .focus:
-            return BubbleShapeGeometry(
-                start: CGPoint(x: 0.49, y: 0.01),
-                segments: [
-                    .init(control1: CGPoint(x: 0.68, y: -0.01), control2: CGPoint(x: 0.79, y: 0.00), end: CGPoint(x: 0.86, y: 0.08)),
-                    .init(control1: CGPoint(x: 0.96, y: 0.18), control2: CGPoint(x: 1.01, y: 0.31), end: CGPoint(x: 0.99, y: 0.48)),
-                    .init(control1: CGPoint(x: 0.99, y: 0.73), control2: CGPoint(x: 0.96, y: 0.87), end: CGPoint(x: 0.86, y: 0.92)),
-                    .init(control1: CGPoint(x: 0.75, y: 0.99), control2: CGPoint(x: 0.61, y: 1.00), end: CGPoint(x: 0.50, y: 1.00)),
-                    .init(control1: CGPoint(x: 0.38, y: 0.99), control2: CGPoint(x: 0.25, y: 0.98), end: CGPoint(x: 0.13, y: 0.92)),
-                    .init(control1: CGPoint(x: 0.03, y: 0.87), control2: CGPoint(x: -0.01, y: 0.71), end: CGPoint(x: 0.01, y: 0.49)),
-                    .init(control1: CGPoint(x: 0.01, y: 0.28), control2: CGPoint(x: 0.01, y: 0.15), end: CGPoint(x: 0.10, y: 0.09)),
-                    .init(control1: CGPoint(x: 0.20, y: 0.00), control2: CGPoint(x: 0.33, y: -0.01), end: CGPoint(x: 0.49, y: 0.01))
-                ]
-            )
+            return BubbleShapeGeometry.smoothClosedLoop(points: [
+                CGPoint(x: 0.440, y: 0.020),
+                CGPoint(x: 0.735, y: 0.048),
+                CGPoint(x: 0.995, y: 0.300),
+                CGPoint(x: 0.905, y: 0.825),
+                CGPoint(x: 0.635, y: 0.988),
+                CGPoint(x: 0.205, y: 0.915),
+                CGPoint(x: 0.015, y: 0.585),
+                CGPoint(x: 0.130, y: 0.180)
+            ])
         case .shortBreak:
-            return BubbleShapeGeometry(
-                start: CGPoint(x: 0.49, y: 0.02),
-                segments: [
-                    .init(control1: CGPoint(x: 0.63, y: -0.01), control2: CGPoint(x: 0.75, y: 0.04), end: CGPoint(x: 0.81, y: 0.12)),
-                    .init(control1: CGPoint(x: 0.88, y: 0.18), control2: CGPoint(x: 0.94, y: 0.24), end: CGPoint(x: 0.93, y: 0.34)),
-                    .init(control1: CGPoint(x: 0.97, y: 0.46), control2: CGPoint(x: 1.01, y: 0.57), end: CGPoint(x: 0.99, y: 0.67)),
-                    .init(control1: CGPoint(x: 0.95, y: 0.85), control2: CGPoint(x: 0.72, y: 0.94), end: CGPoint(x: 0.53, y: 1.00)),
-                    .init(control1: CGPoint(x: 0.40, y: 1.01), control2: CGPoint(x: 0.25, y: 0.92), end: CGPoint(x: 0.15, y: 0.81)),
-                    .init(control1: CGPoint(x: 0.05, y: 0.69), control2: CGPoint(x: -0.03, y: 0.61), end: CGPoint(x: 0.00, y: 0.52)),
-                    .init(control1: CGPoint(x: 0.01, y: 0.41), control2: CGPoint(x: -0.01, y: 0.30), end: CGPoint(x: 0.05, y: 0.20)),
-                    .init(control1: CGPoint(x: 0.11, y: 0.08), control2: CGPoint(x: 0.28, y: 0.02), end: CGPoint(x: 0.49, y: 0.02))
-                ]
-            )
+            return BubbleShapeGeometry.smoothClosedLoop(points: [
+                CGPoint(x: 0.490, y: 0.026),
+                CGPoint(x: 0.805, y: 0.125),
+                CGPoint(x: 0.935, y: 0.360),
+                CGPoint(x: 0.965, y: 0.665),
+                CGPoint(x: 0.540, y: 0.982),
+                CGPoint(x: 0.165, y: 0.815),
+                CGPoint(x: 0.035, y: 0.525),
+                CGPoint(x: 0.075, y: 0.215)
+            ])
         case .longBreak:
-            return BubbleShapeGeometry(
-                start: CGPoint(x: 0.49, y: 0.02),
-                segments: [
-                    .init(control1: CGPoint(x: 0.66, y: 0.00), control2: CGPoint(x: 0.78, y: 0.01), end: CGPoint(x: 0.84, y: 0.08)),
-                    .init(control1: CGPoint(x: 0.90, y: 0.13), control2: CGPoint(x: 0.93, y: 0.18), end: CGPoint(x: 0.94, y: 0.28)),
-                    .init(control1: CGPoint(x: 0.98, y: 0.38), control2: CGPoint(x: 1.01, y: 0.49), end: CGPoint(x: 0.99, y: 0.60)),
-                    .init(control1: CGPoint(x: 0.98, y: 0.74), control2: CGPoint(x: 0.92, y: 0.81), end: CGPoint(x: 0.86, y: 0.84)),
-                    .init(control1: CGPoint(x: 0.77, y: 0.91), control2: CGPoint(x: 0.64, y: 1.00), end: CGPoint(x: 0.53, y: 1.00)),
-                    .init(control1: CGPoint(x: 0.39, y: 1.00), control2: CGPoint(x: 0.22, y: 0.93), end: CGPoint(x: 0.16, y: 0.86)),
-                    .init(control1: CGPoint(x: 0.05, y: 0.73), control2: CGPoint(x: -0.03, y: 0.60), end: CGPoint(x: 0.00, y: 0.48)),
-                    .init(control1: CGPoint(x: 0.03, y: 0.20), control2: CGPoint(x: 0.24, y: 0.02), end: CGPoint(x: 0.49, y: 0.02))
-                ]
-            )
+            return BubbleShapeGeometry.smoothClosedLoop(points: [
+                CGPoint(x: 0.490, y: 0.024),
+                CGPoint(x: 0.835, y: 0.085),
+                CGPoint(x: 0.930, y: 0.300),
+                CGPoint(x: 0.965, y: 0.595),
+                CGPoint(x: 0.845, y: 0.835),
+                CGPoint(x: 0.535, y: 0.982),
+                CGPoint(x: 0.175, y: 0.855),
+                CGPoint(x: 0.070, y: 0.290)
+            ])
         }
     }
 }
