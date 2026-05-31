@@ -14,6 +14,9 @@ enum SettingsLayout {
     static let rowVerticalPadding: CGFloat = 14
     static let pickerRowVerticalPadding: CGFloat = 16
     static let expandedPickerHeight: CGFloat = 128
+    static let expandedPickerTopSpacing: CGFloat = 12
+    static let pickerCornerRadius: CGFloat = 24
+    static let pickerFadeHeight: CGFloat = 28
     static let pickerValuePillHeight: CGFloat = 36
     static let pickerValueMinWidth: CGFloat = 86
     static let sectionTitleTracking: CGFloat = 1.0
@@ -83,10 +86,6 @@ enum SettingsTheme {
 
     static func pickerRecessStroke(for colorScheme: ColorScheme) -> Color {
         colorScheme == .dark ? Color.white.opacity(0.055) : Color.white.opacity(0.26)
-    }
-
-    static func pickerSelectionFill(for colorScheme: ColorScheme) -> Color {
-        colorScheme == .dark ? Color.white.opacity(0.045) : Color.white.opacity(0.26)
     }
 }
 

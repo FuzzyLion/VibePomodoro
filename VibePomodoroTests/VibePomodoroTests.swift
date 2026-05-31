@@ -631,6 +631,46 @@ struct VibePomodoroTests {
         #expect(store.settings.focusMinutes == 15)
     }
 
+    @Test func appearanceModeDefaultsToSystemAndPersistsUpdates() async throws {
+        let (defaults, suiteName) = makeDefaults()
+        defer { clear(defaults, suiteName: suiteName) }
+
+        let store = PomodoroStore(defaults: defaults)
+
+        #expect(store.settings.appearanceMode == .system)
+
+        store.setAppearanceMode(.dark)
+        #expect(store.settings.appearanceMode == .dark)
+
+        let reloadedStore = PomodoroStore(defaults: defaults)
+        #expect(reloadedStore.settings.appearanceMode == .dark)
+    }
+
+    @Test func legacySettingsDecodeWithSystemAppearanceMode() async throws {
+        let legacySettingsJSON = Data("""
+        {
+            "focusMinutes": 45,
+            "shortBreakMinutes": 10,
+            "longBreakMinutes": 20,
+            "targetRounds": 3,
+            "keepScreenOn": false,
+            "notificationsEnabled": true,
+            "soundEnabled": false,
+            "hapticsEnabled": true
+        }
+        """.utf8)
+
+        let decoded = try JSONDecoder().decode(PomodoroSettings.self, from: legacySettingsJSON)
+
+        #expect(decoded.focusMinutes == 45)
+        #expect(decoded.shortBreakMinutes == 10)
+        #expect(decoded.longBreakMinutes == 20)
+        #expect(decoded.targetRounds == 3)
+        #expect(decoded.keepScreenOn == false)
+        #expect(decoded.soundEnabled == false)
+        #expect(decoded.appearanceMode == .system)
+    }
+
     @Test func productivityEmptyCacheProducesZeroBucketsForAllRanges() async throws {
         let (defaults, suiteName) = makeDefaults()
         defer { clear(defaults, suiteName: suiteName) }

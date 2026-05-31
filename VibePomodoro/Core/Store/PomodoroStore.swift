@@ -8,6 +8,9 @@ final class PomodoroStore: ObservableObject {
     static let openSettingsArgument = "--open-settings"
     static let resetStorageArgument = "--reset-vibe-store"
     static let uiTestingArgument = "--ui-testing"
+    static let appearanceLightArgument = "--appearance-light"
+    static let appearanceDarkArgument = "--appearance-dark"
+    static let appearanceSystemArgument = "--appearance-system"
     static let defaultsSuiteNameEnvironmentKey = "VIBE_DEFAULTS_SUITE"
     static let productivityFixtureEnvironmentKey = "VIBE_PRODUCTIVITY_FIXTURE"
     static let resetStorageEnvironmentKey = "VIBE_RESET_STORE"
@@ -37,7 +40,9 @@ final class PomodoroStore: ObservableObject {
         self.feedbackPlayer = feedbackPlayer ?? ReminderFeedbackPlayer()
         Self.resetStorageIfRequested(using: defaults)
         Self.seedUITestingProductivityFixtureIfRequested(using: defaults)
-        self.settings = Self.loadValue(for: StorageKey.settings, using: defaults) ?? .default
+        var loadedSettings: PomodoroSettings = Self.loadValue(for: StorageKey.settings, using: defaults) ?? .default
+        Self.applyLaunchAppearanceOverride(to: &loadedSettings)
+        self.settings = loadedSettings
         self.activeSession = Self.loadValue(for: StorageKey.activeSession, using: defaults)
         self.completedSessions = Self.loadValue(for: StorageKey.completedSessions, using: defaults) ?? []
         self.productivityCache = Self.loadValue(for: StorageKey.productivityCache, using: defaults) ?? .empty
@@ -65,6 +70,18 @@ final class PomodoroStore: ObservableObject {
         }
 
         return .focus
+    }
+
+    private static func applyLaunchAppearanceOverride(to settings: inout PomodoroSettings) {
+        let arguments = ProcessInfo.processInfo.arguments
+
+        if arguments.contains(appearanceLightArgument) {
+            settings.appearanceMode = .light
+        } else if arguments.contains(appearanceDarkArgument) {
+            settings.appearanceMode = .dark
+        } else if arguments.contains(appearanceSystemArgument) {
+            settings.appearanceMode = .system
+        }
     }
 
     private static func resetStorageIfRequested(using defaults: UserDefaults) {

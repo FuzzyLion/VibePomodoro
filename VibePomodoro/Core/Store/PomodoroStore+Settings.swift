@@ -85,6 +85,13 @@ extension PomodoroStore {
         persist()
     }
 
+    func setAppearanceMode(_ mode: PomodoroAppearanceMode) {
+        guard settings.appearanceMode != mode else { return }
+        settings.appearanceMode = mode
+        persist()
+        fireAdjustmentFeedback()
+    }
+
     private func fireAdjustmentFeedback() {
         guard settings.hapticsEnabled else { return }
         let generator = UIImpactFeedbackGenerator(style: .soft)

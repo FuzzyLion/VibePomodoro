@@ -16,9 +16,23 @@ struct VibePomodoroApp: App {
         WindowGroup {
             ContentView()
                 .environmentObject(store)
+                .preferredColorScheme(store.settings.appearanceMode.preferredColorScheme)
                 .onChange(of: scenePhase) { _, newValue in
                     store.handleScenePhaseChange(newValue)
                 }
+        }
+    }
+}
+
+private extension PomodoroAppearanceMode {
+    var preferredColorScheme: ColorScheme? {
+        switch self {
+        case .system:
+            return nil
+        case .light:
+            return .light
+        case .dark:
+            return .dark
         }
     }
 }

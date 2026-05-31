@@ -76,11 +76,17 @@ struct SettingsDisplaySection: View {
                 ),
                 accentOverlay: { EmptyView() }
             ) {
-                SettingsToggleRow(
-                    isOn: keepScreenOnBinding,
-                    title: "Keep Screen On",
-                    subtitle: "Active sessions only"
-                )
+                VStack(spacing: 0) {
+                    appearanceMenu
+
+                    SettingsDivider()
+
+                    SettingsToggleRow(
+                        isOn: keepScreenOnBinding,
+                        title: "Keep Screen On",
+                        subtitle: "Active sessions only"
+                    )
+                }
             }
         }
     }
@@ -90,6 +96,29 @@ struct SettingsDisplaySection: View {
             get: { store.settings.keepScreenOn },
             set: store.setKeepScreenOn
         )
+    }
+
+    private var appearanceMenu: some View {
+        Menu {
+            ForEach(PomodoroAppearanceMode.allCases) { mode in
+                Button {
+                    store.setAppearanceMode(mode)
+                } label: {
+                    Label(mode.title, systemImage: mode == store.settings.appearanceMode ? "checkmark" : mode.systemImage)
+                }
+                .accessibilityIdentifier("settings.appearance.\(mode.rawValue)")
+            }
+        } label: {
+            SettingsMenuRow(
+                title: "Appearance",
+                value: store.settings.appearanceMode.title
+            )
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Appearance")
+        .accessibilityValue(store.settings.appearanceMode.title)
+        .accessibilityHint("Opens appearance mode choices.")
+        .accessibilityIdentifier("settings.appearance")
     }
 }
 
@@ -155,6 +184,66 @@ struct SettingsOtherSection: View {
     }
 }
 
+private struct SettingsMenuRow: View {
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    let title: String
+    let value: String
+
+    var body: some View {
+        Group {
+            if dynamicTypeSize.isAccessibilitySize {
+                VStack(alignment: .leading, spacing: 10) {
+                    titleLabel
+                    valueLabel
+                }
+            } else {
+                HStack(spacing: 14) {
+                    titleLabel
+                    Spacer(minLength: 12)
+                    valueLabel
+                }
+            }
+        }
+        .padding(.vertical, SettingsLayout.rowVerticalPadding)
+        .contentShape(Rectangle())
+    }
+
+    private var titleLabel: some View {
+        Text(title)
+            .font(.system(.body, weight: .semibold))
+            .foregroundStyle(SettingsTheme.primaryTextColor(for: colorScheme))
+            .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private var valueLabel: some View {
+        HStack(spacing: 8) {
+            Text(value)
+                .font(.system(.body, weight: .semibold))
+                .foregroundStyle(SettingsTheme.primaryTextColor(for: colorScheme))
+                .lineLimit(1)
+                .minimumScaleFactor(0.86)
+
+            Image(systemName: "chevron.up.chevron.down")
+                .font(.system(size: 10, weight: .bold))
+                .foregroundStyle(SettingsTheme.secondaryTextColor(for: colorScheme).opacity(0.55))
+        }
+        .padding(.leading, 14)
+        .padding(.trailing, 12)
+        .frame(height: SettingsLayout.pickerValuePillHeight)
+        .background(
+            Capsule(style: .continuous)
+                .fill(SettingsTheme.valuePillFill(for: colorScheme))
+        )
+        .overlay {
+            Capsule(style: .continuous)
+                .strokeBorder(SettingsTheme.valuePillStroke(for: colorScheme), lineWidth: 1)
+        }
+        .fixedSize(horizontal: true, vertical: false)
+    }
+}
+
 private struct SettingsToggleRow: View {
     @Environment(\.colorScheme) private var colorScheme
 
@@ -184,6 +273,7 @@ private struct SettingsToggleRow: View {
         .tint(VibePalette.focusTint)
         .disabled(disabled)
         .opacity(disabled ? 0.72 : 1)
+        .accessibilityIdentifier(title)
     }
 }
 

@@ -2,6 +2,7 @@ import SwiftUI
 
 struct SettingsSessionRhythmSection: View {
     static let expandFocusPickerArgument = "--expand-focus-settings-picker"
+    static let expandShortBreakPickerArgument = "--expand-short-break-settings-picker"
 
     @EnvironmentObject private var store: PomodoroStore
     @Environment(\.colorScheme) private var colorScheme
@@ -12,6 +13,10 @@ struct SettingsSessionRhythmSection: View {
     private static func initialExpandedField() -> SettingsTimerField? {
         if ProcessInfo.processInfo.arguments.contains(expandFocusPickerArgument) {
             return .focus
+        }
+
+        if ProcessInfo.processInfo.arguments.contains(expandShortBreakPickerArgument) {
+            return .shortBreak
         }
 
         return nil
@@ -117,22 +122,10 @@ private struct SettingsExpandablePickerRow: View {
     let toggleExpansion: () -> Void
 
     var body: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: 0) {
             Button(action: toggleExpansion) {
-                Group {
-                    if dynamicTypeSize.isAccessibilitySize {
-                        VStack(alignment: .leading, spacing: 12) {
-                            label
-                            valueDisclosure
-                        }
-                    } else {
-                        HStack(spacing: 12) {
-                            label
-                            Spacer(minLength: 8)
-                            valueDisclosure
-                        }
-                    }
-                }
+                disclosureContent
+                    .frame(minHeight: SettingsLayout.pickerValuePillHeight, alignment: .center)
             }
             .buttonStyle(SettingsPickerDisclosureButtonStyle())
             .accessibilityLabel(title)
@@ -145,6 +138,22 @@ private struct SettingsExpandablePickerRow: View {
         .animation(.spring(response: 0.32, dampingFraction: 0.9), value: isExpanded)
         .padding(.vertical, SettingsLayout.pickerRowVerticalPadding)
         .accessibilityElement(children: .contain)
+    }
+
+    @ViewBuilder
+    private var disclosureContent: some View {
+        if dynamicTypeSize.isAccessibilitySize {
+            VStack(alignment: .leading, spacing: 12) {
+                label
+                valueDisclosure
+            }
+        } else {
+            HStack(alignment: .center, spacing: 12) {
+                label
+                Spacer(minLength: 8)
+                valueDisclosure
+            }
+        }
     }
 
     private var label: some View {
@@ -182,67 +191,69 @@ private struct SettingsExpandablePickerRow: View {
         }
     }
 
+    @ViewBuilder
     private var pickerDrawer: some View {
-        picker
-            .padding(.top, isExpanded ? 12 : 0)
-            .opacity(isExpanded ? 1 : 0)
-            .offset(y: isExpanded ? 0 : -10)
-            .frame(
-                height: isExpanded ? SettingsLayout.expandedPickerHeight + 12 : 0,
-                alignment: .top
-            )
-            .clipped()
-            .allowsHitTesting(isExpanded)
-            .accessibilityHidden(!isExpanded)
+        if isExpanded {
+            picker
+                .padding(.top, SettingsLayout.expandedPickerTopSpacing)
+                .transition(.opacity.combined(with: .move(edge: .top)))
+        }
     }
 
     private var picker: some View {
-        Picker(title, selection: $selectedValue) {
-            ForEach(allowedValues, id: \.self) { value in
-                Text(textForValue(value))
-                    .font(.system(.title2, weight: .semibold))
-                    .monospacedDigit()
-                    .tag(value)
+        ZStack {
+            Picker(title, selection: $selectedValue) {
+                ForEach(allowedValues, id: \.self) { value in
+                    Text(textForValue(value))
+                        .font(.system(.title2, weight: .semibold))
+                        .monospacedDigit()
+                        .tag(value)
+                }
             }
+            .pickerStyle(.wheel)
+            .labelsHidden()
+            .frame(maxWidth: .infinity)
+            .frame(height: SettingsLayout.expandedPickerHeight)
+            .clipped()
+
+            pickerFadeOverlay
+                .allowsHitTesting(false)
         }
-        .pickerStyle(.wheel)
-        .labelsHidden()
         .frame(maxWidth: .infinity)
         .frame(height: SettingsLayout.expandedPickerHeight)
-        .clipped()
         .background {
-            ZStack {
-                RoundedRectangle(cornerRadius: 24, style: .continuous)
-                    .fill(SettingsTheme.pickerFill(for: colorScheme))
-                    .glassEffect(.regular.tint(SettingsTheme.pickerFill(for: colorScheme)), in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+            pickerBackground
+        }
+        .clipShape(pickerShape)
+        .overlay {
+            pickerShape
+                .strokeBorder(SettingsTheme.pickerRecessStroke(for: colorScheme), lineWidth: 1)
+        }
+        .accessibilityLabel("\(title) picker")
+        .accessibilityIdentifier(pickerAccessibilityIdentifier)
+    }
 
-                RoundedRectangle(cornerRadius: 24, style: .continuous)
+    private var pickerBackground: some View {
+        pickerShape
+            .fill(SettingsTheme.pickerFill(for: colorScheme))
+            .overlay {
+                pickerShape
                     .fill(
                         LinearGradient(
                             colors: [
                                 Color.black.opacity(colorScheme == .dark ? 0.035 : 0.018),
                                 Color.clear,
-                                Color.white.opacity(colorScheme == .dark ? 0.018 : 0.18)
+                                Color.white.opacity(colorScheme == .dark ? 0.014 : 0.16)
                             ],
                             startPoint: .top,
                             endPoint: .bottom
                         )
                     )
-
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(SettingsTheme.pickerSelectionFill(for: colorScheme))
-                    .frame(height: 42)
-                    .padding(.horizontal, 16)
             }
-        }
-        .overlay {
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .strokeBorder(SettingsTheme.pickerRecessStroke(for: colorScheme), lineWidth: 1)
-        }
-        .mask {
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
-        }
-        .overlay(alignment: .top) {
+    }
+
+    private var pickerFadeOverlay: some View {
+        VStack(spacing: 0) {
             LinearGradient(
                 colors: [
                     SettingsTheme.pickerFill(for: colorScheme),
@@ -251,10 +262,10 @@ private struct SettingsExpandablePickerRow: View {
                 startPoint: .top,
                 endPoint: .bottom
             )
-            .frame(height: 28)
-            .allowsHitTesting(false)
-        }
-        .overlay(alignment: .bottom) {
+            .frame(height: SettingsLayout.pickerFadeHeight)
+
+            Spacer(minLength: 0)
+
             LinearGradient(
                 colors: [
                     Color.clear,
@@ -263,11 +274,12 @@ private struct SettingsExpandablePickerRow: View {
                 startPoint: .top,
                 endPoint: .bottom
             )
-            .frame(height: 28)
-            .allowsHitTesting(false)
+            .frame(height: SettingsLayout.pickerFadeHeight)
         }
-        .accessibilityLabel("\(title) picker")
-        .accessibilityIdentifier(pickerAccessibilityIdentifier)
+    }
+
+    private var pickerShape: RoundedRectangle {
+        RoundedRectangle(cornerRadius: SettingsLayout.pickerCornerRadius, style: .continuous)
     }
 }
 

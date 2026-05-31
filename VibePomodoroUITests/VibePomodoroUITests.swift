@@ -73,6 +73,95 @@ final class VibePomodoroUITests: XCTestCase {
     }
 
     @MainActor
+    func testSettingsSessionRhythmPickerExpandsAndCollapses() throws {
+        let app = makeCleanApp(arguments: ["--open-settings"])
+        app.terminate()
+        app.launch()
+
+        XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 8), app.debugDescription)
+
+        let shortBreakRow = app.buttons["settings.sessionRhythm.shortBreak"]
+        XCTAssertTrue(shortBreakRow.waitForExistence(timeout: 2), app.debugDescription)
+
+        let shortBreakPicker = app.descendants(matching: .any)["settings.sessionRhythm.shortBreak.picker"]
+        XCTAssertFalse(shortBreakPicker.exists)
+
+        shortBreakRow.tap()
+        XCTAssertTrue(
+            shortBreakPicker.waitForExistence(timeout: 2),
+            app.debugDescription
+        )
+
+        shortBreakRow.tap()
+        XCTAssertTrue(
+            waitForElementToDisappear(shortBreakPicker, timeout: 2),
+            app.debugDescription
+        )
+
+        XCTAssertTrue(app.buttons["settings.sessionRhythm.longBreak"].exists)
+    }
+
+    @MainActor
+    func testSettingsAppearanceMenuSwitchesBetweenModes() throws {
+        let app = makeCleanApp(arguments: ["--open-settings"])
+        app.launch()
+
+        XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 8), app.debugDescription)
+        XCTAssertFalse(app.staticTexts["APPEARANCE"].exists)
+        XCTAssertTrue(app.staticTexts["DISPLAY"].exists)
+
+        let appearanceMenu = app.buttons["settings.appearance"]
+        XCTAssertTrue(appearanceMenu.waitForExistence(timeout: 2), app.debugDescription)
+        XCTAssertTrue(app.switches["Keep Screen On"].exists || app.buttons["Keep Screen On"].exists)
+        XCTAssertTrue(app.staticTexts["Follow System"].exists)
+
+        scrollUntilHittable(appearanceMenu, in: app)
+        appearanceMenu.tap()
+        XCTAssertTrue(app.buttons["Dark"].waitForExistence(timeout: 2), app.debugDescription)
+        app.buttons["Dark"].tap()
+        XCTAssertTrue(app.staticTexts["Dark"].waitForExistence(timeout: 2), app.debugDescription)
+
+        appearanceMenu.tap()
+        XCTAssertTrue(app.buttons["Light"].waitForExistence(timeout: 2), app.debugDescription)
+        app.buttons["Light"].tap()
+        XCTAssertTrue(app.staticTexts["Light"].waitForExistence(timeout: 2), app.debugDescription)
+
+        appearanceMenu.tap()
+        XCTAssertTrue(app.buttons["Follow System"].waitForExistence(timeout: 2), app.debugDescription)
+        app.buttons["Follow System"].tap()
+        XCTAssertTrue(app.staticTexts["Follow System"].waitForExistence(timeout: 2), app.debugDescription)
+    }
+
+    @MainActor
+    private func waitForElementToDisappear(_ element: XCUIElement, timeout: TimeInterval) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+
+        repeat {
+            if !element.exists {
+                return true
+            }
+
+            RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+        } while Date() < deadline
+
+        return !element.exists
+    }
+
+    @MainActor
+    private func scrollUntilHittable(
+        _ element: XCUIElement,
+        in app: XCUIApplication,
+        maxSwipes: Int = 4
+    ) {
+        var remainingSwipes = maxSwipes
+
+        while element.exists && !element.isHittable && remainingSwipes > 0 {
+            app.swipeUp()
+            remainingSwipes -= 1
+        }
+    }
+
+    @MainActor
     private func makeCleanApp(
         arguments: [String] = [],
         environment: [String: String] = [:]
