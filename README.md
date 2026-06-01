@@ -22,6 +22,10 @@ VibePomodoro/
 ├── Core/
 │   ├── Engine/
 │   │   └── PomodoroEngine.swift
+│   ├── LiveActivity/
+│   │   ├── PomodoroActivityAttributes.swift
+│   │   ├── PomodoroLiveActivitySnapshot.swift
+│   │   └── LiveActivityCoordinator.swift
 │   ├── Models/
 │   │   ├── PomodoroTypes.swift
 │   │   ├── SessionModels.swift
@@ -65,7 +69,14 @@ VibePomodoro/
 │   └── UI/
 │       ├── SharedShell.swift
 │       └── SectionTitle.swift
-└── Assets.xcassets/
+├── Assets.xcassets/
+└── VibePomodoroLiveActivity/
+    ├── PomodoroActivityAttributes.swift
+    ├── PomodoroLiveActivityBundle.swift
+    ├── PomodoroLiveActivityWidget.swift
+    ├── Views/
+    ├── Style/
+    └── Preview/
 ```
 
 结构约定：
@@ -86,6 +97,7 @@ VibePomodoro/
 - `ContentView.swift` 负责全局背景、`TabView`，以及跨页面的底部导航显隐协作；不承载业务状态机。
 - `Core/Models/*` 定义核心数据模型、session 快照和 productivity 聚合结构。
 - `Core/Engine/PomodoroEngine.swift` 定义 session 状态推进规则与事件产出。
+- `Core/LiveActivity/*` 定义 Live Activity 的 ActivityKit contract、session 快照映射与 ActivityKit 副作用适配。
 - `Core/Store/*` 仍是运行时唯一 source of truth，但按 `主状态 / 设置 / 生命周期 / 通知 / 持久化 / 统计` 拆分职责。
 - `Screens/*` 负责页面级 UI 和页面专属子视图，不新增第二套全局状态源。
 - `Screens/Focus/*` 当前按 `页面骨架 / render state / 布局 support / 页面 support / chrome 组合 / 页面专属控件 / 气泡计时器实现 / 完成总结 overlay` 拆分，但仍属于同一页面边界。
@@ -271,6 +283,10 @@ VibePomodoro/
   - 放 `Core/Models/*` 或 `Core/Engine/PomodoroEngine.swift`
 - 改持久化、通知、scene 恢复、idle timer、副作用协调：
   - 放 `Core/Store/*`
+- 改 `Live Activities` 的数据 contract、session 快照映射或 ActivityKit 创建/更新/结束适配：
+  - 放 `Core/LiveActivity/*`
+- 改锁屏 Live Activity 或 Dynamic Island UI：
+  - 放 `VibePomodoroLiveActivity/*`
 - 新功能开始前，默认先回答三件事：
   - 当前架构是什么
   - 这个功能应该落在哪一层
@@ -448,7 +464,6 @@ MVP 需要支持的配置项：
 
 ### 3.2 MVP 暂不做
 
-- 正式 `Live Activities` 接入
 - `SwiftData` 完整统计落库
 - `iCloud` 数据同步
 - 多设备接力 session
@@ -847,6 +862,12 @@ MVP 不需要额外寻找开源 PNG 照片素材。
   - Productivity 日聚合缓存、自然日 summary 与 range 类型
 - [VibePomodoro/Core/Engine/PomodoroEngine.swift](./VibePomodoro/Core/Engine/PomodoroEngine.swift)
   - 状态机推进、step 切换、reconcile 与事件定义
+- [VibePomodoro/Core/LiveActivity/PomodoroActivityAttributes.swift](./VibePomodoro/Core/LiveActivity/PomodoroActivityAttributes.swift)
+  - Live Activity 的 ActivityKit attributes、content state、phase 与 run state contract
+- [VibePomodoro/Core/LiveActivity/PomodoroLiveActivitySnapshot.swift](./VibePomodoro/Core/LiveActivity/PomodoroLiveActivitySnapshot.swift)
+  - 从 `SessionSnapshot` 推导 Live Activity 展示快照，保持计时真值来自 `Date / targetEndDate`
+- [VibePomodoro/Core/LiveActivity/LiveActivityCoordinator.swift](./VibePomodoro/Core/LiveActivity/LiveActivityCoordinator.swift)
+  - ActivityKit 创建、更新、结束与测试替身协议；由 `PomodoroStore` 作为 runtime 副作用触发
 - [VibePomodoro/Core/Store/PomodoroStore.swift](./VibePomodoro/Core/Store/PomodoroStore.swift)
   - store 主状态、对外动作入口与页面读取的派生属性
 - [VibePomodoro/Core/Store/PomodoroStore+Settings.swift](./VibePomodoro/Core/Store/PomodoroStore+Settings.swift)
@@ -913,6 +934,8 @@ MVP 不需要额外寻找开源 PNG 照片素材。
   - 共享背景、玻璃容器与底部导航外壳
 - [VibePomodoro/Shared/UI/SectionTitle.swift](./VibePomodoro/Shared/UI/SectionTitle.swift)
   - `Productivity` / `Settings` 共用标题组件
+- [VibePomodoroLiveActivity](./VibePomodoroLiveActivity)
+  - Live Activity extension target；`PomodoroLiveActivityWidget.swift` 只做配置装配，`Views/` 承载锁屏与 Dynamic Island UI，`Style/` 承载 Activity 专用色彩，`Preview/` 承载预览状态
 
 ---
 
@@ -924,7 +947,7 @@ MVP 不需要额外寻找开源 PNG 照片素材。
 2. 接入真正的自定义声音素材
 3. 完善本地通知体验
 4. 将统计持久化迁移到 `SwiftData`
-5. 接入 `Live Activities`
+5. 继续打磨 `Live Activities` 的锁屏与 Dynamic Island 视觉细节
 6. 再考虑 `iCloud` 同步
 
 ---

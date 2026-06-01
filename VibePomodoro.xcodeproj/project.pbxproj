@@ -6,7 +6,18 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		115271A02F70000000A5F46C /* VibePomodoroLiveActivity.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = 115271A22F70000000A5F46C /* VibePomodoroLiveActivity.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
+		115271A12F70000000A5F46C /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 1152716A2F6749BE00A5F46C /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 115271A52F70000000A5F46C;
+			remoteInfo = VibePomodoroLiveActivity;
+		};
 		115271802F6749C000A5F46C /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 1152716A2F6749BE00A5F46C /* Project object */;
@@ -27,12 +38,18 @@
 		115271722F6749BE00A5F46C /* VibePomodoro.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = VibePomodoro.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		1152717F2F6749C000A5F46C /* VibePomodoroTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = VibePomodoroTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		115271892F6749C000A5F46C /* VibePomodoroUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = VibePomodoroUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		115271A22F70000000A5F46C /* VibePomodoroLiveActivity.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = VibePomodoroLiveActivity.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		115271742F6749BE00A5F46C /* VibePomodoro */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = VibePomodoro;
+			sourceTree = "<group>";
+		};
+		115271A32F70000000A5F46C /* VibePomodoroLiveActivity */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = VibePomodoroLiveActivity;
 			sourceTree = "<group>";
 		};
 		115271822F6749C000A5F46C /* VibePomodoroTests */ = {
@@ -69,6 +86,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		115271A42F70000000A5F46C /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -76,6 +100,7 @@
 			isa = PBXGroup;
 			children = (
 				115271742F6749BE00A5F46C /* VibePomodoro */,
+				115271A32F70000000A5F46C /* VibePomodoroLiveActivity */,
 				115271822F6749C000A5F46C /* VibePomodoroTests */,
 				1152718C2F6749C000A5F46C /* VibePomodoroUITests */,
 				115271732F6749BE00A5F46C /* Products */,
@@ -88,6 +113,7 @@
 				115271722F6749BE00A5F46C /* VibePomodoro.app */,
 				1152717F2F6749C000A5F46C /* VibePomodoroTests.xctest */,
 				115271892F6749C000A5F46C /* VibePomodoroUITests.xctest */,
+				115271A22F70000000A5F46C /* VibePomodoroLiveActivity.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -102,10 +128,12 @@
 				1152716E2F6749BE00A5F46C /* Sources */,
 				1152716F2F6749BE00A5F46C /* Frameworks */,
 				115271702F6749BE00A5F46C /* Resources */,
+				115271A82F70000000A5F46C /* Embed App Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				115271A92F70000000A5F46C /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				115271742F6749BE00A5F46C /* VibePomodoro */,
@@ -116,6 +144,28 @@
 			productName = VibePomodoro;
 			productReference = 115271722F6749BE00A5F46C /* VibePomodoro.app */;
 			productType = "com.apple.product-type.application";
+		};
+		115271A52F70000000A5F46C /* VibePomodoroLiveActivity */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 115271AC2F70000000A5F46C /* Build configuration list for PBXNativeTarget "VibePomodoroLiveActivity" */;
+			buildPhases = (
+				115271A72F70000000A5F46C /* Sources */,
+				115271A42F70000000A5F46C /* Frameworks */,
+				115271A62F70000000A5F46C /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				115271A32F70000000A5F46C /* VibePomodoroLiveActivity */,
+			);
+			name = VibePomodoroLiveActivity;
+			packageProductDependencies = (
+			);
+			productName = VibePomodoroLiveActivity;
+			productReference = 115271A22F70000000A5F46C /* VibePomodoroLiveActivity.appex */;
+			productType = "com.apple.product-type.app-extension";
 		};
 		1152717E2F6749C000A5F46C /* VibePomodoroTests */ = {
 			isa = PBXNativeTarget;
@@ -176,6 +226,9 @@
 					115271712F6749BE00A5F46C = {
 						CreatedOnToolsVersion = 26.3;
 					};
+					115271A52F70000000A5F46C = {
+						CreatedOnToolsVersion = 26.3;
+					};
 					1152717E2F6749C000A5F46C = {
 						CreatedOnToolsVersion = 26.3;
 						TestTargetID = 115271712F6749BE00A5F46C;
@@ -201,6 +254,7 @@
 			projectRoot = "";
 			targets = (
 				115271712F6749BE00A5F46C /* VibePomodoro */,
+				115271A52F70000000A5F46C /* VibePomodoroLiveActivity */,
 				1152717E2F6749C000A5F46C /* VibePomodoroTests */,
 				115271882F6749C000A5F46C /* VibePomodoroUITests */,
 			);
@@ -223,6 +277,13 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		115271872F6749C000A5F46C /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		115271A62F70000000A5F46C /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -253,9 +314,35 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		115271A72F70000000A5F46C /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
+/* Begin PBXCopyFilesBuildPhase section */
+		115271A82F70000000A5F46C /* Embed App Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				115271A02F70000000A5F46C /* VibePomodoroLiveActivity.appex in Embed App Extensions */,
+			);
+			name = "Embed App Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXTargetDependency section */
+		115271A92F70000000A5F46C /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 115271A52F70000000A5F46C /* VibePomodoroLiveActivity */;
+			targetProxy = 115271A12F70000000A5F46C /* PBXContainerItemProxy */;
+		};
 		115271812F6749C000A5F46C /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = 115271712F6749BE00A5F46C /* VibePomodoro */;
@@ -305,6 +392,7 @@
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = BYDPVV5PYY;
+				ENABLE_APP_INTENTS_METADATA_GENERATION = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
@@ -370,6 +458,7 @@
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = BYDPVV5PYY;
+				ENABLE_APP_INTENTS_METADATA_GENERATION = NO;
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
@@ -397,12 +486,14 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = VibePomodoro/VibePomodoro.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = BYDPVV5PYY;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CADisableMinimumFrameDurationOnPhone = YES;
+				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -413,6 +504,11 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-framework",
+					AppIntents,
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = Qi.VibePomodoro;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -430,12 +526,14 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = VibePomodoro/VibePomodoro.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = BYDPVV5PYY;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CADisableMinimumFrameDurationOnPhone = YES;
+				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -446,8 +544,71 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-framework",
+					AppIntents,
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = Qi.VibePomodoro;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		115271AA2F70000000A5F46C /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = BYDPVV5PYY;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = "VibePomodoroLiveActivity-Info.plist";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.2;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = Qi.VibePomodoro.LiveActivity;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		115271AB2F70000000A5F46C /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = BYDPVV5PYY;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = "VibePomodoroLiveActivity-Info.plist";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.2;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = Qi.VibePomodoro.LiveActivity;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
@@ -465,13 +626,20 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = BYDPVV5PYY;
+				ENABLE_APP_INTENTS_METADATA_GENERATION = NO;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.2;
 				MARKETING_VERSION = 1.0;
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-framework",
+					AppIntents,
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = Qi.VibePomodoroTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_CONST_VALUE_PROTOCOLS = "";
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
@@ -487,13 +655,20 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = BYDPVV5PYY;
+				ENABLE_APP_INTENTS_METADATA_GENERATION = NO;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.2;
 				MARKETING_VERSION = 1.0;
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-framework",
+					AppIntents,
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = Qi.VibePomodoroTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_CONST_VALUE_PROTOCOLS = "";
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
@@ -510,10 +685,16 @@
 				DEVELOPMENT_TEAM = BYDPVV5PYY;
 				GENERATE_INFOPLIST_FILE = YES;
 				MARKETING_VERSION = 1.0;
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-framework",
+					AppIntents,
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = Qi.VibePomodoroUITests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_CONST_VALUE_PROTOCOLS = "";
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
@@ -530,10 +711,16 @@
 				DEVELOPMENT_TEAM = BYDPVV5PYY;
 				GENERATE_INFOPLIST_FILE = YES;
 				MARKETING_VERSION = 1.0;
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-framework",
+					AppIntents,
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = Qi.VibePomodoroUITests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_CONST_VALUE_PROTOCOLS = "";
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
@@ -577,6 +764,15 @@
 			buildConfigurations = (
 				1152719A2F6749C000A5F46C /* Debug */,
 				1152719B2F6749C000A5F46C /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		115271AC2F70000000A5F46C /* Build configuration list for PBXNativeTarget "VibePomodoroLiveActivity" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				115271AA2F70000000A5F46C /* Debug */,
+				115271AB2F70000000A5F46C /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

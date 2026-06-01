@@ -24,6 +24,7 @@ final class PomodoroStore: ObservableObject {
 
     let defaults: UserDefaults
     let feedbackPlayer: ReminderFeedbackPlaying
+    let liveActivityCoordinator: PomodoroLiveActivityCoordinating
     let encoder = JSONEncoder()
     var stepBoundaryTimer: Timer?
     var currentScenePhase: ScenePhase = .active
@@ -35,9 +36,14 @@ final class PomodoroStore: ObservableObject {
         static let productivityCache = "vibe.productivityCache"
     }
 
-    init(defaults: UserDefaults = .standard, feedbackPlayer: ReminderFeedbackPlaying? = nil) {
+    init(
+        defaults: UserDefaults = .standard,
+        feedbackPlayer: ReminderFeedbackPlaying? = nil,
+        liveActivityCoordinator: PomodoroLiveActivityCoordinating? = nil
+    ) {
         self.defaults = defaults
         self.feedbackPlayer = feedbackPlayer ?? ReminderFeedbackPlayer()
+        self.liveActivityCoordinator = liveActivityCoordinator ?? Self.defaultLiveActivityCoordinator()
         Self.resetStorageIfRequested(using: defaults)
         Self.seedUITestingProductivityFixtureIfRequested(using: defaults)
         var loadedSettings: PomodoroSettings = Self.loadValue(for: StorageKey.settings, using: defaults) ?? .default
@@ -54,6 +60,7 @@ final class PomodoroStore: ObservableObject {
         requestNotificationPermissionsIfNeeded()
         syncNotifications()
         syncStepBoundaryTimer()
+        syncLiveActivity()
     }
 
     deinit {
@@ -107,9 +114,17 @@ final class PomodoroStore: ObservableObject {
             || ProcessInfo.processInfo.environment[uiTestingEnvironmentKey] == "1"
     }
 
+    static var isRunningTests: Bool {
+        ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
+    }
+
     private static var shouldResetStorage: Bool {
         ProcessInfo.processInfo.arguments.contains(resetStorageArgument)
             || ProcessInfo.processInfo.environment[resetStorageEnvironmentKey] == "1"
+    }
+
+    private static func defaultLiveActivityCoordinator() -> PomodoroLiveActivityCoordinating {
+        isRunningTests ? NoopLiveActivityCoordinator() : LiveActivityCoordinator()
     }
 
     var currentPhase: SessionPhase {

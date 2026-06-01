@@ -920,6 +920,30 @@ struct VibePomodoroTests {
         #expect(plans.dropLast().allSatisfy { $0.soundResource == .nextPhaseWhoosh })
     }
 
+    @Test func notificationPlansExposeStableBoundaryDisplayMetadata() async throws {
+        let (defaults, suiteName) = makeDefaults()
+        defer { clear(defaults, suiteName: suiteName) }
+
+        var settings = PomodoroSettings.default
+        settings.focusMinutes = 25
+        settings.shortBreakMinutes = 5
+        settings.longBreakMinutes = 15
+        settings.targetRounds = 2
+
+        let start = Date(timeIntervalSince1970: 55_000)
+        let store = makeStoreWithRunningSession(settings: settings, start: start, defaults: defaults)
+        let plans = store.notificationPlans(now: start)
+
+        #expect(plans.map(\.phase) == [.focus, .shortBreak, .focus, .longBreak])
+        #expect(plans.map(\.roundNumber) == [1, 1, 2, 2])
+        #expect(plans.map(\.targetRounds) == [2, 2, 2, 2])
+        #expect(plans.map(\.deliveryKind) == [.phaseChange, .phaseChange, .phaseChange, .sessionCompletion])
+        #expect(plans.first?.title == "Focus complete")
+        #expect(plans.first?.body == "Short Break - Round 1 of 2")
+        #expect(plans.last?.title == "Session complete")
+        #expect(plans.last?.body == "2 rounds finished. Take a breath.")
+    }
+
     @Test func finalNotificationUsesSessionCompleteSound() async throws {
         let (defaults, suiteName) = makeDefaults()
         defer { clear(defaults, suiteName: suiteName) }
@@ -954,6 +978,234 @@ struct VibePomodoroTests {
         #expect(plans.isEmpty == false)
         #expect(plans.allSatisfy { $0.soundResource == nil })
         #expect(plans.allSatisfy { $0.soundName == nil })
+    }
+
+    @Test func liveActivitySnapshotUsesTargetEndDateWhenRunning() async throws {
+        var settings = PomodoroSettings.default
+        settings.targetRounds = 3
+
+        let start = Date(timeIntervalSince1970: 72_000)
+        var session = SessionSnapshot.makeNew(settings: settings, now: start)
+        _ = PomodoroEngine.startOrResume(session: &session, now: start)
+
+        let snapshot = PomodoroLiveActivitySnapshot(session: session, now: start.addingTimeInterval(120))
+        let state = try #require(snapshot?.contentState)
+
+        #expect(state.sessionID == session.id.uuidString)
+        #expect(state.phase == .focus)
+        #expect(state.roundNumber == 1)
+        #expect(state.targetRounds == 3)
+        #expect(state.runState == .running)
+        #expect(state.targetEndDate == start.addingTimeInterval(settings.focusDuration))
+        #expect(state.pausedRemainingDuration == nil)
+    }
+
+    @Test func liveActivitySnapshotUsesPausedRemainingDurationWhenPaused() async throws {
+        var settings = PomodoroSettings.default
+        settings.focusMinutes = 25
+
+        let start = Date(timeIntervalSince1970: 73_000)
+        let pauseDate = start.addingTimeInterval(7 * 60)
+        var session = SessionSnapshot.makeNew(settings: settings, now: start)
+        _ = PomodoroEngine.startOrResume(session: &session, now: start)
+        PomodoroEngine.pause(session: &session, now: pauseDate)
+
+        let snapshot = PomodoroLiveActivitySnapshot(session: session, now: pauseDate.addingTimeInterval(30))
+        let state = try #require(snapshot?.contentState)
+
+        #expect(state.runState == .paused)
+        #expect(state.targetEndDate == nil)
+        let pausedRemainingDuration = try #require(state.pausedRemainingDuration)
+        #expect(pausedRemainingDuration == TimeInterval(18 * 60))
+    }
+
+    @Test func liveActivitySnapshotUsesLastStepWhenCompletedAfterBoundary() async throws {
+        var settings = PomodoroSettings.default
+        settings.targetRounds = 1
+
+        let start = Date(timeIntervalSince1970: 73_500)
+        var session = SessionSnapshot.makeNew(settings: settings, now: start)
+        _ = PomodoroEngine.startOrResume(session: &session, now: start)
+
+        let completionDate = start
+            .addingTimeInterval(settings.focusDuration)
+            .addingTimeInterval(settings.longBreakDuration)
+        _ = PomodoroEngine.reconcile(session: &session, now: completionDate)
+
+        let snapshot = PomodoroLiveActivitySnapshot(session: session, now: completionDate)
+        let state = try #require(snapshot?.contentState)
+
+        #expect(session.currentStep == nil)
+        #expect(state.phase == .longBreak)
+        #expect(state.roundNumber == 1)
+        #expect(state.runState == .completed)
+        #expect(state.targetEndDate == nil)
+        #expect(state.pausedRemainingDuration == 0)
+    }
+
+    @Test func liveActivityCoordinatorAppliesSnapshotAndNilEndState() async throws {
+        let client = RecordingLiveActivityClient()
+        let coordinator = LiveActivityCoordinator(client: client)
+
+        let start = Date(timeIntervalSince1970: 74_000)
+        var session = SessionSnapshot.makeNew(settings: .default, now: start)
+        _ = PomodoroEngine.startOrResume(session: &session, now: start)
+
+        await coordinator.apply(session: session, now: start)
+        await coordinator.apply(session: nil, now: start.addingTimeInterval(60))
+
+        #expect(client.appliedSnapshots.count == 2)
+        #expect(client.appliedSnapshots[0]?.contentState.sessionID == session.id.uuidString)
+        #expect(client.appliedSnapshots[0]?.contentState.runState == .running)
+        #expect(client.appliedSnapshots[1] == nil)
+    }
+
+    @Test func refreshRuntimeSideEffectsRefreshesLiveActivityCoordinator() async throws {
+        let (defaults, suiteName) = makeDefaults()
+        defer { clear(defaults, suiteName: suiteName) }
+
+        let coordinator = RecordingLiveActivityCoordinator()
+        let store = PomodoroStore(
+            defaults: defaults,
+            feedbackPlayer: RecordingReminderFeedbackPlayer(),
+            liveActivityCoordinator: coordinator
+        )
+
+        let start = Date(timeIntervalSince1970: 75_000)
+        var session = SessionSnapshot.makeNew(settings: .default, now: start)
+        _ = PomodoroEngine.startOrResume(session: &session, now: start)
+        store.activeSession = session
+
+        store.refreshRuntimeSideEffects()
+
+        #expect(coordinator.refreshedSessionIDs.last == session.id)
+    }
+
+    @Test func storeRefreshesLiveActivityForSessionControls() async throws {
+        let (defaults, suiteName) = makeDefaults()
+        defer { clear(defaults, suiteName: suiteName) }
+
+        let coordinator = RecordingLiveActivityCoordinator()
+        let store = PomodoroStore(
+            defaults: defaults,
+            feedbackPlayer: RecordingReminderFeedbackPlayer(),
+            liveActivityCoordinator: coordinator
+        )
+        coordinator.removeAll()
+
+        store.togglePrimaryAction()
+        let startedState = try #require(coordinator.refreshedSnapshots.last ?? nil)
+        #expect(startedState.contentState.runState == .running)
+        #expect(startedState.contentState.phase == .focus)
+
+        store.togglePrimaryAction()
+        let pausedState = try #require(coordinator.refreshedSnapshots.last ?? nil)
+        #expect(pausedState.contentState.runState == .paused)
+
+        store.togglePrimaryAction()
+        let resumedState = try #require(coordinator.refreshedSnapshots.last ?? nil)
+        #expect(resumedState.contentState.runState == .running)
+
+        store.skipCurrentStep()
+        let skippedState = try #require(coordinator.refreshedSnapshots.last ?? nil)
+        #expect(skippedState.contentState.phase == .shortBreak)
+        #expect(skippedState.contentState.roundNumber == 1)
+
+        store.resetCurrentStep()
+        let resetState = try #require(coordinator.refreshedSnapshots.last ?? nil)
+        #expect(resetState.contentState.phase == .shortBreak)
+        #expect(resetState.contentState.runState == .running)
+
+        store.goBackOneStep()
+        let backState = try #require(coordinator.refreshedSnapshots.last ?? nil)
+        #expect(backState.contentState.phase == .focus)
+        #expect(backState.contentState.roundNumber == 1)
+        #expect(backState.contentState.runState == .running)
+    }
+
+    @Test func storeRefreshesCompletedLiveActivityWhenFinalStepEnds() async throws {
+        let (defaults, suiteName) = makeDefaults()
+        defer { clear(defaults, suiteName: suiteName) }
+
+        let coordinator = RecordingLiveActivityCoordinator()
+        let store = PomodoroStore(
+            defaults: defaults,
+            feedbackPlayer: RecordingReminderFeedbackPlayer(),
+            liveActivityCoordinator: coordinator
+        )
+        var settings = PomodoroSettings.default
+        settings.targetRounds = 1
+
+        let start = Date(timeIntervalSince1970: 76_000)
+        var session = SessionSnapshot.makeNew(settings: settings, now: start)
+        session.currentStepIndex = session.steps.count - 1
+        session.runState = .running
+        session.currentSegmentStartDate = start
+        session.targetEndDate = start.addingTimeInterval(settings.longBreakDuration)
+        store.activeSession = session
+        coordinator.removeAll()
+
+        store.skipCurrentStep()
+
+        let completedState = try #require(coordinator.refreshedSnapshots.last ?? nil)
+        #expect(completedState.contentState.runState == .completed)
+        #expect(completedState.contentState.phase == .longBreak)
+        #expect(completedState.contentState.roundNumber == 1)
+    }
+
+    @Test func missedBoundaryRefreshesLiveActivityToNextStep() async throws {
+        let (defaults, suiteName) = makeDefaults()
+        defer { clear(defaults, suiteName: suiteName) }
+
+        let coordinator = RecordingLiveActivityCoordinator()
+        let store = PomodoroStore(
+            defaults: defaults,
+            feedbackPlayer: RecordingReminderFeedbackPlayer(),
+            liveActivityCoordinator: coordinator
+        )
+        var settings = PomodoroSettings.default
+        settings.targetRounds = 2
+
+        let now = Date.now
+        let start = now.addingTimeInterval(-(settings.focusDuration + 1))
+        var session = SessionSnapshot.makeNew(settings: settings, now: start)
+        _ = PomodoroEngine.startOrResume(session: &session, now: start)
+        store.activeSession = session
+        coordinator.removeAll()
+
+        store.reconcileNow(deliverForegroundFeedback: false)
+
+        let nextStepState = try #require(coordinator.refreshedSnapshots.last ?? nil)
+        #expect(nextStepState.contentState.runState == .running)
+        #expect(nextStepState.contentState.phase == .shortBreak)
+        #expect(nextStepState.contentState.roundNumber == 1)
+    }
+
+    @Test func restoredMissedSessionRefreshesCompletedLiveActivity() async throws {
+        let (defaults, suiteName) = makeDefaults()
+        defer { clear(defaults, suiteName: suiteName) }
+
+        var settings = PomodoroSettings.default
+        settings.targetRounds = 1
+
+        let now = Date.now
+        let start = now.addingTimeInterval(-(settings.focusDuration + settings.longBreakDuration + 1))
+        var session = SessionSnapshot.makeNew(settings: settings, now: start)
+        _ = PomodoroEngine.startOrResume(session: &session, now: start)
+        saveValue(settings, for: PomodoroStore.StorageKey.settings, defaults: defaults)
+        saveValue(session, for: TestStorageKey.activeSession, defaults: defaults)
+
+        let coordinator = RecordingLiveActivityCoordinator()
+        _ = PomodoroStore(
+            defaults: defaults,
+            feedbackPlayer: RecordingReminderFeedbackPlayer(),
+            liveActivityCoordinator: coordinator
+        )
+
+        let restoredState = try #require(coordinator.refreshedSnapshots.compactMap { $0 }.last)
+        #expect(restoredState.contentState.runState == .completed)
+        #expect(restoredState.contentState.phase == .longBreak)
+        #expect(restoredState.contentState.roundNumber == 1)
     }
 
     @Test func foregroundBoundaryFeedbackUsesForwardWhooshOnly() async throws {
@@ -1308,6 +1560,29 @@ struct VibePomodoroTests {
 
         func play(_ actions: [ReminderFeedbackAction]) {
             playedActionBatches.append(actions)
+        }
+    }
+
+    private final class RecordingLiveActivityClient: PomodoroLiveActivityClient {
+        var appliedSnapshots: [PomodoroLiveActivitySnapshot?] = []
+
+        func apply(_ snapshot: PomodoroLiveActivitySnapshot?) async {
+            appliedSnapshots.append(snapshot)
+        }
+    }
+
+    private final class RecordingLiveActivityCoordinator: PomodoroLiveActivityCoordinating {
+        var refreshedSessionIDs: [UUID?] = []
+        var refreshedSnapshots: [PomodoroLiveActivitySnapshot?] = []
+
+        func refresh(session: SessionSnapshot?, now: Date) {
+            refreshedSessionIDs.append(session?.id)
+            refreshedSnapshots.append(PomodoroLiveActivitySnapshot(session: session, now: now))
+        }
+
+        func removeAll() {
+            refreshedSessionIDs.removeAll()
+            refreshedSnapshots.removeAll()
         }
     }
 
