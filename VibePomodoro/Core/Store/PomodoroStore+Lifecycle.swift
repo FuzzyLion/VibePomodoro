@@ -77,6 +77,11 @@ extension PomodoroStore {
         syncIdleTimer()
         syncNotifications()
         syncStepBoundaryTimer()
+        syncLiveActivity()
+    }
+
+    func syncLiveActivity() {
+        liveActivityCoordinator.refresh(session: activeSession, now: .now)
     }
 
     func syncStepBoundaryTimer() {
