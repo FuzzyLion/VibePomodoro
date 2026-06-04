@@ -1006,6 +1006,75 @@ struct VibePomodoroTests {
         #expect(state.scheduledSteps[1].endDate == start.addingTimeInterval(settings.focusDuration + settings.shortBreakDuration))
     }
 
+    @Test func liveActivityContentStateUsesSystemTimerRangeForCurrentScheduledStep() async throws {
+        var settings = PomodoroSettings.default
+        settings.targetRounds = 2
+
+        let start = Date(timeIntervalSince1970: 72_500)
+        var session = SessionSnapshot.makeNew(settings: settings, now: start)
+        _ = PomodoroEngine.startOrResume(session: &session, now: start)
+
+        let snapshot = PomodoroLiveActivitySnapshot(session: session, now: start)
+        let state = try #require(snapshot?.contentState)
+        let displayDate = start.addingTimeInterval(90)
+        let timerInterval = try #require(state.displayTimerInterval(at: displayDate))
+
+        #expect(timerInterval.lowerBound == displayDate)
+        #expect(timerInterval.upperBound == start.addingTimeInterval(settings.focusDuration))
+        #expect(state.displayTimerPauseTime(at: displayDate) == nil)
+    }
+
+    @Test func liveActivityContentStateUsesSystemTimerRangeForFutureScheduledStep() async throws {
+        var settings = PomodoroSettings.default
+        settings.focusMinutes = 1
+        settings.shortBreakMinutes = 1
+        settings.longBreakMinutes = 1
+        settings.targetRounds = 2
+
+        let start = Date(timeIntervalSince1970: 72_800)
+        var session = SessionSnapshot.makeNew(settings: settings, now: start)
+        _ = PomodoroEngine.startOrResume(session: &session, now: start)
+
+        let snapshot = PomodoroLiveActivitySnapshot(session: session, now: start)
+        let state = try #require(snapshot?.contentState)
+        let shortBreakDisplayDate = start.addingTimeInterval(settings.focusDuration + 10)
+        let timerInterval = try #require(state.displayTimerInterval(at: shortBreakDisplayDate))
+
+        #expect(timerInterval.lowerBound == shortBreakDisplayDate)
+        #expect(timerInterval.upperBound == start.addingTimeInterval(settings.focusDuration + settings.shortBreakDuration))
+        #expect(state.displayTimerPauseTime(at: shortBreakDisplayDate) == nil)
+    }
+
+    @Test func liveActivityContentStateOmitsSystemTimerRangeWhenPausedOrCompleted() async throws {
+        let runningState = PomodoroActivityAttributes.ContentState(
+            sessionID: UUID().uuidString,
+            phase: .focus,
+            roundNumber: 1,
+            targetRounds: 1,
+            runState: .paused,
+            stepDuration: 25 * 60,
+            targetEndDate: nil,
+            pausedRemainingDuration: 10 * 60,
+            scheduledSteps: []
+        )
+        let completedState = PomodoroActivityAttributes.ContentState(
+            sessionID: UUID().uuidString,
+            phase: .longBreak,
+            roundNumber: 1,
+            targetRounds: 1,
+            runState: .completed,
+            stepDuration: 15 * 60,
+            targetEndDate: nil,
+            pausedRemainingDuration: 0,
+            scheduledSteps: []
+        )
+
+        #expect(runningState.displayTimerInterval(at: Date(timeIntervalSince1970: 73_000)) == nil)
+        #expect(runningState.displayTimerPauseTime(at: Date(timeIntervalSince1970: 73_000)) == nil)
+        #expect(completedState.displayTimerInterval(at: Date(timeIntervalSince1970: 73_000)) == nil)
+        #expect(completedState.displayTimerPauseTime(at: Date(timeIntervalSince1970: 73_000)) == nil)
+    }
+
     @Test func liveActivitySnapshotUsesPausedRemainingDurationWhenPaused() async throws {
         var settings = PomodoroSettings.default
         settings.focusMinutes = 25
