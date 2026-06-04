@@ -12,10 +12,10 @@ struct PomodoroLiveActivityWidget: Widget {
                     PomodoroExpandedIslandContent(state: context.state)
                 }
             } compactLeading: {
-                PomodoroPhaseDot(phase: context.state.phase)
-                    .frame(width: 13, height: 13)
+                PomodoroCompactProgressMark(state: context.state, size: .compact)
             } compactTrailing: {
-                EmptyView()
+                PomodoroRemainingTimeText(state: context.state, size: .compact)
+                    .frame(width: 42, alignment: .trailing)
             } minimal: {
                 PomodoroMinimalView(state: context.state)
             }

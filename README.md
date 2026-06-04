@@ -83,6 +83,10 @@ The project currently exposes these schemes:
 - `VibePomodoro`
 - `VibePomodoroLiveActivity`
 
+## Troubleshooting
+
+Development environment recovery notes live in [TROUBLESHOOTING.md](./TROUBLESHOOTING.md), including the fix for Simulator.app getting stuck on an `External Display` window.
+
 ## Roadmap
 
 1. Continue polishing the `Focus` bubble and layout details.

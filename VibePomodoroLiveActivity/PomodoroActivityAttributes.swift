@@ -2,14 +2,24 @@ import ActivityKit
 import Foundation
 
 struct PomodoroActivityAttributes: ActivityAttributes, Equatable {
+    struct ScheduledStep: Codable, Equatable, Hashable {
+        let phase: PomodoroActivityPhase
+        let roundNumber: Int
+        let stepDuration: TimeInterval
+        let startDate: Date
+        let endDate: Date
+    }
+
     struct ContentState: Codable, Equatable, Hashable {
         let sessionID: String
         let phase: PomodoroActivityPhase
         let roundNumber: Int
         let targetRounds: Int
         let runState: PomodoroActivityRunState
+        let stepDuration: TimeInterval
         let targetEndDate: Date?
         let pausedRemainingDuration: TimeInterval?
+        let scheduledSteps: [ScheduledStep]
     }
 }
 

@@ -9,7 +9,7 @@ struct PomodoroLockScreenLiveActivityContainer: View {
         let palette = PomodoroLiveActivityPalette()
 
         PomodoroLockScreenLiveActivityView(state: state, palette: palette)
-            .activityBackgroundTint(palette.cardBackground)
+            .activityBackgroundTint(palette.cardBackground(for: state.phase))
             .activitySystemActionForegroundColor(state.phase.activityStyle.accent)
     }
 }
@@ -19,21 +19,38 @@ struct PomodoroLockScreenLiveActivityView: View {
     let palette: PomodoroLiveActivityPalette
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .firstTextBaseline) {
-                PomodoroPhaseBadge(state: state, foregroundColor: palette.primaryText)
-                Spacer(minLength: 12)
-                Text("Round \(state.roundNumber)/\(state.targetRounds)")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(palette.secondaryText)
-                    .monospacedDigit()
+        Group {
+            if state.shouldUseTimelineDisplay {
+                TimelineView(.periodic(from: .now, by: 1)) { timeline in
+                    content(at: timeline.date)
+                }
+            } else {
+                content(at: .now)
             }
-
-            PomodoroRemainingTimeText(state: state, size: .lockScreen, foregroundColor: palette.primaryText)
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-            PomodoroRoundProgress(state: state, inactiveColor: palette.inactiveProgress)
         }
-        .padding(18)
+    }
+
+    private func content(at date: Date) -> some View {
+        ZStack(alignment: .topLeading) {
+            PomodoroBreathField(phase: state.displayPhase(at: date))
+
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(alignment: .firstTextBaseline) {
+                    PomodoroPhaseBadge(state: state, foregroundColor: palette.primaryText)
+                    Spacer(minLength: 12)
+                    PomodoroRoundLabel(
+                        state: state,
+                        size: .lockScreen,
+                        foregroundColor: palette.secondaryText
+                    )
+                }
+
+                PomodoroRemainingTimeText(state: state, size: .lockScreen, foregroundColor: palette.primaryText)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                PomodoroStepProgressBar(state: state, inactiveColor: palette.inactiveProgress)
+            }
+            .padding(18)
+        }
     }
 }

@@ -88,8 +88,7 @@ extension PomodoroStore {
         stepBoundaryTimer?.invalidate()
         stepBoundaryTimer = nil
 
-        guard currentScenePhase == .active,
-              let session = activeSession,
+        guard let session = activeSession,
               session.runState == .running,
               session.currentStep != nil,
               let targetEndDate = session.targetEndDate else {

@@ -998,6 +998,12 @@ struct VibePomodoroTests {
         #expect(state.runState == .running)
         #expect(state.targetEndDate == start.addingTimeInterval(settings.focusDuration))
         #expect(state.pausedRemainingDuration == nil)
+        #expect(state.stepDuration == settings.focusDuration)
+        #expect(state.scheduledSteps.map(\.phase) == [.focus, .shortBreak, .focus, .shortBreak, .focus, .longBreak])
+        #expect(state.scheduledSteps.first?.startDate == start)
+        #expect(state.scheduledSteps.first?.endDate == start.addingTimeInterval(settings.focusDuration))
+        #expect(state.scheduledSteps[1].startDate == start.addingTimeInterval(settings.focusDuration))
+        #expect(state.scheduledSteps[1].endDate == start.addingTimeInterval(settings.focusDuration + settings.shortBreakDuration))
     }
 
     @Test func liveActivitySnapshotUsesPausedRemainingDurationWhenPaused() async throws {
@@ -1015,6 +1021,8 @@ struct VibePomodoroTests {
 
         #expect(state.runState == .paused)
         #expect(state.targetEndDate == nil)
+        #expect(state.stepDuration == settings.focusDuration)
+        #expect(state.scheduledSteps.isEmpty)
         let pausedRemainingDuration = try #require(state.pausedRemainingDuration)
         #expect(pausedRemainingDuration == TimeInterval(18 * 60))
     }
@@ -1041,6 +1049,8 @@ struct VibePomodoroTests {
         #expect(state.runState == .completed)
         #expect(state.targetEndDate == nil)
         #expect(state.pausedRemainingDuration == 0)
+        #expect(state.stepDuration == settings.longBreakDuration)
+        #expect(state.scheduledSteps.isEmpty)
     }
 
     @Test func liveActivityCoordinatorAppliesSnapshotAndNilEndState() async throws {

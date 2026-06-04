@@ -5,15 +5,101 @@ struct PomodoroPhaseBadge: View {
     var foregroundColor: Color = .primary
 
     var body: some View {
-        HStack(spacing: 7) {
-            PomodoroPhaseDot(phase: state.phase)
-            Text(state.phase.title)
+        Group {
+            if state.shouldUseTimelineDisplay {
+                TimelineView(.periodic(from: .now, by: 1)) { timeline in
+                    content(at: timeline.date)
+                }
+            } else {
+                content(at: .now)
+            }
+        }
+    }
+
+    private func content(at date: Date) -> some View {
+        let phase = state.displayPhase(at: date)
+
+        return HStack(spacing: 7) {
+            PomodoroCompactProgressMark(state: state, size: .badge)
+            Text(phase.title)
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(foregroundColor)
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
         }
-        .accessibilityLabel(state.phase.title)
+        .accessibilityLabel(phase.title)
+    }
+}
+
+extension PomodoroActivityAttributes.ContentState {
+    var shouldUseTimelineDisplay: Bool {
+        runState == .running && !scheduledSteps.isEmpty
+    }
+
+    func displayStep(at date: Date) -> PomodoroActivityAttributes.ScheduledStep? {
+        guard shouldUseTimelineDisplay else { return nil }
+
+        if let step = scheduledSteps.first(where: { date < $0.endDate }) {
+            return step
+        }
+
+        return scheduledSteps.last
+    }
+
+    func displayRunState(at date: Date) -> PomodoroActivityRunState {
+        guard shouldUseTimelineDisplay,
+              let lastStep = scheduledSteps.last else {
+            return runState
+        }
+
+        return date >= lastStep.endDate ? .completed : .running
+    }
+
+    func displayPhase(at date: Date) -> PomodoroActivityPhase {
+        displayStep(at: date)?.phase ?? phase
+    }
+
+    func displayRoundNumber(at date: Date) -> Int {
+        displayStep(at: date)?.roundNumber ?? roundNumber
+    }
+
+    func displayStepDuration(at date: Date) -> TimeInterval {
+        displayStep(at: date)?.stepDuration ?? stepDuration
+    }
+
+    func displayTargetEndDate(at date: Date) -> Date? {
+        guard displayRunState(at: date) == .running else { return nil }
+        return displayStep(at: date)?.endDate ?? targetEndDate
+    }
+
+    func roundText(at date: Date = .now) -> String {
+        "Round \(displayRoundNumber(at: date))/\(targetRounds)"
+    }
+
+    func remainingDuration(at date: Date) -> TimeInterval {
+        switch displayRunState(at: date) {
+        case .running:
+            guard let targetEndDate = displayTargetEndDate(at: date) else { return 0 }
+            return max(0, targetEndDate.timeIntervalSince(date))
+        case .paused:
+            return max(0, pausedRemainingDuration ?? 0)
+        case .completed:
+            return 0
+        }
+    }
+
+    func stepProgress(at date: Date) -> Double {
+        let displayRunState = displayRunState(at: date)
+        let duration = displayStepDuration(at: date)
+        guard duration > 0 else { return displayRunState == .completed ? 1 : 0 }
+        guard displayRunState != .completed else { return 1 }
+
+        if let step = displayStep(at: date) {
+            return min(1, max(0, date.timeIntervalSince(step.startDate) / duration))
+        }
+
+        let remaining = remainingDuration(at: date)
+        return min(1, max(0, 1 - (remaining / duration)))
     }
 }
 
@@ -30,20 +116,12 @@ struct PomodoroRemainingTimeText: View {
 
     var body: some View {
         Group {
-            if state.runState == .running, let targetEndDate = state.targetEndDate {
-                if targetEndDate > Date.now {
-                    if size == .lockScreen {
-                        PomodoroCountdownText(targetEndDate: targetEndDate)
-                    } else {
-                        Text(timerInterval: Date.now...targetEndDate, countsDown: true)
-                    }
-                } else {
-                    Text(Self.pausedText(for: 0))
+            if state.shouldUseTimelineDisplay {
+                TimelineView(.periodic(from: .now, by: 1)) { timeline in
+                    remainingContent(at: timeline.date)
                 }
-            } else if state.runState == .completed {
-                Text("Done")
             } else {
-                Text(Self.pausedText(for: state.pausedRemainingDuration))
+                remainingContent(at: .now)
             }
         }
         .font(font)
@@ -52,6 +130,34 @@ struct PomodoroRemainingTimeText: View {
         .lineLimit(1)
         .minimumScaleFactor(minimumScaleFactor)
         .accessibilityLabel(accessibilityText)
+    }
+
+    @ViewBuilder
+    private func remainingContent(at date: Date) -> some View {
+        switch state.displayRunState(at: date) {
+        case .running:
+            if let targetEndDate = state.displayTargetEndDate(at: date), targetEndDate > date {
+                Text(Self.pausedText(for: targetEndDate.timeIntervalSince(date)))
+            } else {
+                Text(Self.pausedText(for: 0))
+            }
+        case .paused:
+            Text(Self.pausedText(for: state.pausedRemainingDuration))
+        case .completed:
+            Text("Done")
+        }
+    }
+
+    private var accessibilityText: String {
+        let now = Date.now
+        switch state.displayRunState(at: now) {
+        case .running:
+            return "Remaining time"
+        case .paused:
+            return "Paused with \(Self.pausedText(for: state.pausedRemainingDuration)) remaining"
+        case .completed:
+            return "Session complete"
+        }
     }
 
     private var font: Font {
@@ -71,17 +177,6 @@ struct PomodoroRemainingTimeText: View {
             return 0.62
         case .expanded, .lockScreen:
             return 0.72
-        }
-    }
-
-    private var accessibilityText: String {
-        switch state.runState {
-        case .running:
-            return "Remaining time"
-        case .paused:
-            return "Paused with \(Self.pausedText(for: state.pausedRemainingDuration)) remaining"
-        case .completed:
-            return "Session complete"
         }
     }
 
@@ -113,36 +208,48 @@ struct PomodoroCountdownText: View {
     }
 }
 
-struct PomodoroRoundProgress: View {
+struct PomodoroStepProgressBar: View {
     let state: PomodoroActivityAttributes.ContentState
     var inactiveColor: Color = Color.secondary.opacity(0.22)
 
     var body: some View {
-        HStack(spacing: 6) {
-            ForEach(1...max(1, state.targetRounds), id: \.self) { round in
-                Capsule()
-                    .fill(progressFill(for: round))
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 5)
+        Group {
+            if state.shouldUseTimelineDisplay {
+                TimelineView(.periodic(from: .now, by: 1)) { timeline in
+                    progressBar(
+                        progress: state.stepProgress(at: timeline.date),
+                        phase: state.displayPhase(at: timeline.date)
+                    )
+                }
+            } else {
+                progressBar(progress: state.stepProgress(at: .now), phase: state.displayPhase(at: .now))
             }
         }
-        .accessibilityLabel("Round \(state.roundNumber) of \(state.targetRounds)")
+        .accessibilityLabel("Current step progress")
     }
 
-    private func progressFill(for round: Int) -> AnyShapeStyle {
-        guard round <= state.roundNumber else {
-            return AnyShapeStyle(inactiveColor)
-        }
+    private func progressBar(progress: Double, phase: PomodoroActivityPhase) -> some View {
+        GeometryReader { proxy in
+            ZStack(alignment: .leading) {
+                Capsule()
+                    .fill(inactiveColor)
 
-        return AnyShapeStyle(
-            LinearGradient(
-                colors: [
-                    state.phase.activityStyle.accent,
-                    state.phase.activityStyle.deepAccent
-                ],
-                startPoint: .leading,
-                endPoint: .trailing
-            )
+                Capsule()
+                    .fill(progressFill(for: phase))
+                    .frame(width: max(6, proxy.size.width * progress))
+            }
+        }
+        .frame(height: 5)
+    }
+
+    private func progressFill(for phase: PomodoroActivityPhase) -> some ShapeStyle {
+        LinearGradient(
+            colors: [
+                phase.activityStyle.accent,
+                phase.activityStyle.secondaryAccent
+            ],
+            startPoint: .leading,
+            endPoint: .trailing
         )
     }
 }
@@ -152,13 +259,9 @@ struct PomodoroExpandedProgressView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 7) {
-            Text("Round \(state.roundNumber)/\(state.targetRounds)")
-                .font(.caption2.weight(.semibold))
-                .foregroundStyle(Color.white.opacity(0.66))
-                .monospacedDigit()
-                .lineLimit(1)
+            PomodoroRoundLabel(state: state, size: .expanded)
 
-            PomodoroRoundProgress(state: state)
+            PomodoroStepProgressBar(state: state)
                 .frame(height: 5)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -166,12 +269,133 @@ struct PomodoroExpandedProgressView: View {
     }
 }
 
-struct PomodoroPhaseDot: View {
+struct PomodoroCompactProgressMark: View {
+    enum Size {
+        case badge
+        case compact
+        case minimal
+    }
+
+    let state: PomodoroActivityAttributes.ContentState
+    let size: Size
+
+    var body: some View {
+        Group {
+            if state.shouldUseTimelineDisplay {
+                TimelineView(.periodic(from: .now, by: 1)) { timeline in
+                    mark(
+                        progress: state.stepProgress(at: timeline.date),
+                        phase: state.displayPhase(at: timeline.date)
+                    )
+                    .accessibilityLabel(state.displayPhase(at: timeline.date).title)
+                }
+            } else {
+                mark(progress: state.stepProgress(at: .now), phase: state.displayPhase(at: .now))
+                    .accessibilityLabel(state.displayPhase(at: .now).title)
+            }
+        }
+    }
+
+    private func mark(progress: Double, phase: PomodoroActivityPhase) -> some View {
+        ZStack(alignment: .leading) {
+            Capsule()
+                .fill(Color.white.opacity(size == .minimal ? 0.18 : 0.14))
+
+            Capsule()
+                .fill(progressFill(for: phase))
+                .frame(width: max(4, dimensions.width * progress))
+        }
+        .frame(width: dimensions.width, height: dimensions.height)
+    }
+
+    private var dimensions: CGSize {
+        switch size {
+        case .badge:
+            return CGSize(width: 24, height: 13)
+        case .compact:
+            return CGSize(width: 26, height: 12)
+        case .minimal:
+            return CGSize(width: 16, height: 7)
+        }
+    }
+
+    private func progressFill(for phase: PomodoroActivityPhase) -> some ShapeStyle {
+        LinearGradient(
+            colors: [
+                phase.activityStyle.accent,
+                phase.activityStyle.secondaryAccent
+            ],
+            startPoint: .leading,
+            endPoint: .trailing
+        )
+    }
+}
+
+struct PomodoroRoundLabel: View {
+    enum Size {
+        case lockScreen
+        case expanded
+    }
+
+    let state: PomodoroActivityAttributes.ContentState
+    let size: Size
+    var foregroundColor: Color = Color.white.opacity(0.66)
+
+    var body: some View {
+        Group {
+            if state.shouldUseTimelineDisplay {
+                TimelineView(.periodic(from: .now, by: 1)) { timeline in
+                    label(at: timeline.date)
+                }
+            } else {
+                label(at: .now)
+            }
+        }
+    }
+
+    private func label(at date: Date) -> some View {
+        Text(state.roundText(at: date))
+            .font(font)
+            .foregroundStyle(foregroundColor)
+            .monospacedDigit()
+            .lineLimit(1)
+    }
+
+    private var font: Font {
+        switch size {
+        case .lockScreen:
+            return .caption.weight(.semibold)
+        case .expanded:
+            return .caption2.weight(.semibold)
+        }
+    }
+}
+
+struct PomodoroBreathField: View {
     let phase: PomodoroActivityPhase
 
     var body: some View {
-        Circle()
-            .fill(phase.activityStyle.accent)
-            .frame(width: 9, height: 9)
+        ZStack {
+            RadialGradient(
+                colors: [
+                    phase.activityStyle.accent.opacity(0.26),
+                    phase.activityStyle.accent.opacity(0)
+                ],
+                center: .topLeading,
+                startRadius: 8,
+                endRadius: 160
+            )
+
+            RadialGradient(
+                colors: [
+                    phase.activityStyle.secondaryAccent.opacity(0.14),
+                    phase.activityStyle.secondaryAccent.opacity(0)
+                ],
+                center: .topTrailing,
+                startRadius: 12,
+                endRadius: 150
+            )
+        }
+        .allowsHitTesting(false)
     }
 }

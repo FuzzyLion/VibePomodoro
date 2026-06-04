@@ -51,9 +51,45 @@ struct PomodoroLiveActivitySnapshot: Equatable {
             roundNumber: step.roundNumber,
             targetRounds: session.targetRounds,
             runState: runState,
+            stepDuration: step.plannedDuration,
             targetEndDate: targetEndDate,
-            pausedRemainingDuration: pausedRemainingDuration
+            pausedRemainingDuration: pausedRemainingDuration,
+            scheduledSteps: Self.scheduledSteps(for: session, displayStep: step)
         )
+    }
+
+    private static func scheduledSteps(
+        for session: SessionSnapshot,
+        displayStep: SessionStep
+    ) -> [PomodoroActivityAttributes.ScheduledStep] {
+        guard session.runState == .running,
+              let targetEndDate = session.targetEndDate,
+              let currentIndex = session.steps.firstIndex(where: { $0.id == displayStep.id }) else {
+            return []
+        }
+
+        var nextStartDate = targetEndDate.addingTimeInterval(-displayStep.plannedDuration)
+        var steps: [PomodoroActivityAttributes.ScheduledStep] = []
+
+        for step in session.steps[currentIndex...] {
+            let stepStartDate = step.id == displayStep.id ? nextStartDate : nextStartDate
+            let stepEndDate = step.id == displayStep.id
+                ? targetEndDate
+                : stepStartDate.addingTimeInterval(step.plannedDuration)
+
+            steps.append(
+                PomodoroActivityAttributes.ScheduledStep(
+                    phase: PomodoroActivityPhase(sessionPhase: step.phase),
+                    roundNumber: step.roundNumber,
+                    stepDuration: step.plannedDuration,
+                    startDate: stepStartDate,
+                    endDate: stepEndDate
+                )
+            )
+            nextStartDate = stepEndDate
+        }
+
+        return steps
     }
 }
 

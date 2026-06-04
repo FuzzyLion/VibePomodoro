@@ -28,9 +28,7 @@ struct PomodoroMinimalView: View {
     let state: PomodoroActivityAttributes.ContentState
 
     var body: some View {
-        Circle()
-            .fill(state.phase.activityStyle.accent)
-            .frame(width: 7, height: 7)
+        PomodoroCompactProgressMark(state: state, size: .minimal)
             .accessibilityLabel(state.phase.title)
     }
 }

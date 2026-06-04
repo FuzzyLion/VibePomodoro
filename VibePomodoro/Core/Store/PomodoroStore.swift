@@ -8,11 +8,13 @@ final class PomodoroStore: ObservableObject {
     static let openSettingsArgument = "--open-settings"
     static let resetStorageArgument = "--reset-vibe-store"
     static let uiTestingArgument = "--ui-testing"
+    static let liveActivityBoundaryFixtureArgument = "--live-activity-boundary-fixture"
     static let appearanceLightArgument = "--appearance-light"
     static let appearanceDarkArgument = "--appearance-dark"
     static let appearanceSystemArgument = "--appearance-system"
     static let defaultsSuiteNameEnvironmentKey = "VIBE_DEFAULTS_SUITE"
     static let productivityFixtureEnvironmentKey = "VIBE_PRODUCTIVITY_FIXTURE"
+    static let timerFixtureEnvironmentKey = "VIBE_TIMER_FIXTURE"
     static let resetStorageEnvironmentKey = "VIBE_RESET_STORE"
     static let uiTestingEnvironmentKey = "VIBE_UI_TESTING"
 
@@ -46,6 +48,7 @@ final class PomodoroStore: ObservableObject {
         self.liveActivityCoordinator = liveActivityCoordinator ?? Self.defaultLiveActivityCoordinator()
         Self.resetStorageIfRequested(using: defaults)
         Self.seedUITestingProductivityFixtureIfRequested(using: defaults)
+        Self.seedUITestingTimerFixtureIfRequested(using: defaults)
         var loadedSettings: PomodoroSettings = Self.loadValue(for: StorageKey.settings, using: defaults) ?? .default
         Self.applyLaunchAppearanceOverride(to: &loadedSettings)
         self.settings = loadedSettings

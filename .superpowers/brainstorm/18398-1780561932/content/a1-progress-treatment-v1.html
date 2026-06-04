@@ -1,0 +1,81 @@
+<h2>A1 progress treatment</h2>
+<p class="subtitle">Keep progress, but decide what kind of progress the Live Activity should emphasize: rounds, current step time, or both.</p>
+
+<div class="cards">
+  <div class="card" data-choice="segmented-rounds" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#111;padding:22px;border-radius:18px;color:white">
+      <div style="display:grid;gap:16px">
+        <div style="border-radius:24px;padding:18px;background:radial-gradient(140px 80px at 20% 24%,rgba(239,209,138,.24),transparent 72%),radial-gradient(140px 80px at 82% 18%,rgba(159,195,212,.13),transparent 70%),linear-gradient(150deg,rgba(255,255,255,.12),rgba(255,255,255,.035));border:1px solid rgba(255,255,255,.16)">
+          <div style="display:flex;justify-content:space-between;align-items:center;font:600 12px system-ui;color:rgba(255,255,255,.70)">
+            <span style="display:flex;gap:8px;align-items:center"><span style="width:24px;height:14px;border-radius:999px;background:linear-gradient(90deg,#efd18a,#9fc3d4)"></span>Focus</span><span>Round 2 / 4</span>
+          </div>
+          <div style="font:700 48px ui-rounded,system-ui;margin-top:12px">12:48</div>
+          <div style="display:flex;gap:7px;margin-top:14px">
+            <span style="height:5px;border-radius:999px;background:#efd18a;flex:1"></span>
+            <span style="height:5px;border-radius:999px;background:#efd18a;flex:1"></span>
+            <span style="height:5px;border-radius:999px;background:rgba(255,255,255,.17);flex:1"></span>
+            <span style="height:5px;border-radius:999px;background:rgba(255,255,255,.17);flex:1"></span>
+          </div>
+        </div>
+        <div style="border-radius:22px;background:#050505;padding:10px 18px;display:flex;align-items:center;justify-content:space-between;font:600 13px system-ui">
+          <span style="display:flex;gap:8px;align-items:center"><span style="width:26px;height:12px;border-radius:999px;background:linear-gradient(90deg,#efd18a,#9fc3d4)"></span>Focus</span><span style="font-size:22px">12:48</span>
+        </div>
+        <div style="width:42px;height:22px;border-radius:999px;background:#050505;display:flex;align-items:center;justify-content:center"><span style="width:25px;height:10px;border-radius:999px;background:linear-gradient(90deg,#efd18a 0 50%,rgba(239,209,138,.32) 50% 100%);display:block"></span></div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>Segmented round progress</h3>
+      <p>Keep the current round semantics. Easy to scan and already matches the app's session model. It does not show current-step time progress beyond the countdown.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="continuous-time" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#111;padding:22px;border-radius:18px;color:white">
+      <div style="display:grid;gap:16px">
+        <div style="border-radius:24px;padding:18px;background:radial-gradient(140px 80px at 20% 24%,rgba(239,209,138,.24),transparent 72%),radial-gradient(140px 80px at 82% 18%,rgba(159,195,212,.13),transparent 70%),linear-gradient(150deg,rgba(255,255,255,.12),rgba(255,255,255,.035));border:1px solid rgba(255,255,255,.16)">
+          <div style="display:flex;justify-content:space-between;align-items:center;font:600 12px system-ui;color:rgba(255,255,255,.70)">
+            <span style="display:flex;gap:8px;align-items:center"><span style="width:24px;height:14px;border-radius:999px;background:linear-gradient(90deg,#efd18a,#9fc3d4)"></span>Focus</span><span>Round 2 / 4</span>
+          </div>
+          <div style="font:700 48px ui-rounded,system-ui;margin-top:12px">12:48</div>
+          <div style="height:6px;border-radius:999px;background:rgba(255,255,255,.16);overflow:hidden;margin-top:14px"><div style="width:48%;height:100%;border-radius:inherit;background:linear-gradient(90deg,#efd18a,#9fc3d4)"></div></div>
+        </div>
+        <div style="border-radius:22px;background:#050505;padding:10px 18px;display:flex;align-items:center;justify-content:space-between;font:600 13px system-ui">
+          <span style="display:flex;gap:8px;align-items:center"><span style="width:26px;height:12px;border-radius:999px;background:linear-gradient(90deg,#efd18a 0 48%,rgba(255,255,255,.16) 48% 100%)"></span>Focus</span><span style="font-size:22px">12:48</span>
+        </div>
+        <div style="width:42px;height:22px;border-radius:999px;background:#050505;display:flex;align-items:center;justify-content:center"><span style="width:25px;height:10px;border-radius:999px;background:linear-gradient(90deg,#efd18a 0 48%,rgba(255,255,255,.16) 48% 100%);display:block"></span></div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>Continuous time progress</h3>
+      <p>Shows how far the current step has moved. Stronger as a timer surface, but it needs duration data in the Live Activity state if we want it to be accurate while running.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="hybrid-soft" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#111;padding:22px;border-radius:18px;color:white">
+      <div style="display:grid;gap:16px">
+        <div style="border-radius:24px;padding:18px;background:radial-gradient(140px 80px at 20% 24%,rgba(239,209,138,.24),transparent 72%),radial-gradient(140px 80px at 82% 18%,rgba(159,195,212,.13),transparent 70%),linear-gradient(150deg,rgba(255,255,255,.12),rgba(255,255,255,.035));border:1px solid rgba(255,255,255,.16)">
+          <div style="display:flex;justify-content:space-between;align-items:center;font:600 12px system-ui;color:rgba(255,255,255,.70)">
+            <span style="display:flex;gap:8px;align-items:center"><span style="width:24px;height:14px;border-radius:999px;background:linear-gradient(90deg,#efd18a,#9fc3d4)"></span>Focus</span><span>Round 2 / 4</span>
+          </div>
+          <div style="font:700 48px ui-rounded,system-ui;margin-top:12px">12:48</div>
+          <div style="height:6px;border-radius:999px;background:rgba(255,255,255,.13);overflow:hidden;margin-top:14px"><div style="width:48%;height:100%;border-radius:inherit;background:linear-gradient(90deg,#efd18a,#9fc3d4)"></div></div>
+          <div style="display:flex;gap:5px;margin-top:7px">
+            <span style="height:3px;border-radius:999px;background:rgba(239,209,138,.64);flex:1"></span>
+            <span style="height:3px;border-radius:999px;background:rgba(239,209,138,.64);flex:1"></span>
+            <span style="height:3px;border-radius:999px;background:rgba(255,255,255,.13);flex:1"></span>
+            <span style="height:3px;border-radius:999px;background:rgba(255,255,255,.13);flex:1"></span>
+          </div>
+        </div>
+        <div style="border-radius:22px;background:#050505;padding:10px 18px;display:flex;align-items:center;justify-content:space-between;font:600 13px system-ui">
+          <span style="display:flex;gap:8px;align-items:center"><span style="width:26px;height:12px;border-radius:999px;background:linear-gradient(90deg,#efd18a 0 48%,rgba(255,255,255,.16) 48% 100%)"></span>Focus</span><span style="font-size:22px">12:48</span>
+        </div>
+        <div style="width:42px;height:22px;border-radius:999px;background:#050505;display:flex;align-items:center;justify-content:center"><span style="width:25px;height:10px;border-radius:999px;background:linear-gradient(90deg,#efd18a 0 48%,rgba(255,255,255,.16) 48% 100%);display:block"></span></div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>Soft hybrid</h3>
+      <p>Primary line shows current-step time progress; a quieter second line shows completed rounds. Richest information, but it may be too busy for the lock screen surface.</p>
+    </div>
+  </div>
+</div>
