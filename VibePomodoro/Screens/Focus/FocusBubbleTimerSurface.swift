@@ -5,10 +5,11 @@ struct BubbleAnimatedSurfaceLayer: View {
     let waveClock: BubbleWaveClock
     let phaseMorph: BubblePhaseMorph
     let liquidSourceVisuals: BubbleLiquidVisualState
+    let renderingPolicy: BubbleRenderingPolicy
 
     var body: some View {
         Group {
-            if renderState.isAnimating {
+            if renderingPolicy.animatesSurface {
                 TimelineView(.periodic(from: .now, by: renderState.animationRefreshInterval)) { context in
                     animatedSurface(at: context.date)
                 }
@@ -16,6 +17,7 @@ struct BubbleAnimatedSurfaceLayer: View {
                 animatedSurface(at: .now)
             }
         }
+        .mask(phaseMorph.shape)
         .allowsHitTesting(false)
     }
 
@@ -30,25 +32,17 @@ struct BubbleAnimatedSurfaceLayer: View {
             progress: phaseMorph.clampedProgress
         )
 
-        ZStack {
-            BubbleGlowBackdrop(
-                phaseMorph: phaseMorph,
-                glowExpansion: glowExpansion,
-                stepBoundaryCueProgress: liquidVisuals.stepBoundaryCueProgress
-            )
-
-            BubbleLiquidLayer(
-                phaseMorph: phaseMorph,
-                visuals: liquidVisuals,
-                wavePhase: wavePhase,
-                glowExpansion: glowExpansion
-            )
-            .mask(phaseMorph.shape)
-        }
+        BubbleLiquidLayer(
+            phaseMorph: phaseMorph,
+            visuals: liquidVisuals,
+            wavePhase: wavePhase,
+            glowExpansion: glowExpansion,
+            renderingPolicy: renderingPolicy
+        )
     }
 }
 
-private struct BubbleGlowBackdrop: View {
+struct BubbleGlowBackdrop: View {
     @Environment(\.colorScheme) private var colorScheme
 
     let phaseMorph: BubblePhaseMorph
@@ -161,6 +155,7 @@ private struct BubbleLiquidLayer: View {
     let visuals: BubbleLiquidVisualState
     let wavePhase: Double
     let glowExpansion: Double
+    let renderingPolicy: BubbleRenderingPolicy
 
     private var phase: SessionPhase {
         phaseMorph.visualPhase
@@ -236,32 +231,33 @@ private struct BubbleLiquidLayer: View {
                 )
             )
 
-            var depthPoolContext = context
-            depthPoolContext.clip(to: secondaryLiquidPath)
-            depthPoolContext.addFilter(.blur(radius: colorScheme == .dark ? 14 - boundaryCue * 2 : 11 - boundaryCue * 1.4))
-            depthPoolContext.fill(
-                Path(
-                    ellipseIn: CGRect(
-                        x: sphereRect.midX - (gatheredDepthPoolSize.width / 2) + gatheredDepthPoolOffset.width,
-                        y: sphereRect.midY - (gatheredDepthPoolSize.height / 2) + gatheredDepthPoolOffset.height,
-                        width: gatheredDepthPoolSize.width,
-                        height: gatheredDepthPoolSize.height
-                    )
-                ),
-                with: .radialGradient(
-                    Gradient(colors: [
-                        phase.shadowColor.opacity(colorScheme == .dark ? 0.34 + boundaryCue * 0.08 : 0.18 + boundaryCue * 0.05),
-                        phase.tintColor.opacity(colorScheme == .dark ? 0.18 + boundaryCue * 0.03 : 0.10 + boundaryCue * 0.02),
-                        Color.clear
-                    ]),
-                    center: CGPoint(
-                        x: sphereRect.midX + gatheredDepthPoolOffset.width * 0.08,
-                        y: sphereRect.maxY - gatheredDepthPoolSize.height * (0.28 - boundaryCue * 0.05)
+            if renderingPolicy.rendersDepthPool {
+                var depthPoolContext = context
+                depthPoolContext.clip(to: secondaryLiquidPath)
+                depthPoolContext.fill(
+                    Path(
+                        ellipseIn: CGRect(
+                            x: sphereRect.midX - (gatheredDepthPoolSize.width / 2) + gatheredDepthPoolOffset.width,
+                            y: sphereRect.midY - (gatheredDepthPoolSize.height / 2) + gatheredDepthPoolOffset.height,
+                            width: gatheredDepthPoolSize.width,
+                            height: gatheredDepthPoolSize.height
+                        )
                     ),
-                    startRadius: 4,
-                    endRadius: gatheredDepthPoolSize.width * (0.46 - boundaryCue * 0.06)
+                    with: .radialGradient(
+                        Gradient(colors: [
+                            phase.shadowColor.opacity(colorScheme == .dark ? 0.34 + boundaryCue * 0.08 : 0.18 + boundaryCue * 0.05),
+                            phase.tintColor.opacity(colorScheme == .dark ? 0.18 + boundaryCue * 0.03 : 0.10 + boundaryCue * 0.02),
+                            Color.clear
+                        ]),
+                        center: CGPoint(
+                            x: sphereRect.midX + gatheredDepthPoolOffset.width * 0.08,
+                            y: sphereRect.maxY - gatheredDepthPoolSize.height * (0.28 - boundaryCue * 0.05)
+                        ),
+                        startRadius: 4,
+                        endRadius: gatheredDepthPoolSize.width * (0.46 - boundaryCue * 0.06)
+                    )
                 )
-            )
+            }
 
             if colorScheme == .dark {
                 var waterlineGlowContext = context

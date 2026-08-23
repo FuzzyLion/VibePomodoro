@@ -2,31 +2,22 @@ import UIKit
 
 extension PomodoroStore {
     func normalizeSettingsIfNeeded() {
-        let normalizedFocus = SettingsTimerField.focus.value(in: settings)
-        if settings.focusMinutes != normalizedFocus {
-            updateFocusMinutes(normalizedFocus, fireFeedback: false)
-        }
+        var normalizedSettings = settings
+        normalizedSettings.focusMinutes = SettingsTimerField.focus.value(in: settings)
+        normalizedSettings.shortBreakMinutes = SettingsTimerField.shortBreak.value(in: settings)
+        normalizedSettings.longBreakMinutes = SettingsTimerField.longBreak.value(in: settings)
+        normalizedSettings.targetRounds = SettingsTimerField.rounds.value(in: settings)
 
-        let normalizedShortBreak = SettingsTimerField.shortBreak.value(in: settings)
-        if settings.shortBreakMinutes != normalizedShortBreak {
-            updateShortBreakMinutes(normalizedShortBreak, fireFeedback: false)
-        }
+        guard normalizedSettings != settings else { return }
 
-        let normalizedLongBreak = SettingsTimerField.longBreak.value(in: settings)
-        if settings.longBreakMinutes != normalizedLongBreak {
-            updateLongBreakMinutes(normalizedLongBreak, fireFeedback: false)
-        }
-
-        let normalizedRounds = SettingsTimerField.rounds.value(in: settings)
-        if settings.targetRounds != normalizedRounds {
-            updateTargetRounds(normalizedRounds, fireFeedback: false)
-        }
+        settings = normalizedSettings
+        persist(.settings)
     }
 
     func updateFocusMinutes(_ minutes: Int, fireFeedback: Bool = true) {
         guard settings.focusMinutes != minutes else { return }
         settings.focusMinutes = minutes
-        persist()
+        persist(.settings)
         if fireFeedback {
             fireAdjustmentFeedback()
         }
@@ -35,7 +26,7 @@ extension PomodoroStore {
     func updateShortBreakMinutes(_ minutes: Int, fireFeedback: Bool = true) {
         guard settings.shortBreakMinutes != minutes else { return }
         settings.shortBreakMinutes = minutes
-        persist()
+        persist(.settings)
         if fireFeedback {
             fireAdjustmentFeedback()
         }
@@ -44,7 +35,7 @@ extension PomodoroStore {
     func updateLongBreakMinutes(_ minutes: Int, fireFeedback: Bool = true) {
         guard settings.longBreakMinutes != minutes else { return }
         settings.longBreakMinutes = minutes
-        persist()
+        persist(.settings)
         if fireFeedback {
             fireAdjustmentFeedback()
         }
@@ -53,42 +44,46 @@ extension PomodoroStore {
     func updateTargetRounds(_ rounds: Int, fireFeedback: Bool = true) {
         guard settings.targetRounds != rounds else { return }
         settings.targetRounds = rounds
-        persist()
+        persist(.settings)
         if fireFeedback {
             fireAdjustmentFeedback()
         }
     }
 
     func setKeepScreenOn(_ enabled: Bool) {
+        guard settings.keepScreenOn != enabled else { return }
         settings.keepScreenOn = enabled
-        persist()
+        persist(.settings)
         syncIdleTimer()
     }
 
     func setNotificationsEnabled(_ enabled: Bool) {
+        guard settings.notificationsEnabled != enabled else { return }
         settings.notificationsEnabled = enabled
         if enabled {
             requestNotificationPermissionsIfNeeded()
         }
-        persist()
+        persist(.settings)
         syncNotifications()
     }
 
     func setSoundEnabled(_ enabled: Bool) {
+        guard settings.soundEnabled != enabled else { return }
         settings.soundEnabled = enabled
-        persist()
+        persist(.settings)
         syncNotifications()
     }
 
     func setHapticsEnabled(_ enabled: Bool) {
+        guard settings.hapticsEnabled != enabled else { return }
         settings.hapticsEnabled = enabled
-        persist()
+        persist(.settings)
     }
 
     func setAppearanceMode(_ mode: PomodoroAppearanceMode) {
         guard settings.appearanceMode != mode else { return }
         settings.appearanceMode = mode
-        persist()
+        persist(.settings)
         fireAdjustmentFeedback()
     }
 

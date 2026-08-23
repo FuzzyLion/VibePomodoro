@@ -12,7 +12,7 @@ extension PomodoroStore {
             syncIdleTimer()
             syncNotifications()
         case .inactive, .background:
-            persist()
+            persist(.activeSession)
         @unknown default:
             break
         }
@@ -64,7 +64,7 @@ extension PomodoroStore {
         withTransaction(transaction) {
             storeCompletedSessionIfNeeded(from: completedSession)
         }
-        refreshRuntimeSideEffects()
+        refreshRuntimeSideEffects(persisting: .completedSessionTransaction)
     }
 
     func syncIdleTimer() {
@@ -72,8 +72,10 @@ extension PomodoroStore {
         UIApplication.shared.isIdleTimerDisabled = keepAwake
     }
 
-    func refreshRuntimeSideEffects() {
-        persist()
+    func refreshRuntimeSideEffects(
+        persisting scope: PomodoroPersistenceScope = .activeSession
+    ) {
+        persist(scope)
         syncIdleTimer()
         syncNotifications()
         syncStepBoundaryTimer()

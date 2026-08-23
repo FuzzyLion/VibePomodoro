@@ -12,32 +12,29 @@ struct ContentView: View {
     @State private var isFocusTabBarVisuallyHidden = false
 
     var body: some View {
-        ZStack {
-            VibeBackground()
-            TabView(selection: $store.selectedTab) {
-                FocusScreen(tabBarChromeHidden: $isFocusTabBarVisuallyHidden)
-                    .tag(AppTab.focus)
-                    .tabItem {
-                        Label("Focus", systemImage: "timer")
-                    }
+        TabView(selection: $store.selectedTab) {
+            FocusScreen(tabBarChromeHidden: $isFocusTabBarVisuallyHidden)
+                .tag(AppTab.focus)
+                .tabItem {
+                    Label("Focus", systemImage: "timer")
+                }
 
-                ProductivityScreen()
-                    .tag(AppTab.productivity)
-                    .tabItem {
-                        Label("Productivity", systemImage: "chart.bar")
-                    }
+            ProductivityScreen()
+                .tag(AppTab.productivity)
+                .tabItem {
+                    Label("Productivity", systemImage: "chart.bar")
+                }
 
-                SettingsScreen()
-                    .tag(AppTab.settings)
-                    .tabItem {
-                        Label("Settings", systemImage: "gearshape")
-                    }
-            }
-            .tint(VibePalette.warmAmberAccent)
-            .background {
-                SystemTabBarVisibilityBridge(isHidden: isFocusTabBarVisuallyHidden)
-                    .allowsHitTesting(false)
-            }
+            SettingsScreen()
+                .tag(AppTab.settings)
+                .tabItem {
+                    Label("Settings", systemImage: "gearshape")
+                }
+        }
+        .tint(VibePalette.warmAmberAccent)
+        .background {
+            SystemTabBarVisibilityBridge(isHidden: isFocusTabBarVisuallyHidden)
+                .allowsHitTesting(false)
         }
         .animation(.spring(response: 0.38, dampingFraction: 0.88), value: store.selectedTab)
     }

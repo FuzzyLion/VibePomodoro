@@ -1,84 +1,47 @@
 # VibePomodoro
 
-`VibePomodoro` is a calm, timestamp-driven Pomodoro app for iOS. It is built around accurate focus timing, quiet visual feedback, straightforward productivity review, and settings that affect the next session only.
+VibePomodoro is a calm Pomodoro timer for iOS. It keeps time accurately, stays out of the way while you work, and avoids turning focus into another game or dashboard.
 
-The full product direction lives in [PRODUCT_VISION.md](./PRODUCT_VISION.md).
+I want it to feel more like a small object sitting beside you than an app constantly asking for attention. The current interface is built around a quiet liquid-glass bubble, with the timer always kept clear and readable.
 
-## Key Features
+## What it does
 
-- Date-based Pomodoro timing with `targetEndDate` as the runtime truth.
-- `Focus -> Short Break` cycles with a final `Long Break` and session completion only after the final long break.
-- `Start`, `Pause`, `Resume`, `Reset`, `Skip`, and `Back to last step` semantics.
-- Background recovery and app relaunch restoration for unfinished sessions.
-- Productivity statistics based only on completed sessions, with `Week / Month / Year` chart ranges.
-- Session settings for focus duration, break duration, target rounds, notifications, sound, haptics, and keep-screen-on behavior.
-- Fixed event sound mapping for phase boundaries, reset, backward navigation, and session completion.
+- Uses real timestamps and `targetEndDate`, so the timer stays accurate after backgrounding or relaunching.
+- Runs `Focus -> Short Break` cycles followed by a final `Long Break`.
+- Supports start, pause, resume, reset, skip, back, and early completion.
+- Applies setting changes to the next session without mutating one already in progress.
+- Counts only completed sessions in Productivity, with week, month, and year views.
+- Handles local notifications, fixed event sounds, haptics, and optional screen-awake behavior.
 
-## Screens
+Focus stays on one screen. Productivity is meant to be honest and easy to read. Settings stays quiet and close to the system. That is basically the product position.
 
-- `Focus`: the primary single-screen timer experience, centered on a calm liquid-glass bubble timer, lightweight phase/session indicators, secondary controls, and a distinct completion summary state.
-- `Productivity`: the review screen for completed session time, daily focus average, streak, and trend charts. Its role is clear and trustworthy data presentation, not decorative analytics.
-- `Settings`: the control surface for session rhythm, alerts, display preferences, feedback/share placeholders, and productivity history clearing.
+The app is currently iOS-only, and active sessions stay on the device. More detailed behavior and design decisions live in [PRODUCT_VISION.md](./PRODUCT_VISION.md).
 
-## Tech Stack
+## Built with
 
-- Swift and SwiftUI for the app UI.
-- Charts for productivity trend rendering.
-- Combine and `ObservableObject` for runtime store publishing.
-- `UserDefaults` for current persistence.
-- UserNotifications, AVFoundation, UIKit haptics, and idle-timer integration for reminders and feedback.
-- XCTest and Swift Testing targets for tests.
+Swift, SwiftUI, Charts, Combine, `UserDefaults`, UserNotifications, and AVFoundation. The app process has one `PomodoroStore`, while `Date` and `targetEndDate` remain the timer truth.
 
-## Repository Structure
+## What is next
 
-```text
-VibePomodoro/
-├── README.md
-├── PRODUCT_VISION.md
-├── VibePomodoro.xcodeproj
-├── VibePomodoro/
-│   ├── VibePomodoroApp.swift
-│   ├── ContentView.swift
-│   ├── Core/
-│   │   ├── Engine/
-│   │   ├── Models/
-│   │   └── Store/
-│   ├── Screens/
-│   │   ├── Focus/
-│   │   ├── Productivity/
-│   │   └── Settings/
-│   ├── Shared/
-│   │   ├── Theme/
-│   │   └── UI/
-│   ├── Resources/Sounds/
-│   └── Assets.xcassets/
-├── VibePomodoroTests/
-└── VibePomodoroUITests/
-```
+The current goal is a clean public baseline, not endless polishing of the first visual idea.
 
-## Build and Run
+- Reduce the bubble's steady-state rendering and energy cost, using iPhone 14 Pro as the real-device baseline.
+- Remove repeated Productivity calculations and unnecessary full-history persistence work.
+- Explore animated numerals as the next visual anchor, then redesign Focus, Productivity, and Settings together around that language.
+- Move completed-session history to `SwiftData` once the current version is stable.
 
-Open `VibePomodoro.xcodeproj` in Xcode, select the `VibePomodoro` scheme, choose an iOS simulator or device, then build and run.
+The dynamic numeral system is a future direction, not a half-finished feature hidden in the current UI.
 
-From the command line, use an installed simulator destination:
+## Run it
+
+Open `VibePomodoro.xcodeproj`, select the `VibePomodoro` scheme, and run it on an iOS simulator or device.
 
 ```bash
-xcodebuild -project VibePomodoro.xcodeproj -scheme VibePomodoro -destination 'platform=iOS Simulator,name=<Simulator Name>' build
+xcodebuild \
+  -project VibePomodoro.xcodeproj \
+  -scheme VibePomodoro \
+  -destination 'platform=iOS Simulator,name=<Simulator Name>' \
+  build
 ```
 
-To run tests:
-
-```bash
-xcodebuild -project VibePomodoro.xcodeproj -scheme VibePomodoro -destination 'platform=iOS Simulator,name=<Simulator Name>' test
-```
-
-The project exposes the `VibePomodoro` scheme.
-
-## Roadmap
-
-1. Continue polishing the `Focus` bubble and layout details.
-2. Integrate real custom sound assets where needed.
-3. Improve the local notification experience.
-4. Migrate productivity persistence to `SwiftData`.
-5. Strengthen accessibility and edge-case coverage.
-6. Consider `iCloud` sync after the local model is stable.
+Run the same command with `test` instead of `build` to execute the test suite.

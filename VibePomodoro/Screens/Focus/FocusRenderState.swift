@@ -1,6 +1,8 @@
 import SwiftUI
 
 struct BubbleRenderState: Equatable {
+    static let visibleAnimationRefreshInterval: TimeInterval = 1.0 / 12.0
+
     let phase: SessionPhase
     let actionTitle: String
     let targetEndDate: Date?
@@ -11,7 +13,7 @@ struct BubbleRenderState: Equatable {
     let shouldTickSeconds: Bool
 
     var animationRefreshInterval: TimeInterval {
-        isAnimating ? 1.0 / 12.0 : 60.0
+        isAnimating ? Self.visibleAnimationRefreshInterval : 60.0
     }
 
     var textRefreshInterval: TimeInterval {
@@ -51,6 +53,16 @@ struct BubbleRenderState: Equatable {
         let minutes = totalSeconds / 60
         let seconds = totalSeconds % 60
         return String(format: "%02d:%02d", minutes, seconds)
+    }
+}
+
+struct BubbleRenderingPolicy: Equatable {
+    let animatesSurface: Bool
+    let rendersDepthPool: Bool
+
+    init(isAnimating: Bool, reduceMotion: Bool, lowPowerModeEnabled: Bool) {
+        animatesSurface = isAnimating && !reduceMotion
+        rendersDepthPool = !lowPowerModeEnabled
     }
 }
 

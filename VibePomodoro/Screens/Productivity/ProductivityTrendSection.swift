@@ -5,24 +5,11 @@ struct ProductivityTrendCard: View {
     @Environment(\.colorScheme) private var colorScheme
 
     let metric: ProductivityChartMetricKind
-    let snapshot: ProductivityMetricsSnapshot
+    let buckets: [ProductivityDisplayBucket]
     let range: ProductivityRange
 
     private let contentInset = ProductivityLayout.TrendCard.contentInset
     private let cornerRadius = ProductivityLayout.TrendCard.cornerRadius
-
-    private var displayBuckets: [ProductivityDisplayBucket] {
-        ProductivityChartDisplay.displayBuckets(from: snapshot.chartPoints, range: range)
-    }
-
-    private var axisStyle: ProductivityNumericAxisStyle {
-        metric.axisStyle(for: displayBuckets)
-    }
-
-    private var slotDomain: ClosedRange<Double> {
-        let bucketCount = max(displayBuckets.count, 1)
-        return -0.5...(Double(bucketCount) - 0.5)
-    }
 
     private var accentColor: Color {
         metric.accentColor(for: colorScheme)
@@ -37,6 +24,11 @@ struct ProductivityTrendCard: View {
     }
 
     var body: some View {
+        let axisStyle = metric.axisStyle(for: buckets)
+        let bucketCount = max(buckets.count, 1)
+        let slotDomain = -0.5...(Double(bucketCount) - 0.5)
+        let rangeValueText = metric.rangeValueText(from: buckets)
+
         VStack(alignment: .leading, spacing: ProductivityLayout.TrendCard.stackSpacing) {
             HStack(spacing: ProductivityLayout.TrendCard.headerSpacing) {
                 Image(systemName: metric.systemImage)
@@ -70,14 +62,14 @@ struct ProductivityTrendCard: View {
                 )
             }
 
-            Text(metric.rangeValueText(from: displayBuckets))
+            Text(rangeValueText)
                 .font(.system(size: 28, weight: .semibold))
                 .foregroundStyle(primaryTextColor)
                 .minimumScaleFactor(0.76)
                 .lineLimit(1)
                 .monospacedDigit()
 
-            Chart(displayBuckets) { bucket in
+            Chart(buckets) { bucket in
                 let value = metric.bucketValue(for: bucket)
 
                 BarMark(
@@ -123,7 +115,7 @@ struct ProductivityTrendCard: View {
                 GeometryReader { geometry in
                     if let plotFrame = proxy.plotFrame {
                         ProductivityCustomXAxis(
-                            buckets: displayBuckets,
+                            buckets: buckets,
                             range: range,
                             plotFrame: geometry[plotFrame],
                             textColor: secondaryTextColor

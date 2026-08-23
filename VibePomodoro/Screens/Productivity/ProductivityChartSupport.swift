@@ -165,7 +165,7 @@ enum ProductivityChartDisplay {
         case .month:
             unslottedBuckets = stride(from: 0, to: sortedPoints.count, by: 7).compactMap { startIndex in
                 let endIndex = min(startIndex + 7, sortedPoints.count)
-                let chunk = Array(sortedPoints[startIndex..<endIndex])
+                let chunk = sortedPoints[startIndex..<endIndex]
                 guard let first = chunk.first else { return nil }
                 let endDate = calendar.date(byAdding: .day, value: chunk.count, to: first.startDate)
 
@@ -231,6 +231,18 @@ enum ProductivityChartDisplay {
 
 enum ProductivityChartFormatting {
     private static let englishLocale = Locale(identifier: "en_US_POSIX")
+    private static let monthAxisFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = englishLocale
+        formatter.dateFormat = "d MMM"
+        return formatter
+    }()
+    private static let weekAxisFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = englishLocale
+        formatter.dateFormat = "EEE"
+        return formatter
+    }()
     private static let englishMonthSymbols: [String] = {
         let formatter = DateFormatter()
         formatter.locale = englishLocale
@@ -249,17 +261,11 @@ enum ProductivityChartFormatting {
     }
 
     static func monthAxisLabel(for date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.locale = englishLocale
-        formatter.dateFormat = "d MMM"
-        return formatter.string(from: date)
+        monthAxisFormatter.string(from: date)
     }
 
     static func weekAxisLabel(for date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.locale = englishLocale
-        formatter.dateFormat = "EEE"
-        return formatter.string(from: date)
+        weekAxisFormatter.string(from: date)
     }
 
     static func yearAxisLabel(for date: Date, calendar: Calendar = .autoupdatingCurrent) -> String {

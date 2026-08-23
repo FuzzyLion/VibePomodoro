@@ -4,7 +4,7 @@ extension PomodoroStore {
     func clearProductivityHistory() {
         completedSessions = []
         productivityCache = .empty
-        persist()
+        persist([.completedSessions, .productivityCache])
     }
 
     func productivitySnapshot(for range: ProductivityRange, now: Date = .now) -> ProductivityMetricsSnapshot {

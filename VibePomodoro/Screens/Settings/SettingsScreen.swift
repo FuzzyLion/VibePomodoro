@@ -5,22 +5,26 @@ struct SettingsScreen: View {
 
     var body: some View {
         NavigationStack {
-            ScrollView(showsIndicators: false) {
-                VStack(alignment: .leading, spacing: SettingsLayout.pageSectionSpacing) {
-                    SettingsSessionRhythmSection()
-                    SettingsAlertsSection()
-                    SettingsDisplaySection()
-                    SettingsOtherSection()
+            ZStack {
+                VibeBackground()
+
+                ScrollView(showsIndicators: false) {
+                    VStack(alignment: .leading, spacing: SettingsLayout.pageSectionSpacing) {
+                        SettingsSessionRhythmSection()
+                        SettingsAlertsSection()
+                        SettingsDisplaySection()
+                        SettingsOtherSection()
+                    }
+                    .padding(.horizontal, SettingsLayout.pageHorizontalInset)
+                    .padding(.top, SettingsLayout.pageTopInset)
+                    .padding(.bottom, SettingsLayout.pageBottomInset)
                 }
-                .padding(.horizontal, SettingsLayout.pageHorizontalInset)
-                .padding(.top, SettingsLayout.pageTopInset)
-                .padding(.bottom, SettingsLayout.pageBottomInset)
+                .onAppear {
+                    store.normalizeSettingsIfNeeded()
+                }
+                .navigationTitle("Settings")
+                .navigationBarTitleDisplayMode(.large)
             }
-            .onAppear {
-                store.normalizeSettingsIfNeeded()
-            }
-            .navigationTitle("Settings")
-            .navigationBarTitleDisplayMode(.large)
         }
     }
 }

@@ -615,6 +615,39 @@ struct VibePomodoroTests {
         #expect(reloadedStore.activeSession == preservedActiveSession)
     }
 
+    @Test func settingsPersistenceDoesNotRewriteProductivityDomains() async throws {
+        let (defaults, suiteName) = makeDefaults()
+        defer { clear(defaults, suiteName: suiteName) }
+
+        let start = Date(timeIntervalSince1970: 45_000)
+        let completedSession = makeCompletedSession(
+            settings: .default,
+            createdAt: start,
+            completedAt: start.addingTimeInterval(1_500),
+            segments: [
+                makeSegment(
+                    phase: .focus,
+                    roundNumber: 1,
+                    startDate: start,
+                    endDate: start.addingTimeInterval(1_500)
+                )
+            ]
+        )
+        saveValue([completedSession], for: TestStorageKey.completedSessions, defaults: defaults)
+
+        let store = PomodoroStore(defaults: defaults)
+        #expect(store.completedSessions.map(\.id) == [completedSession.id])
+
+        store.completedSessions = []
+        store.productivityCache = .empty
+        store.updateFocusMinutes(30)
+
+        let reloadedStore = PomodoroStore(defaults: defaults)
+        #expect(reloadedStore.settings.focusMinutes == 30)
+        #expect(reloadedStore.completedSessions.map(\.id) == [completedSession.id])
+        #expect(reloadedStore.productivityCache.completedSessionCount == 1)
+    }
+
     @Test func focusDurationNormalizationRemovesQaMinuteOptionForRelease() async throws {
         let (defaults, suiteName) = makeDefaults()
         defer { clear(defaults, suiteName: suiteName) }
@@ -629,6 +662,41 @@ struct VibePomodoroTests {
         #expect(SettingsTimerField.focus.allowedValues.first == 15)
         #expect(SettingsTimerField.focus.allowedValues.contains(1) == false)
         #expect(store.settings.focusMinutes == 15)
+    }
+
+    @Test func bubbleRenderingPolicyKeepsLowPowerAnimationAtTwelveHertz() async throws {
+        let renderState = BubbleRenderState(
+            phase: .focus,
+            actionTitle: "Pause",
+            targetEndDate: Date().addingTimeInterval(60),
+            remainingDuration: 60,
+            progress: 0.5,
+            plannedDuration: 120,
+            isAnimating: true,
+            shouldTickSeconds: true
+        )
+        let normalPolicy = BubbleRenderingPolicy(
+            isAnimating: true,
+            reduceMotion: false,
+            lowPowerModeEnabled: false
+        )
+        let lowPowerPolicy = BubbleRenderingPolicy(
+            isAnimating: true,
+            reduceMotion: false,
+            lowPowerModeEnabled: true
+        )
+        let reduceMotionPolicy = BubbleRenderingPolicy(
+            isAnimating: true,
+            reduceMotion: true,
+            lowPowerModeEnabled: false
+        )
+
+        #expect(renderState.animationRefreshInterval == 1.0 / 12.0)
+        #expect(normalPolicy.animatesSurface)
+        #expect(normalPolicy.rendersDepthPool)
+        #expect(lowPowerPolicy.animatesSurface)
+        #expect(!lowPowerPolicy.rendersDepthPool)
+        #expect(!reduceMotionPolicy.animatesSurface)
     }
 
     @Test func appearanceModeDefaultsToSystemAndPersistsUpdates() async throws {

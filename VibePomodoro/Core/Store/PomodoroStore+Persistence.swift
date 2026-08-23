@@ -1,11 +1,34 @@
 import Foundation
 
+struct PomodoroPersistenceScope: OptionSet {
+    let rawValue: UInt8
+
+    static let settings = PomodoroPersistenceScope(rawValue: 1 << 0)
+    static let activeSession = PomodoroPersistenceScope(rawValue: 1 << 1)
+    static let completedSessions = PomodoroPersistenceScope(rawValue: 1 << 2)
+    static let productivityCache = PomodoroPersistenceScope(rawValue: 1 << 3)
+
+    static let completedSessionTransaction: PomodoroPersistenceScope = [
+        .activeSession,
+        .completedSessions,
+        .productivityCache
+    ]
+}
+
 extension PomodoroStore {
-    func persist() {
-        Self.saveValue(settings, for: StorageKey.settings, using: defaults, encoder: encoder)
-        Self.saveValue(activeSession, for: StorageKey.activeSession, using: defaults, encoder: encoder)
-        Self.saveValue(completedSessions, for: StorageKey.completedSessions, using: defaults, encoder: encoder)
-        Self.saveValue(productivityCache, for: StorageKey.productivityCache, using: defaults, encoder: encoder)
+    func persist(_ scope: PomodoroPersistenceScope) {
+        if scope.contains(.settings) {
+            Self.saveValue(settings, for: StorageKey.settings, using: defaults, encoder: encoder)
+        }
+        if scope.contains(.activeSession) {
+            Self.saveValue(activeSession, for: StorageKey.activeSession, using: defaults, encoder: encoder)
+        }
+        if scope.contains(.completedSessions) {
+            Self.saveValue(completedSessions, for: StorageKey.completedSessions, using: defaults, encoder: encoder)
+        }
+        if scope.contains(.productivityCache) {
+            Self.saveValue(productivityCache, for: StorageKey.productivityCache, using: defaults, encoder: encoder)
+        }
     }
 
     func repairProductivityCacheIfNeeded() {
@@ -16,7 +39,7 @@ extension PomodoroStore {
         guard needsRebuild else { return }
 
         productivityCache = ProductivityAggregateCache.rebuild(from: completedSessions)
-        persist()
+        persist(.productivityCache)
     }
 
     static func saveValue<T: Encodable>(

@@ -111,11 +111,18 @@ enum ProductivityLayout {
 private struct ProductivityRenderState: Equatable {
     let selectedRange: ProductivityRange
     let snapshot: ProductivityMetricsSnapshot
+    let displayBuckets: [ProductivityDisplayBucket]
 
     static func build(store: PomodoroStore, selectedRange: ProductivityRange) -> Self {
-        ProductivityRenderState(
+        let snapshot = store.productivitySnapshot(for: selectedRange)
+
+        return ProductivityRenderState(
             selectedRange: selectedRange,
-            snapshot: store.productivitySnapshot(for: selectedRange)
+            snapshot: snapshot,
+            displayBuckets: ProductivityChartDisplay.displayBuckets(
+                from: snapshot.chartPoints,
+                range: selectedRange
+            )
         )
     }
 
@@ -134,40 +141,42 @@ struct ProductivityScreen: View {
     @EnvironmentObject private var store: PomodoroStore
     @State private var selectedRange: ProductivityRange = .week
 
-    private var renderState: ProductivityRenderState {
-        ProductivityRenderState.build(store: store, selectedRange: selectedRange)
-    }
-
     var body: some View {
+        let renderState = ProductivityRenderState.build(store: store, selectedRange: selectedRange)
+
         NavigationStack {
-            ScrollView(showsIndicators: false) {
-                VStack(alignment: .leading, spacing: ProductivityLayout.sectionSpacing) {
-                    ProductivitySummaryStrip(snapshot: renderState.snapshot)
+            ZStack {
+                VibeBackground()
 
-                    if renderState.showsEmptyState {
-                        ProductivityEmptyStateNote()
-                    }
-
+                ScrollView(showsIndicators: false) {
                     VStack(alignment: .leading, spacing: ProductivityLayout.sectionSpacing) {
-                        ForEach(ProductivityChartMetricKind.allCases) { metric in
-                            ProductivityTrendCard(
-                                metric: metric,
-                                snapshot: renderState.snapshot,
-                                range: renderState.selectedRange
-                            )
+                        ProductivitySummaryStrip(snapshot: renderState.snapshot)
+
+                        if renderState.showsEmptyState {
+                            ProductivityEmptyStateNote()
                         }
+
+                        VStack(alignment: .leading, spacing: ProductivityLayout.sectionSpacing) {
+                            ForEach(ProductivityChartMetricKind.allCases) { metric in
+                                ProductivityTrendCard(
+                                    metric: metric,
+                                    buckets: renderState.displayBuckets,
+                                    range: renderState.selectedRange
+                                )
+                            }
+                        }
+                        .padding(.top, renderState.trendTopInset)
                     }
-                    .padding(.top, renderState.trendTopInset)
+                    .padding(.horizontal, ProductivityLayout.pageHorizontalInset)
+                    .padding(.top, ProductivityLayout.pageTopInset)
+                    .padding(.bottom, ProductivityLayout.pageBottomInset)
                 }
-                .padding(.horizontal, ProductivityLayout.pageHorizontalInset)
-                .padding(.top, ProductivityLayout.pageTopInset)
-                .padding(.bottom, ProductivityLayout.pageBottomInset)
-            }
-            .navigationTitle("Productivity")
-            .navigationBarTitleDisplayMode(.large)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    ProductivityRangeToolbarMenu(selectedRange: $selectedRange)
+                .navigationTitle("Productivity")
+                .navigationBarTitleDisplayMode(.large)
+                .toolbar {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        ProductivityRangeToolbarMenu(selectedRange: $selectedRange)
+                    }
                 }
             }
         }

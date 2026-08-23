@@ -1,3 +1,4 @@
+import Foundation
 import SwiftUI
 
 struct BubbleTimerView: View {
@@ -13,6 +14,7 @@ struct BubbleTimerView: View {
     @State private var morphProgress: CGFloat = 1
     @State private var previousRenderState: BubbleRenderState?
     @State private var liquidSourceVisuals = BubbleLiquidVisualState()
+    @State private var isLowPowerModeEnabled = ProcessInfo.processInfo.isLowPowerModeEnabled
 
     var body: some View {
         let sphereSize = FocusScreenLayout.bubbleDiameter
@@ -28,16 +30,22 @@ struct BubbleTimerView: View {
         let waveClock = BubbleWaveClock(
             accumulatedWaveTime: accumulatedWaveTime,
             waveAnimationStart: waveAnimationStart,
-            isAnimating: renderState.isAnimating
+            isAnimating: renderingPolicy.animatesSurface
         )
 
         ZStack {
             BubbleGlassBackdrop(phaseMorph: phaseMorph, sphereSize: sphereSize)
+            BubbleGlowBackdrop(
+                phaseMorph: phaseMorph,
+                glowExpansion: 0.60,
+                stepBoundaryCueProgress: 0
+            )
             BubbleAnimatedSurfaceLayer(
                 renderState: renderState,
                 waveClock: waveClock,
                 phaseMorph: phaseMorph,
-                liquidSourceVisuals: effectiveLiquidSourceVisuals
+                liquidSourceVisuals: effectiveLiquidSourceVisuals,
+                renderingPolicy: renderingPolicy
             )
             BubbleGlassRimOverlay(phaseMorph: phaseMorph, sphereSize: sphereSize)
             if showsForegroundContent {
@@ -46,12 +54,23 @@ struct BubbleTimerView: View {
         }
         .frame(width: sphereSize, height: sphereSize)
         .onAppear(perform: handleAppear)
-        .onChange(of: renderState.isAnimating) { _, newValue in
+        .onChange(of: renderingPolicy.animatesSurface) { _, newValue in
             handleAnimationStateChange(isAnimating: newValue)
         }
         .onChange(of: renderState) { oldValue, newValue in
             handleRenderStateChange(from: oldValue, to: newValue)
         }
+        .onReceive(NotificationCenter.default.publisher(for: .NSProcessInfoPowerStateDidChange)) { _ in
+            isLowPowerModeEnabled = ProcessInfo.processInfo.isLowPowerModeEnabled
+        }
+    }
+
+    private var renderingPolicy: BubbleRenderingPolicy {
+        BubbleRenderingPolicy(
+            isAnimating: renderState.isAnimating,
+            reduceMotion: reduceMotion,
+            lowPowerModeEnabled: isLowPowerModeEnabled
+        )
     }
 
     private func handleAppear() {
@@ -60,7 +79,7 @@ struct BubbleTimerView: View {
         morphTargetPhase = renderState.phase
         morphProgress = 1
         liquidSourceVisuals = BubbleLiquidVisualState(renderState: renderState, at: .now)
-        if renderState.isAnimating && waveAnimationStart == nil {
+        if renderingPolicy.animatesSurface && waveAnimationStart == nil {
             waveAnimationStart = .now
         }
     }
@@ -90,7 +109,7 @@ struct BubbleTimerView: View {
             progress: morphProgress
         )
         accumulatedWaveTime = 0
-        waveAnimationStart = newValue.isAnimating ? .now : nil
+        waveAnimationStart = renderingPolicy.animatesSurface ? .now : nil
 
         if reduceMotion {
             morphSourcePhase = newValue.phase

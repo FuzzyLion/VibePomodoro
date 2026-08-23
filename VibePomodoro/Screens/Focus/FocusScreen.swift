@@ -115,6 +115,9 @@ struct FocusScreen: View {
                 Text("This will end the current session and show the completion summary.")
             }
         }
+        .background {
+            VibeBackground()
+        }
     }
 
     private var presentedCompletionSummaryState: FocusCompletionSummaryState? {
