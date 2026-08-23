@@ -11,39 +11,9 @@ extension PomodoroStore {
         saveValue(sessions, for: StorageKey.completedSessions, using: defaults, encoder: JSONEncoder())
         defaults.removeObject(forKey: StorageKey.productivityCache)
     }
-
-    static func seedUITestingTimerFixtureIfRequested(using defaults: UserDefaults) {
-        guard isUITestingLaunch,
-              ProcessInfo.processInfo.environment[timerFixtureEnvironmentKey] == "live-activity-boundary"
-                || ProcessInfo.processInfo.arguments.contains(liveActivityBoundaryFixtureArgument) else {
-            return
-        }
-
-        let now = Date.now
-        let settings = makeLiveActivityBoundarySettings()
-        var session = SessionSnapshot.makeNew(settings: settings, now: now)
-        _ = PomodoroEngine.startOrResume(session: &session, now: now)
-
-        saveValue(settings, for: StorageKey.settings, using: defaults, encoder: JSONEncoder())
-        saveValue(session, for: StorageKey.activeSession, using: defaults, encoder: JSONEncoder())
-        defaults.removeObject(forKey: StorageKey.completedSessions)
-        defaults.removeObject(forKey: StorageKey.productivityCache)
-    }
 }
 
 private extension PomodoroStore {
-    static func makeLiveActivityBoundarySettings() -> PomodoroSettings {
-        var settings = PomodoroSettings.default
-        settings.focusMinutes = 1
-        settings.shortBreakMinutes = 1
-        settings.longBreakMinutes = 1
-        settings.targetRounds = 2
-        settings.notificationsEnabled = false
-        settings.soundEnabled = false
-        settings.hapticsEnabled = false
-        return settings
-    }
-
     static func makeLongExtremeProductivityFixture(
         now: Date,
         calendar: Calendar = .autoupdatingCurrent

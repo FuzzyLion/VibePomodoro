@@ -110,17 +110,25 @@ final class VibePomodoroUITests: XCTestCase {
         XCTAssertFalse(app.staticTexts["APPEARANCE"].exists)
         XCTAssertTrue(app.staticTexts["DISPLAY"].exists)
 
-        XCTAssertTrue(app.buttons["settings.appearance"].waitForExistence(timeout: 2), app.debugDescription)
+        let appearanceMenu = app.buttons["settings.appearance"]
+        XCTAssertTrue(appearanceMenu.waitForExistence(timeout: 2), app.debugDescription)
         XCTAssertTrue(app.switches["Keep Screen On"].exists || app.buttons["Keep Screen On"].exists)
         XCTAssertTrue(app.staticTexts["Follow System"].exists)
 
-        selectAppearanceMode("Dark", in: app)
+        scrollUntilHittable(appearanceMenu, in: app)
+        appearanceMenu.tap()
+        XCTAssertTrue(app.buttons["Dark"].waitForExistence(timeout: 2), app.debugDescription)
+        app.buttons["Dark"].tap()
         XCTAssertTrue(app.staticTexts["Dark"].waitForExistence(timeout: 2), app.debugDescription)
 
-        selectAppearanceMode("Light", in: app)
+        appearanceMenu.tap()
+        XCTAssertTrue(app.buttons["Light"].waitForExistence(timeout: 2), app.debugDescription)
+        app.buttons["Light"].tap()
         XCTAssertTrue(app.staticTexts["Light"].waitForExistence(timeout: 2), app.debugDescription)
 
-        selectAppearanceMode("Follow System", in: app)
+        appearanceMenu.tap()
+        XCTAssertTrue(app.buttons["Follow System"].waitForExistence(timeout: 2), app.debugDescription)
+        app.buttons["Follow System"].tap()
         XCTAssertTrue(app.staticTexts["Follow System"].waitForExistence(timeout: 2), app.debugDescription)
     }
 
@@ -151,18 +159,6 @@ final class VibePomodoroUITests: XCTestCase {
             app.swipeUp()
             remainingSwipes -= 1
         }
-    }
-
-    @MainActor
-    private func selectAppearanceMode(_ title: String, in app: XCUIApplication) {
-        let appearanceMenu = app.buttons["settings.appearance"]
-        XCTAssertTrue(appearanceMenu.waitForExistence(timeout: 2), app.debugDescription)
-        scrollUntilHittable(appearanceMenu, in: app)
-        appearanceMenu.tap()
-
-        let option = app.buttons[title]
-        XCTAssertTrue(option.waitForExistence(timeout: 2), app.debugDescription)
-        option.tap()
     }
 
     @MainActor

@@ -1,21 +1,12 @@
 import Foundation
 import UserNotifications
 
-enum PomodoroNotificationDeliveryKind: Equatable {
-    case phaseChange
-    case sessionCompletion
-}
-
 struct PomodoroNotificationPlan: Equatable {
     let identifier: String
     let title: String
     let body: String
     let timeInterval: TimeInterval
     let soundResource: ReminderSoundResource?
-    let phase: SessionPhase
-    let roundNumber: Int
-    let targetRounds: Int
-    let deliveryKind: PomodoroNotificationDeliveryKind
 
     var soundName: String? {
         soundResource?.notificationSoundName
@@ -77,15 +68,12 @@ extension PomodoroStore {
 
             let title: String
             let body: String
-            let deliveryKind: PomodoroNotificationDeliveryKind
             if let nextStep {
                 title = "\(step.phase.title) complete"
-                body = "\(nextStep.phase.title) - Round \(nextStep.roundNumber) of \(session.targetRounds)"
-                deliveryKind = .phaseChange
+                body = "\(nextStep.phase.title) begins now."
             } else {
-                title = "Session complete"
-                body = "\(session.targetRounds) rounds finished. Take a breath."
-                deliveryKind = .sessionCompletion
+                title = "\(step.phase.title) complete"
+                body = "Session complete. Take a breath."
             }
 
             let soundResource: ReminderSoundResource?
@@ -100,11 +88,7 @@ extension PomodoroStore {
                 title: title,
                 body: body,
                 timeInterval: max(1, boundaryDate.timeIntervalSince(now)),
-                soundResource: soundResource,
-                phase: step.phase,
-                roundNumber: step.roundNumber,
-                targetRounds: session.targetRounds,
-                deliveryKind: deliveryKind
+                soundResource: soundResource
             ))
         }
 

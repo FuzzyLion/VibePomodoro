@@ -1,0 +1,11 @@
+# macOS metadata
+.DS_Store
+
+# Local AI and agent workspace
+AGENTS.md
+AGENT_CONTEXT.md
+.agents/
+.codex/
+.superpowers/
+.impeccable.md
+docs/superpowers/
