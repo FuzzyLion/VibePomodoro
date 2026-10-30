@@ -4,7 +4,6 @@
 # Local AI and agent workspace
 AGENTS.md
 AGENT_CONTEXT.md
-PRODUCT_VISION.md
 .agents/
 .codex/
 .superpowers/
