@@ -2,12 +2,14 @@ import SwiftUI
 
 struct FocusPageContent: View {
     @EnvironmentObject private var store: PomodoroStore
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     let renderState: FocusRenderState
     let layout: FocusScreenLayout
     let bubbleCenter: CGPoint
     let isChromeHidden: Bool
     let onBackgroundTap: (CGPoint) -> Void
+    let onPrimary: () -> Void
     let onRequestFinish: () -> Void
 
     var body: some View {
@@ -35,6 +37,11 @@ struct FocusPageContent: View {
                     topPadding: layout.progressDotsTop(bubbleCenterY: bubbleCenter.y)
                 )
 
+                FocusSummaryCaptionChrome(
+                    caption: renderState.summaryCaption,
+                    topPadding: layout.summaryCaptionTop(bubbleCenterY: bubbleCenter.y)
+                )
+
                 FocusTopChrome(
                     renderState: renderState,
                     layout: layout,
@@ -45,67 +52,21 @@ struct FocusPageContent: View {
                 FocusBottomChrome(
                     renderState: renderState,
                     topPadding: layout.bottomChromeTop(bubbleCenterY: bubbleCenter.y),
-                    onPrimary: store.togglePrimaryAction,
+                    onPrimary: onPrimary,
                     onBack: store.goBackOneStep,
                     onSkip: store.skipCurrentStep
                 )
             }
+            // When a session ends, and when Done closes it, the status, the markers, and the
+            // controls change over together rather than switching at once.
+            .animation(
+                reduceMotion ? FocusCompletionMotion.reducedMotionFade : FocusCompletionMotion.chrome,
+                value: renderState.isSessionComplete
+            )
             .opacity(isChromeHidden ? 0 : 1)
             .allowsHitTesting(!isChromeHidden)
         }
         .frame(width: layout.size.width, height: layout.size.height, alignment: .center)
-    }
-}
-
-struct FocusCompletionBackdropBubble: View {
-    @Environment(\.colorScheme) private var colorScheme
-
-    let renderState: BubbleRenderState
-    let size: CGSize
-    let bubbleCenter: CGPoint
-
-    var body: some View {
-        let bubbleShape = BubbleGlassShape(phase: renderState.phase)
-        let isDark = colorScheme == .dark
-
-        ZStack {
-            bubbleShape
-                .fill(
-                    LinearGradient(
-                        colors: [
-                            Color.white.opacity(isDark ? 0.030 : 0.145),
-                            renderState.phase.tintColor.opacity(isDark ? 0.030 : 0.060),
-                            renderState.phase.shadowColor.opacity(isDark ? 0.018 : 0.035)
-                        ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-
-            bubbleShape
-                .stroke(
-                    Color.white.opacity(isDark ? 0.12 : 0.34),
-                    lineWidth: isDark ? 0.9 : 1.0
-                )
-
-            bubbleShape
-                .stroke(
-                    renderState.phase.shadowColor.opacity(isDark ? 0.035 : 0.045),
-                    lineWidth: 10
-                )
-                .blur(radius: isDark ? 7 : 5)
-                .scaleEffect(1.012)
-        }
-        .frame(
-            width: FocusScreenLayout.bubbleDiameter,
-            height: FocusScreenLayout.bubbleDiameter
-        )
-        .position(bubbleCenter)
-        .opacity(isDark ? 0.28 : 0.32)
-        .blur(radius: isDark ? 3.2 : 2.6)
-        .frame(width: size.width, height: size.height, alignment: .center)
-        .allowsHitTesting(false)
-        .accessibilityHidden(true)
     }
 }
 
@@ -134,7 +95,46 @@ private struct FocusProgressDotsChrome: View {
     }
 }
 
+/// A finished session's breakdown under the round markers. It arrives after the vessel has
+/// started to settle and leaves first when Done is tapped.
+private struct FocusSummaryCaptionChrome: View {
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    let caption: String?
+    let topPadding: CGFloat
+
+    var body: some View {
+        ZStack {
+            if let caption {
+                Text(caption)
+                    .font(.system(size: 13, weight: .medium, design: .default))
+                    .monospacedDigit()
+                    .foregroundStyle(FocusControlColors.captionColor(for: colorScheme))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
+                    .transition(reduceMotion ? .opacity : .opacity.combined(with: .offset(y: 6)))
+            }
+        }
+        .animation(animation, value: caption != nil)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .padding(.top, topPadding)
+        .padding(.horizontal, FocusScreenLayout.horizontalPadding)
+        .allowsHitTesting(false)
+    }
+
+    private var animation: Animation {
+        if reduceMotion {
+            return FocusCompletionMotion.reducedMotionFade
+        }
+        return caption != nil ? FocusCompletionMotion.captionIn : FocusCompletionMotion.captionOut
+    }
+}
+
 private struct FocusTopChrome: View {
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     let renderState: FocusRenderState
     let layout: FocusScreenLayout
     let onReset: () -> Void
@@ -163,6 +163,18 @@ private struct FocusTopChrome: View {
                 }
             }
 
+            // A session finished early says that what was done is kept.
+            ZStack {
+                if let detail = renderState.statusDetail {
+                    Text(detail)
+                        .font(.system(size: 14, weight: .medium, design: .default))
+                        .foregroundStyle(FocusControlColors.captionColor(for: colorScheme))
+                        .multilineTextAlignment(.center)
+                        .transition(reduceMotion ? .opacity : .opacity.combined(with: .offset(y: -4)))
+                }
+            }
+            .animation(detailAnimation, value: renderState.statusDetail != nil)
+
             Spacer(minLength: 0)
         }
         .padding(.top, layout.topChromePadding)
@@ -177,6 +189,13 @@ private struct FocusTopChrome: View {
                 shadowBoost: 0
             )
         )
+    }
+
+    private var detailAnimation: Animation {
+        if reduceMotion {
+            return FocusCompletionMotion.reducedMotionFade
+        }
+        return renderState.statusDetail != nil ? FocusCompletionMotion.captionIn : FocusCompletionMotion.captionOut
     }
 
     private func topButton(_ systemImage: String, label: String, action: @escaping () -> Void) -> some View {

@@ -133,6 +133,17 @@ protocol ReminderFeedbackPlaying: AnyObject {
 final class ReminderFeedbackPlayer: ReminderFeedbackPlaying {
     private var players: [AVAudioPlayer] = []
 
+    init() {
+        // The first player sets up the audio system, which held the main thread for a few hundred
+        // milliseconds right when a phase or the session ended and froze the bubble's transition.
+        // One throwaway player, prepared off the main thread at launch, takes that cost early.
+        guard let url = ReminderSoundResource.sessionCompleteThud.bundleURL else { return }
+        DispatchQueue.global(qos: .utility).async {
+            let player = try? AVAudioPlayer(contentsOf: url)
+            player?.prepareToPlay()
+        }
+    }
+
     func play(_ actions: [ReminderFeedbackAction]) {
         guard !actions.isEmpty else { return }
 

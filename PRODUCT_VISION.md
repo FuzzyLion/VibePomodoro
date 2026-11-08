@@ -160,13 +160,13 @@ The countdown remains the most important information. Highlights, outlines, shad
 
 ### Controls and layout
 
-Keep all frequent actions on one screen. **Start / Pause / Resume** is the primary control beneath the bubble. Reset and Skip are secondary; Back is a quieter, less frequent action. Show Back only after timing has begun. Secondary controls appear only when they can act, and each keeps its slot so the primary control does not move; before a session starts, Focus shows only the bubble and **Start**.
+Keep all frequent actions on one screen. **Start / Pause / Resume** is the primary control beneath the bubble. Reset and Skip are secondary; Back is a quieter, less frequent action. Show Back only after timing has begun. Secondary controls appear only when they can act, and each keeps its slot so the primary control does not move; before a session starts, Focus shows only the bubble and **Start**, and after it ends, only the bubble's summary and **Done**.
 
 Align the main controls with the bubble. Leave enough space beneath it for the group to feel balanced. The current controls sit low, near the upper edge of the tab bar, with a clear gap above system navigation.
 
 The top row contains Reset, the status light and title, and Finish early. Keep it close to the top safe area and light enough to read as page navigation. Its buttons should feel comparable to system toolbar items. The title and light stay subordinate to the countdown.
 
-Pause has a quiet, neutral appearance, so the bubble stays the strongest color while a step runs. Start, Resume, and Start Again carry a light wash of the current phase color. Reserve enough button width for the longest label, and keep the top and bottom icons consistent in weight. Use warm white control text and icons in dark mode and restrained dark foregrounds in light mode.
+Pause has a quiet, neutral appearance, so the bubble stays the strongest color while a step runs. Start, Resume, and Done carry a light wash of the current phase color. Reserve enough button width for the longest label, and keep the top and bottom icons consistent in weight. Use warm white control text and icons in dark mode and restrained dark foregrounds in light mode.
 
 For the circular `.glass` controls, the button itself carries the visible glass circle. An outer slot owns its hit area and alignment. Keep custom pressed-opacity animations off the glass surface so they do not compete with system interaction feedback.
 
@@ -174,19 +174,15 @@ Back, Pause/Resume, and Skip must remain visibly separate during interaction. Th
 
 ### Status and round markers
 
-The status vocabulary is `READY / FOCUS / SHORT BREAK / LONG BREAK / COMPLETE`. During a session, the badge names the phase. The primary control communicates whether the timer can pause or resume. Let the badge width follow its content and keep its text on one line.
+The status vocabulary is `READY / FOCUS / SHORT BREAK / LONG BREAK`, and once a session has ended, **Session complete** or **Session finished**. During a session, the badge names the phase. The primary control communicates whether the timer can pause or resume. Let the badge width follow its content and keep its text on one line.
 
 The strip beneath the bubble contains one marker per focus round. The current focus round uses a half-filled marker. Once the session moves past it, the marker fills only if that focus block reached its full planned duration; a block that was skipped or ended early keeps an outlined marker, matching what the statistics count. Future rounds stay subdued. Keep the strip compact, close to the status badge's height, so it connects the bubble to the controls without becoming a separate visual focus.
 
 ### Completion
 
-**Session complete / Session finished** is a dedicated confirmation view. Keep only a faint bubble outline behind it and hide the regular controls, status badge, and tab bar. `COMPLETE` remains an internal state after the summary appears.
+A finished session stays on the Focus page rather than opening a separate view. The vessel keeps its place and becomes the summary: the countdown turns into the time spent focusing, under a small **FOCUSED** label, in the same numerals and liquid. The liquid comes to rest as full as the session's focus time came to its plan, just below the rim when the plan was met, and its surface goes calm. The status reads **Session complete**, or **Session finished** with a short note that what was done is kept. The round markers show which focus blocks were completed, and one line beneath them gives that count and the break time. Reset, Finish early, Back, and Skip step aside, and **Done** takes the primary control's place in the same glass family, with the phase color's wash. The tab bar stays hidden until Done.
 
-Normal completion needs a title without extra explanatory copy. Early completion adds a short explanation. Give the summary card less space above its content and more below, so the composition does not feel top-heavy.
-
-**Done** is a centered, narrow capsule with a clear text label. It uses the same system glass family as Pause and Resume, with a calm tint and enough text size to feel deliberate.
-
-The entrance sequence is simple: badge first, title and card next, Done last. Dismissal should follow the same restrained rhythm without leaving a long gap containing only a dim background and bubble. Reveal masks are suitable for text; rounded cards and buttons need to keep their corners intact. With Reduce Motion enabled, use a simple appearance and dismissal.
+When a session ends, everything changes in place: the controls change over first, the liquid settles from its final overfill, the countdown blurs into the total, and the breakdown arrives last. Nothing disappears and comes back, so there are no doubled frames and no empty page in between. Done drains the vessel to the next session's starting level while it morphs into the focus phase; the total blurs back into the countdown and Done becomes Start. With Reduce Motion enabled, the changes fade without movement.
 
 ### Changing duration
 

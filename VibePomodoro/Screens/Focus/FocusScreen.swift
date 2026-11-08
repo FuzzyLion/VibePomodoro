@@ -13,45 +13,32 @@ struct FocusScreen: View {
     /// at its last global position, and leaving immersive mode keeps it there until the
     /// layout has settled back.
     @State private var pinnedBubble: PinnedBubble?
-    @State private var completionSummaryState: FocusCompletionSummaryState?
     @State private var isShowingFinishConfirmation = false
     @State private var isVoiceOverRunning = UIAccessibility.isVoiceOverRunning
 
     var body: some View {
         GeometryReader { proxy in
             let layout = FocusScreenLayout(proxy: proxy)
-            let summaryState = presentedCompletionSummaryState
-            let bubbleCenter = layout.bubbleCenter(
-                pinnedGlobalY: summaryState == nil ? pinnedBubble?.globalY : nil
-            )
+            let bubbleCenter = layout.bubbleCenter(pinnedGlobalY: pinnedBubble?.globalY)
             let renderState = FocusRenderState.build(store: store, scenePhase: scenePhase)
 
-            ZStack {
-                if let summaryState {
-                    FocusCompletionBackdropBubble(
-                        renderState: renderState.bubble,
-                        size: layout.size,
-                        bubbleCenter: bubbleCenter
-                    )
-
-                    FocusCompletionSummaryView(state: summaryState, doneAction: dismissCompletionSummary)
-                        .zIndex(2)
-                } else {
-                    FocusPageContent(
-                        renderState: renderState,
-                        layout: layout,
-                        bubbleCenter: bubbleCenter,
-                        isChromeHidden: isImmersive,
-                        onBackgroundTap: { location in
-                            handleBackgroundTap(at: location, layout: layout, bubbleCenter: bubbleCenter)
-                        },
-                        onRequestFinish: { isShowingFinishConfirmation = true }
-                    )
-                }
-            }
-            .animation(
-                reduceMotion ? nil : FocusCompletionMotion.containerFadeInAnimation,
-                value: summaryState != nil
+            // A finished session stays on this page: the vessel holds its focus total until Done.
+            FocusPageContent(
+                renderState: renderState,
+                layout: layout,
+                bubbleCenter: bubbleCenter,
+                isChromeHidden: isImmersive,
+                onBackgroundTap: { location in
+                    handleBackgroundTap(at: location, layout: layout, bubbleCenter: bubbleCenter)
+                },
+                onPrimary: {
+                    if renderState.primaryAction == .done {
+                        closeFinishedSession()
+                    } else {
+                        store.togglePrimaryAction()
+                    }
+                },
+                onRequestFinish: { isShowingFinishConfirmation = true }
             )
             .frame(width: layout.size.width, height: layout.size.height, alignment: .top)
             .statusBarHidden(hidesSystemOverlays)
@@ -83,7 +70,7 @@ struct FocusScreen: View {
                 Button("Cancel", role: .cancel) {}
                 Button("Finish session early") { store.finishSessionEarly() }
             } message: {
-                Text("This will end the current session and show the completion summary.")
+                Text("This will end the current session and show what you completed.")
             }
         }
         .background {
@@ -91,23 +78,23 @@ struct FocusScreen: View {
         }
     }
 
-    private var presentedCompletionSummaryState: FocusCompletionSummaryState? {
-        completionSummaryState ?? FocusCompletionSummaryState(session: store.activeSession)
+    private var isSessionComplete: Bool {
+        store.activeSession?.runState == .completed
     }
 
     private var immersiveModeAllowed: Bool {
-        presentedCompletionSummaryState == nil
+        !isSessionComplete
             && store.selectedTab == .focus
             && scenePhase == .active
             && !isVoiceOverRunning
     }
 
     private var hidesSystemOverlays: Bool {
-        isImmersive && presentedCompletionSummaryState == nil
+        isImmersive && !isSessionComplete
     }
 
     private var wantsTabBarHidden: Bool {
-        store.selectedTab == .focus && (isImmersive || presentedCompletionSummaryState != nil)
+        store.selectedTab == .focus && (isImmersive || isSessionComplete)
     }
 
     private var isRestoringLayout: Bool {
@@ -147,7 +134,7 @@ struct FocusScreen: View {
     }
 
     private func syncWithStore() {
-        syncCompletionSummary()
+        isShowingFinishConfirmation = false
 
         guard !immersiveModeAllowed else { return }
 
@@ -159,24 +146,9 @@ struct FocusScreen: View {
         isShowingFinishConfirmation = false
     }
 
-    private func syncCompletionSummary() {
-        isShowingFinishConfirmation = false
-
-        let state = FocusCompletionSummaryState(session: store.activeSession)
-        guard completionSummaryState != state else { return }
-
-        let animation = state == nil
-            ? FocusCompletionMotion.containerFadeOutAnimation
-            : FocusCompletionMotion.containerFadeInAnimation
-        withAnimation(reduceMotion ? nil : animation) {
-            completionSummaryState = state
-        }
-    }
-
-    private func dismissCompletionSummary() {
-        withAnimation(reduceMotion ? nil : FocusCompletionMotion.containerFadeOutAnimation) {
-            completionSummaryState = nil
-        }
+    /// Done: the vessel drains into the next session's Ready state while the chrome changes back.
+    /// The vessel, its readout, and the chrome animate the change themselves.
+    private func closeFinishedSession() {
         store.dismissCompletedSession()
         setImmersive(false)
         isShowingFinishConfirmation = false

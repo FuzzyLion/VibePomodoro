@@ -3,7 +3,8 @@ import SwiftUI
 /// The liquid with the countdown inside it. The digits are drawn once, in their glass treatment,
 /// and the liquid shader runs over their layer: above the wave line they stay as drawn, below it
 /// they are seen through the liquid, refracted and tinted. The text changes once a second; the
-/// liquid follows its own 12 Hz schedule.
+/// liquid follows its own 12 Hz schedule. Once a session has ended, the vessel holds the focus
+/// total instead of the countdown.
 struct BubbleLiquidContent: View {
     @Environment(\.colorScheme) private var colorScheme
 
@@ -11,20 +12,13 @@ struct BubbleLiquidContent: View {
     let driver: BubbleLiquidDriver
 
     var body: some View {
-        Group {
-            if renderState.shouldTickSeconds {
-                TimelineView(.periodic(from: .now, by: renderState.textRefreshInterval)) { context in
-                    liquid(
-                        around: renderState.timeText(at: context.date),
-                        stepBoundaryCueProgress: renderState.stepBoundaryCueProgress(at: context.date)
-                    )
-                }
-            } else {
-                liquid(
-                    around: renderState.timeText(at: .now),
-                    stepBoundaryCueProgress: renderState.stepBoundaryCueProgress(at: .now)
-                )
-            }
+        // One timeline whether or not the clock ticks, so the readout keeps its identity and the
+        // countdown can turn into the summary with a transition.
+        TimelineView(.periodic(from: .now, by: renderState.textRefreshInterval)) { context in
+            liquid(
+                around: renderState.timeText(at: context.date),
+                stepBoundaryCueProgress: renderState.stepBoundaryCueProgress(at: context.date)
+            )
         }
         .frame(width: FocusScreenLayout.bubbleDiameter, height: FocusScreenLayout.bubbleDiameter)
         // The liquid stays inside the glass wall instead of reaching the outer edge.
@@ -43,8 +37,9 @@ struct BubbleLiquidContent: View {
                 Rectangle()
                     .fill(Color.black.opacity(0.004))
 
-                BubbleTimerDigits(
+                BubbleVesselReadout(
                     timeText: timeText,
+                    summary: renderState.summary,
                     stepBoundaryCueProgress: stepBoundaryCueProgress,
                     glassTint: driver.phaseMorph.glassTint
                 )
@@ -65,16 +60,59 @@ struct BubbleLiquidContent: View {
     }
 }
 
-/// The countdown in its glass treatment, as it looks above the liquid.
-private struct BubbleTimerDigits: View {
-    @Environment(\.colorScheme) private var colorScheme
+/// What the vessel reads: the countdown while a session runs, and the time spent focusing once it
+/// has ended. One blurs into the other in place.
+private struct BubbleVesselReadout: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     let timeText: String
+    let summary: BubbleSessionSummary?
     let stepBoundaryCueProgress: Double
     let glassTint: Color
 
     var body: some View {
-        let textLabel = BubbleTimerTextLabel(display: BubbleTimeDisplay(text: timeText))
+        ZStack {
+            if let summary {
+                BubbleGlassText(stepBoundaryCueProgress: 0, glassTint: glassTint) {
+                    BubbleSummaryLabel(summary: summary)
+                }
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(
+                    "Focused \(FocusCompletionFormatting.accessibilityDurationText(summary.focusTime))"
+                )
+                .transition(transition)
+            } else {
+                BubbleGlassText(stepBoundaryCueProgress: stepBoundaryCueProgress, glassTint: glassTint) {
+                    BubbleTimerTextLabel(display: BubbleTimeDisplay(text: timeText))
+                }
+                .transition(transition)
+            }
+        }
+        .animation(animation, value: summary != nil)
+    }
+
+    private var transition: AnyTransition {
+        reduceMotion ? .opacity : AnyTransition(.blurReplace)
+    }
+
+    private var animation: Animation {
+        if reduceMotion {
+            return FocusCompletionMotion.reducedMotionFade
+        }
+        return summary != nil ? FocusCompletionMotion.readoutIn : FocusCompletionMotion.readoutOut
+    }
+}
+
+/// Text in the vessel's glass treatment, as it looks above the liquid.
+private struct BubbleGlassText<Label: View>: View {
+    @Environment(\.colorScheme) private var colorScheme
+
+    let stepBoundaryCueProgress: Double
+    let glassTint: Color
+    @ViewBuilder let label: () -> Label
+
+    var body: some View {
+        let textLabel = label()
             .padding(.horizontal, 2)
             .padding(.vertical, 6)
         let cue = max(0, min(stepBoundaryCueProgress, 1))
@@ -159,6 +197,51 @@ private struct BubbleTimerDigits: View {
                 }
                 .shadow(color: Color.black.opacity(0.08 + cue * 0.02), radius: 10, y: 5)
         }
+    }
+}
+
+/// The focus total in the countdown's numerals, with smaller units, under a small label. The
+/// number sits where the countdown was.
+private struct BubbleSummaryLabel: View {
+    let summary: BubbleSessionSummary
+
+    var body: some View {
+        let parts = FocusCompletionFormatting.durationParts(summary.focusTime)
+        let digitCount = parts.reduce(0) { $0 + $1.value.count }
+        // The units make the total wider than a countdown, so its numerals are a little smaller,
+        // and smaller again for four digits, as in "10h 25m".
+        let numeralSize: CGFloat = digitCount > 3 ? 46 : 52
+
+        VStack(spacing: 2) {
+            caption
+
+            HStack(alignment: .firstTextBaseline, spacing: 0) {
+                ForEach(Array(parts.enumerated()), id: \.offset) { index, part in
+                    Text(part.value)
+                        .font(.system(size: numeralSize, weight: .heavy, design: .default))
+                        .fontWidth(.expanded)
+
+                    Text(part.unit)
+                        .font(.system(size: numeralSize * 0.5, weight: .heavy, design: .default))
+                        .fontWidth(.expanded)
+                        .padding(.leading, 2)
+                        .padding(.trailing, index < parts.count - 1 ? 12 : 0)
+                }
+            }
+            .monospacedDigit()
+            .tracking(-1.1)
+
+            // Balances the label, so the number stays centered where the countdown was.
+            caption.hidden()
+        }
+        .fixedSize()
+    }
+
+    private var caption: some View {
+        Text("FOCUSED")
+            .font(.system(size: 12, weight: .heavy, design: .default))
+            .fontWidth(.expanded)
+            .tracking(2.4)
     }
 }
 

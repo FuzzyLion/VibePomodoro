@@ -687,15 +687,6 @@ struct VibePomodoroTests {
     }
 
     @Test func bubbleRenderingPolicyKeepsLowPowerAnimationAtTwelveHertz() async throws {
-        let renderState = BubbleRenderState(
-            phase: .focus,
-            targetEndDate: Date().addingTimeInterval(60),
-            remainingDuration: 60,
-            progress: 0.5,
-            plannedDuration: 120,
-            isAnimating: true,
-            shouldTickSeconds: true
-        )
         let normalPolicy = BubbleRenderingPolicy(
             isAnimating: true,
             reduceMotion: false,
@@ -712,12 +703,94 @@ struct VibePomodoroTests {
             lowPowerModeEnabled: false
         )
 
-        #expect(renderState.animationRefreshInterval == 1.0 / 12.0)
+        #expect(BubbleRenderState.visibleAnimationRefreshInterval == 1.0 / 12.0)
         #expect(normalPolicy.animatesSurface)
         #expect(normalPolicy.rendersCaustic)
         #expect(lowPowerPolicy.animatesSurface)
         #expect(!lowPowerPolicy.rendersCaustic)
         #expect(!reduceMotionPolicy.animatesSurface)
+    }
+
+    @Test func finishedSessionSummaryCountsBlocksBreaksAndFocusShare() async throws {
+        var settings = PomodoroSettings.default
+        settings.focusMinutes = 25
+        settings.shortBreakMinutes = 5
+        settings.longBreakMinutes = 15
+        settings.targetRounds = 3
+
+        let start = Date(timeIntervalSince1970: 40_000)
+        var session = SessionSnapshot.makeNew(settings: settings, now: start)
+        _ = PomodoroEngine.startOrResume(session: &session, now: start)
+
+        // The first focus block and its break, then ten minutes into the second block.
+        let finish = start.addingTimeInterval((25 + 5 + 10) * 60)
+        _ = PomodoroEngine.reconcile(session: &session, now: finish)
+        #expect(FocusRenderState.nodeStates(for: session, fallbackRounds: 3) == [.filled, .half, .inactive])
+
+        // Finishing early stops the second block, so its marker shows it as unfinished.
+        _ = PomodoroEngine.finishSessionEarly(session: &session, now: finish)
+        #expect(FocusRenderState.nodeStates(for: session, fallbackRounds: 3) == [.filled, .skipped, .inactive])
+
+        let statistics = session.statistics(now: finish)
+        let summary = BubbleSessionSummary(session: session, statistics: statistics)
+        #expect(abs(summary.focusTime - 35 * 60) < 1)
+        #expect(abs(summary.focusShare - 35.0 / 75.0) < 0.001)
+        #expect(FocusRenderState.summaryCaption(for: statistics, targetRounds: 3) == "1 of 3 focus blocks · 5m break")
+
+        let single = SessionStatistics(focusTime: 25 * 60, shortBreakTime: 0, longBreakTime: 0, completedFocusCount: 1)
+        #expect(FocusRenderState.summaryCaption(for: single, targetRounds: 1) == "1 of 1 focus block")
+    }
+
+    @Test func finishedSessionVesselRestsBelowTheRimWithACalmSurface() async throws {
+        func summaryState(focusShare: Double) -> BubbleRenderState {
+            BubbleRenderState(
+                phase: .longBreak,
+                targetEndDate: nil,
+                remainingDuration: 0,
+                progress: 0,
+                plannedDuration: 15 * 60,
+                isAnimating: false,
+                shouldTickSeconds: false,
+                summary: BubbleSessionSummary(focusTime: 100 * 60 * focusShare, focusShare: focusShare)
+            )
+        }
+
+        let full = BubbleLiquidVisualState(renderState: summaryState(focusShare: 1), at: .now)
+        #expect(abs(full.fillRatio - BubbleLiquidVisualState.fullRestingFillRatio) < 0.0001)
+        #expect(full.surfaceCalm == 1)
+        #expect(full.stepBoundaryCueProgress == 0)
+
+        let empty = BubbleLiquidVisualState(renderState: summaryState(focusShare: 0), at: .now)
+        #expect(abs(empty.fillRatio - 0.12) < 0.0001)
+
+        let half = BubbleLiquidVisualState(renderState: summaryState(focusShare: 0.5), at: .now)
+        #expect(half.fillRatio > 0.12 && half.fillRatio < full.fillRatio)
+
+        // The last step's final second overfills the vessel; the summary never does.
+        let ending = BubbleRenderState(
+            phase: .longBreak,
+            targetEndDate: nil,
+            remainingDuration: 0,
+            progress: 0,
+            plannedDuration: 15 * 60,
+            isAnimating: false,
+            shouldTickSeconds: false,
+            summary: nil
+        )
+        #expect(BubbleLiquidVisualState(renderState: ending, at: .now).fillRatio > 1)
+        #expect(full.fillRatio < 0.9)
+    }
+
+    @Test func completionDurationsSplitIntoNumbersAndUnits() async throws {
+        let parts = FocusCompletionFormatting.durationParts(100 * 60)
+        #expect(parts == [
+            FocusCompletionFormatting.DurationPart(value: "1", unit: "h"),
+            FocusCompletionFormatting.DurationPart(value: "40", unit: "m")
+        ])
+        #expect(FocusCompletionFormatting.durationText(100 * 60) == "1h 40m")
+        #expect(FocusCompletionFormatting.durationText(2 * 3_600) == "2h")
+        #expect(FocusCompletionFormatting.durationText(25 * 60) == "25m")
+        #expect(FocusCompletionFormatting.durationText(45) == "45s")
     }
 
     @Test func vesselCrossSectionAndSurfaceFollowTheWaterLine() async throws {

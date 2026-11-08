@@ -10,23 +10,29 @@ struct BubbleTimerView: View {
     @State private var waveAnimationStart: Date?
     @State private var morphSourcePhase: SessionPhase = .focus
     @State private var morphTargetPhase: SessionPhase = .focus
+    /// Whether the morph is heading to the summary of a finished session.
+    @State private var morphTargetShowsSummary = false
     @State private var morphProgress: CGFloat = 1
     @State private var previousRenderState: BubbleRenderState?
     @State private var liquidSourceVisuals = BubbleLiquidVisualState()
+    /// Keeps the surface moving while the liquid settles at a session's end or drains after it.
+    @State private var isSettling = false
+    @State private var settleTask: Task<Void, Never>?
     @State private var isLowPowerModeEnabled = ProcessInfo.processInfo.isLowPowerModeEnabled
 
     var body: some View {
         let sphereSize = FocusScreenLayout.bubbleDiameter
-        // Until `onChange` starts the morph, a new phase is drawn as the first frame of the
-        // morph from the previous one.
-        let isPendingPhaseTransition = previousRenderState != nil && renderState.phase != morphTargetPhase
+        // Until `onChange` starts the morph, a new phase or the end of a session is drawn as the
+        // first frame of the morph from the previous state.
+        let isPendingTransition = previousRenderState != nil
+            && (renderState.phase != morphTargetPhase || (renderState.summary != nil) != morphTargetShowsSummary)
 
         BubbleVesselLayers(
             renderState: renderState,
-            sourcePhase: isPendingPhaseTransition ? morphTargetPhase : morphSourcePhase,
-            targetPhase: isPendingPhaseTransition ? renderState.phase : morphTargetPhase,
-            morphProgress: isPendingPhaseTransition ? 0 : morphProgress,
-            liquidSourceVisuals: isPendingPhaseTransition
+            sourcePhase: isPendingTransition ? morphTargetPhase : morphSourcePhase,
+            targetPhase: isPendingTransition ? renderState.phase : morphTargetPhase,
+            morphProgress: isPendingTransition ? 0 : morphProgress,
+            liquidSourceVisuals: isPendingTransition
                 ? BubbleLiquidVisualState(renderState: previousRenderState ?? renderState, at: .now)
                 : liquidSourceVisuals,
             waveClock: BubbleWaveClock(
@@ -37,6 +43,14 @@ struct BubbleTimerView: View {
             renderingPolicy: renderingPolicy
         )
         .frame(width: sphereSize, height: sphereSize)
+        // The first frame of a transition is drawn at its start even when the change that caused
+        // it carries an animation: interpolating it would show the end state for a moment before
+        // the morph from `onChange` begins.
+        .transaction { transaction in
+            if isPendingTransition {
+                transaction.animation = nil
+            }
+        }
         .onAppear(perform: handleAppear)
         .onChange(of: renderingPolicy.animatesSurface) { _, newValue in
             handleAnimationStateChange(isAnimating: newValue)
@@ -47,11 +61,16 @@ struct BubbleTimerView: View {
         .onReceive(NotificationCenter.default.publisher(for: .NSProcessInfoPowerStateDidChange)) { _ in
             isLowPowerModeEnabled = ProcessInfo.processInfo.isLowPowerModeEnabled
         }
+        .onDisappear {
+            settleTask?.cancel()
+            settleTask = nil
+            isSettling = false
+        }
     }
 
     private var renderingPolicy: BubbleRenderingPolicy {
         BubbleRenderingPolicy(
-            isAnimating: renderState.isAnimating,
+            isAnimating: renderState.isAnimating || isSettling,
             reduceMotion: reduceMotion,
             lowPowerModeEnabled: isLowPowerModeEnabled
         )
@@ -61,6 +80,7 @@ struct BubbleTimerView: View {
         previousRenderState = renderState
         morphSourcePhase = renderState.phase
         morphTargetPhase = renderState.phase
+        morphTargetShowsSummary = renderState.summary != nil
         morphProgress = 1
         liquidSourceVisuals = BubbleLiquidVisualState(renderState: renderState, at: .now)
         if renderingPolicy.animatesSurface && waveAnimationStart == nil {
@@ -83,7 +103,8 @@ struct BubbleTimerView: View {
             previousRenderState = newValue
         }
 
-        guard oldValue.phase != newValue.phase else { return }
+        let summaryChanged = (oldValue.summary == nil) != (newValue.summary == nil)
+        guard oldValue.phase != newValue.phase || summaryChanged else { return }
 
         let now = Date.now
         let oldTargetVisuals = BubbleLiquidVisualState(renderState: oldValue, at: now)
@@ -92,6 +113,7 @@ struct BubbleTimerView: View {
             to: oldTargetVisuals,
             progress: morphProgress
         )
+        morphTargetShowsSummary = newValue.summary != nil
         // The wave clock keeps running through a phase change, so the surface carries on
         // moving instead of snapping back to its starting shape.
 
@@ -107,8 +129,27 @@ struct BubbleTimerView: View {
         morphTargetPhase = newValue.phase
         morphProgress = 0
 
-        withAnimation(FocusScreenLayout.phaseMorphAnimation) {
+        var animation = FocusScreenLayout.phaseMorphAnimation
+        if summaryChanged {
+            // When a session ends the liquid settles below the rim; Done drains it into the
+            // next session. Either way the surface moves until the liquid comes to rest.
+            let isEnding = newValue.summary != nil
+            animation = isEnding ? FocusCompletionMotion.settle : FocusCompletionMotion.drain
+            keepSurfaceMoving(for: isEnding ? FocusCompletionMotion.settleDuration : FocusCompletionMotion.drainDuration)
+        }
+
+        withAnimation(animation) {
             morphProgress = 1
+        }
+    }
+
+    private func keepSurfaceMoving(for duration: TimeInterval) {
+        settleTask?.cancel()
+        isSettling = true
+        settleTask = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(duration))
+            guard !Task.isCancelled else { return }
+            isSettling = false
         }
     }
 }
@@ -193,24 +234,28 @@ struct BubbleLiquidDriver {
         return BubbleLiquidFrame(
             fillRatio: max(0, min(visuals.fillRatio, 1.08)),
             wavePhase: wavePhase,
-            amplitude: (profile.waveAmplitudeBase + glowExpansion * profile.waveAmplitudeRange) * (1 - boundaryCue * 0.08),
+            amplitude: (profile.waveAmplitudeBase + glowExpansion * profile.waveAmplitudeRange)
+                * (1 - boundaryCue * 0.08)
+                * (1 - max(0, min(visuals.surfaceCalm, 1)) * 0.85),
             boundaryCue: boundaryCue
         )
     }
 }
 
-/// Redraws on the liquid's animation schedule while the surface moves, otherwise once.
+/// Redraws on the liquid's animation schedule while the surface moves. The timeline stays in
+/// place when the surface stops, so the views inside keep their identity and can animate from
+/// one state to the next; a still surface is drawn for the current moment.
 struct BubbleLiquidTimeline<Content: View>: View {
     let driver: BubbleLiquidDriver
     @ViewBuilder let content: (BubbleLiquidFrame) -> Content
 
     var body: some View {
-        if driver.renderingPolicy.animatesSurface {
-            TimelineView(.periodic(from: .now, by: driver.renderState.animationRefreshInterval)) { context in
-                content(driver.frame(at: context.date))
-            }
-        } else {
-            content(driver.frame(at: .now))
+        let animates = driver.renderingPolicy.animatesSurface
+
+        TimelineView(
+            .animation(minimumInterval: BubbleRenderState.visibleAnimationRefreshInterval, paused: !animates)
+        ) { context in
+            content(driver.frame(at: animates ? context.date : .now))
         }
     }
 }
@@ -263,15 +308,29 @@ struct BubblePhaseMorph: Equatable {
 }
 
 struct BubbleLiquidVisualState: Equatable {
+    /// Where the liquid rests once a session that met its planned focus time has ended: just
+    /// below the rim, so its surface still shows.
+    static let fullRestingFillRatio = 0.86
+
     let fillRatio: Double
     let stepBoundaryCueProgress: Double
+    /// How still the surface is, from 0 for the regular waves to 1 for an all but flat surface.
+    let surfaceCalm: Double
 
-    init(fillRatio: Double = 0.12, stepBoundaryCueProgress: Double = 0) {
+    init(fillRatio: Double = 0.12, stepBoundaryCueProgress: Double = 0, surfaceCalm: Double = 0) {
         self.fillRatio = fillRatio
         self.stepBoundaryCueProgress = stepBoundaryCueProgress
+        self.surfaceCalm = surfaceCalm
     }
 
     init(renderState: BubbleRenderState, at date: Date) {
+        if let summary = renderState.summary {
+            fillRatio = Self.restingFillRatio(forFocusShare: summary.focusShare)
+            stepBoundaryCueProgress = 0
+            surfaceCalm = 1
+            return
+        }
+
         let normalizedProgress = max(0, min(renderState.progress(at: date), 1))
         let preCompletionFillRatio = min(0.94, 0.12 + pow(normalizedProgress, 1.28) * 0.82)
         let remainingDuration = renderState.remainingDuration(at: date)
@@ -282,6 +341,14 @@ struct BubbleLiquidVisualState: Equatable {
 
         fillRatio = interpolate(preCompletionFillRatio, 1.08, easedFinalFillProgress)
         stepBoundaryCueProgress = renderState.stepBoundaryCueProgress(at: date)
+        surfaceCalm = 0
+    }
+
+    /// A finished session's vessel holds its focus time: as full as the session's focus time
+    /// came to its plan, on the curve the liquid rises along while a step runs.
+    static func restingFillRatio(forFocusShare share: Double) -> Double {
+        let clampedShare = share.isFinite ? min(1, max(0, share)) : 0
+        return 0.12 + pow(clampedShare, 1.28) * (fullRestingFillRatio - 0.12)
     }
 
     static func interpolated(
@@ -295,7 +362,8 @@ struct BubbleLiquidVisualState: Equatable {
                 source.stepBoundaryCueProgress,
                 target.stepBoundaryCueProgress,
                 progress
-            )
+            ),
+            surfaceCalm: interpolate(source.surfaceCalm, target.surfaceCalm, progress)
         )
     }
 }

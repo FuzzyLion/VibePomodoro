@@ -58,6 +58,11 @@ struct FocusScreenLayout {
         bubbleCenterY + Self.bubbleDiameter / 2 + (isCompact ? 16 : 20)
     }
 
+    /// The breakdown of a finished session, just under the round markers.
+    func summaryCaptionTop(bubbleCenterY: CGFloat) -> CGFloat {
+        progressDotsTop(bubbleCenterY: bubbleCenterY) + Self.progressDotsHeight + (isCompact ? 11 : 14)
+    }
+
     func bottomChromeTop(bubbleCenterY: CGFloat) -> CGFloat {
         bubbleCenterY
             + Self.bubbleDiameter / 2
