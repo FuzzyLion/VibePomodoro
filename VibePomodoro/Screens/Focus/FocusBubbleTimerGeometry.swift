@@ -395,7 +395,13 @@ enum BubbleVessel {
         let depth: CGFloat
     }
 
-    static func surface(in rect: CGRect, innerOutline: [CGPoint], fillRatio: Double) -> Surface? {
+    /// `reach` is how far the waves move the edges of the surface up and down.
+    static func surface(
+        in rect: CGRect,
+        innerOutline: [CGPoint],
+        fillRatio: Double,
+        reach: CGFloat = 0
+    ) -> Surface? {
         let waterlineY = BubbleWave.waterlineY(fillRatio: fillRatio, in: rect)
         guard waterlineY > rect.minY + 4,
               waterlineY < rect.maxY - 4,
@@ -403,28 +409,68 @@ enum BubbleVessel {
             return nil
         }
 
-        let radius = (extent.upperBound - extent.lowerBound) / 2
+        let depth = min(12, (extent.upperBound - extent.lowerBound) / 2 * 0.09)
+        // The surface's far and near edges and its waves meet the glass a little above and below
+        // the water line. Where the glass is wider there, the surface spans to it and the glass
+        // cuts it off, so no gap of air opens between the surface and the glass.
+        var lower = extent.lowerBound
+        var upper = extent.upperBound
+        for y in [waterlineY - depth - reach, waterlineY + depth + reach] {
+            guard let other = horizontalExtent(of: innerOutline, atY: y) else { continue }
+            lower = min(lower, other.lowerBound)
+            upper = max(upper, other.upperBound)
+        }
+
         return Surface(
             waterlineY: waterlineY,
-            centerX: (extent.lowerBound + extent.upperBound) / 2,
-            radius: radius,
-            depth: min(12, radius * 0.09)
+            centerX: (lower + upper) / 2,
+            radius: (upper - lower) / 2 + 1,
+            depth: depth
         )
     }
 
-    /// The inside of the glass as `count` (left, right) pairs on rows spread evenly down `rect`,
-    /// for the shader's sense of how far a point is from the glass. Rows outside the vessel
-    /// collapse to the middle.
-    static func crossSections(of innerOutline: [CGPoint], in rect: CGRect, count: Int) -> [Float] {
+    /// The inside of the glass as the shader sees it. `values` holds `count` (left, right) pairs
+    /// on rows spread evenly from the top to the bottom of the inside, then `count` (top, bottom)
+    /// pairs on columns spread evenly across it; `bounds` is where they start and end. Rows alone
+    /// lose the bottom and the top, where the glass runs nearly level, so the shader takes the
+    /// distance to the glass from both.
+    struct CrossSections: Equatable {
+        let bounds: CGRect
+        let values: [Float]
+    }
+
+    static func crossSections(of innerOutline: [CGPoint], count: Int) -> CrossSections {
+        guard count > 1,
+              let minX = innerOutline.map(\.x).min(),
+              let maxX = innerOutline.map(\.x).max(),
+              let minY = innerOutline.map(\.y).min(),
+              let maxY = innerOutline.map(\.y).max() else {
+            return CrossSections(bounds: .zero, values: [])
+        }
+
+        let bounds = CGRect(x: minX, y: minY, width: maxX - minX, height: maxY - minY)
+        // The outermost rows and columns sit just inside the bounds, where they still cross the
+        // outline.
+        let inset: CGFloat = 0.25
         var values: [Float] = []
-        values.reserveCapacity(count * 2)
-        for row in 0..<count {
-            let y = rect.minY + rect.height * CGFloat(row) / CGFloat(max(count - 1, 1))
-            let extent = horizontalExtent(of: innerOutline, atY: y) ?? rect.midX...rect.midX
+        values.reserveCapacity(count * 4)
+
+        for index in 0..<count {
+            let y = interpolate(minY + inset, maxY - inset, CGFloat(index) / CGFloat(count - 1))
+            let extent = horizontalExtent(of: innerOutline, atY: y) ?? bounds.midX...bounds.midX
             values.append(Float(extent.lowerBound))
             values.append(Float(extent.upperBound))
         }
-        return values
+        // Columns are rows of the outline with its axes swapped.
+        let transposed = innerOutline.map { CGPoint(x: $0.y, y: $0.x) }
+        for index in 0..<count {
+            let x = interpolate(minX + inset, maxX - inset, CGFloat(index) / CGFloat(count - 1))
+            let extent = horizontalExtent(of: transposed, atY: x) ?? bounds.midY...bounds.midY
+            values.append(Float(extent.lowerBound))
+            values.append(Float(extent.upperBound))
+        }
+
+        return CrossSections(bounds: bounds, values: values)
     }
 }
 

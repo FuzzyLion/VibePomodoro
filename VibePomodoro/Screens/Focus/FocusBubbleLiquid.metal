@@ -44,15 +44,22 @@ float threads(float2 uv, float t) {
     return border * border * border * presence;
 }
 
-// Where the inside of the glass starts and ends on the row at `y`, from (left, right) pairs
-// sampled evenly down the frame.
-float2 rowExtent(float y, float height, device const float *rows, int count) {
-    int pairs = max(count / 2, 2);
-    float fy = clamp(y / height, 0.0, 1.0) * float(pairs - 1);
-    int i0 = int(floor(fy));
-    int i1 = min(i0 + 1, pairs - 1);
-    float k = fy - float(i0);
-    return mix(float2(rows[i0 * 2], rows[i0 * 2 + 1]), float2(rows[i1 * 2], rows[i1 * 2 + 1]), k);
+// A cross-section of the inside of the glass at `t`, from 0 to 1 across it, from `count` (a, b)
+// pairs sampled evenly and stored from pair `first` on.
+float2 crossSection(float t, device const float *sections, int first, int count) {
+    float f = clamp(t, 0.0, 1.0) * float(count - 1);
+    int i0 = min(int(floor(f)), count - 1);
+    int i1 = min(i0 + 1, count - 1);
+    float k = f - float(i0);
+    float2 a = float2(sections[(first + i0) * 2], sections[(first + i0) * 2 + 1]);
+    float2 b = float2(sections[(first + i1) * 2], sections[(first + i1) * 2 + 1]);
+    return mix(a, b, k);
+}
+
+// The distance to the glass from a point that is `h` from it sideways and `v` from it vertically,
+// taking the glass between those two points as straight.
+float cornerDistance(float h, float v) {
+    return h * v / sqrt(h * h + v * v + 1e-4);
 }
 
 float squared(float x) {
@@ -68,6 +75,9 @@ float squared(float x) {
 // surface:   water line y, surface center x, surface half width, perspective depth (0 = no surface)
 // waveState: amplitude, phase, far-edge phase, time for the caustic threads
 // look:      dark (1) or light (0), tint density, fill ratio, caustic strength
+// bounds:    the inside of the glass: top, bottom, left, right
+// sections:  (left, right) pairs on rows from its top to its bottom, then as many (top, bottom)
+//            pairs on columns from its left to its right
 [[ stitchable ]] half4 bubbleLiquid(
     float2 position,
     SwiftUI::Layer layer,
@@ -80,8 +90,9 @@ float squared(float x) {
     half4 backdropColor,
     float4 look,
     float cue,
-    device const float *rows,
-    int rowCount
+    float4 bounds,
+    device const float *sections,
+    int sectionCount
 ) {
     float2 q = position;
     float4 dry = float4(layer.sample(q));
@@ -102,12 +113,23 @@ float squared(float x) {
         return half4(dry);
     }
 
-    float2 extent = bubble::rowExtent(q.y, size.y, rows, rowCount);
+    // Where the glass is on this row and in this column. Its distance is taken from both, so the
+    // liquid meets the glass the same way along the bottom as along the sides.
+    int pairs = max(sectionCount / 4, 2);
+    float2 extent = bubble::crossSection((q.y - bounds.x) / max(bounds.y - bounds.x, 1.0), sections, 0, pairs);
+    float2 heights = bubble::crossSection((q.x - bounds.z) / max(bounds.w - bounds.z, 1.0), sections, pairs, pairs);
     float halfWidth = max((extent.y - extent.x) * 0.5, 1.0);
     float centerX = (extent.x + extent.y) * 0.5;
     float u = clamp((q.x - centerX) / halfWidth, -1.0, 1.0);
     float path = sqrt(max(0.0, 1.0 - u * u));
-    float wall = max(min(q.x - extent.x, extent.y - q.x), 0.0);
+    float toLeft = max(q.x - extent.x, 0.0);
+    float toRight = max(extent.y - q.x, 0.0);
+    float toTop = max(q.y - heights.x, 0.0);
+    float toBottom = max(heights.y - q.y, 0.0);
+    float wall = min(
+        min(bubble::cornerDistance(toLeft, toBottom), bubble::cornerDistance(toRight, toBottom)),
+        min(bubble::cornerDistance(toLeft, toTop), bubble::cornerDistance(toRight, toTop))
+    );
     float depthBelow = max(q.y - nearY, 0.0);
     float slope = (bubble::wave(q.x + 1.0, size, waveState.x, waveState.y)
                    - bubble::wave(q.x - 1.0, size, waveState.x, waveState.y)) * 0.5;
@@ -139,8 +161,10 @@ float squared(float x) {
     float scattered = 1.0 - (transmitted.r + transmitted.g + transmitted.b) / 3.0;
     float3 light = glow * scattered * lightLeft * (dark ? 0.62 : 0.22);
 
-    // Light bent by the curved glass gathers along the wall away from the light.
-    float rim = exp(-bubble::squared((wall - 3.2) / 2.6))
+    // Light bent by the curved glass gathers along the side wall away from the light. It follows
+    // the side walls only, so it does not run along the bottom as a streak.
+    float sideWall = min(toLeft, toRight);
+    float rim = exp(-bubble::squared((sideWall - 3.2) / 2.6))
         * smoothstep(-0.1, 0.85, u)
         * smoothstep(0.30, 0.85, q.y / size.y);
     light += glow * rim * (dark ? 0.30 : 0.35);
@@ -185,7 +209,8 @@ float squared(float x) {
         alpha = min(1.0, alpha + glint);
 
         // The edges fade toward the glass, so they read as light on the surface, not as outlines.
-        float fade = (1.0 - smoothstep(0.80, 1.0, abs(us))) * (1.0 - cue * 0.2);
+        // The surface reaches past the glass, which cuts it off, so the fade follows the glass.
+        float fade = (1.0 - smoothstep(0.80, 1.0, abs(us))) * smoothstep(0.5, 8.0, wall) * (1.0 - cue * 0.2);
         float side = clamp(us * 0.5 + 0.5, 0.0, 1.0);
         float farLine = exp(-bubble::squared((q.y - farY) / 0.55)) * fade * mix(1.0, 0.45, side) * (dark ? 0.55 : 0.40);
         float nearLine = exp(-bubble::squared((q.y - nearY) / 0.55)) * fade * mix(1.0, 0.6, side) * (dark ? 0.60 : 0.50);
@@ -196,7 +221,7 @@ float squared(float x) {
         alpha = mix(alpha, 1.0, nearLine);
 
         // The liquid climbs the glass a little where they meet.
-        float meniscus = exp(-bubble::squared((1.0 - abs(us)) / 0.05))
+        float meniscus = exp(-bubble::squared(wall / 4.0))
             * exp(-bubble::squared((q.y - splitY) / (surface.w + 2.0))) * 0.35;
         rgb = mix(rgb, float3(1.0), meniscus);
         alpha = mix(alpha, 1.0, meniscus);

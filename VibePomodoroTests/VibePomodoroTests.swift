@@ -812,11 +812,18 @@ struct VibePomodoroTests {
         #expect(BubbleVessel.surface(in: rect, innerOutline: outline, fillRatio: 1.08) == nil)
         #expect(BubbleVessel.surface(in: rect, innerOutline: outline, fillRatio: 0) == nil)
 
-        // The shader's cross-sections follow the outline and collapse to the middle outside it.
-        let sections = BubbleVessel.crossSections(of: outline, in: rect, count: 5)
-        #expect(sections.count == 10)
-        #expect(abs(Double(sections[4]) - 40) < 1 && abs(Double(sections[5]) - 240) < 1)
-        #expect(sections[0] == 140 && sections[1] == 140)
+        // The shader's cross-sections span the inside of the glass: rows from its top to its
+        // bottom, then columns from its left to its right.
+        let sections = BubbleVessel.crossSections(of: outline, count: 5)
+        #expect(abs(sections.bounds.minY - 40) < 1 && abs(sections.bounds.maxY - 240) < 1)
+        #expect(abs(sections.bounds.minX - 40) < 1 && abs(sections.bounds.maxX - 240) < 1)
+        #expect(sections.values.count == 20)
+        // The middle row and the middle column cross the circle at its widest.
+        #expect(abs(Double(sections.values[4]) - 40) < 1 && abs(Double(sections.values[5]) - 240) < 1)
+        #expect(abs(Double(sections.values[14]) - 40) < 1 && abs(Double(sections.values[15]) - 240) < 1)
+        // The first row sits just inside the top of the circle, around its middle.
+        #expect(abs(Double(sections.values[0] + sections.values[1]) / 2 - 140) < 1)
+        #expect(sections.values[1] - sections.values[0] < 30)
     }
 
     @Test func appearanceModeDefaultsToSystemAndPersistsUpdates() async throws {

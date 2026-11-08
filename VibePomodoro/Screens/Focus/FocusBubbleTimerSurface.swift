@@ -114,7 +114,8 @@ enum BubbleLiquidShader {
     /// How far from a pixel the shader samples the digits when it refracts them.
     static let maxSampleOffset = CGSize(width: 16, height: 8)
 
-    private static let crossSectionCount = 48
+    /// Rows and columns across the inside of the glass, about 2.5 pt apart.
+    private static let crossSectionCount = 96
     /// The glass behind the liquid, measured from the rendered bubble. The glass is not part of the
     /// shaded layer, so the shader uses these to tint it.
     private static let darkBackdrop = Color(red: 0.150, green: 0.155, blue: 0.168)
@@ -128,8 +129,17 @@ enum BubbleLiquidShader {
     ) -> Shader {
         let size = FocusScreenLayout.bubbleDiameter
         let rect = CGRect(x: 0, y: 0, width: size, height: size)
-        let innerOutline = BubbleVessel.polygon(of: BubbleVessel.innerPath(of: phaseMorph.shape.path(in: rect), in: rect))
-        let surface = BubbleVessel.surface(in: rect, innerOutline: innerOutline, fillRatio: frame.fillRatio)
+        let innerOutline = BubbleVessel.polygon(
+            of: BubbleVessel.innerPath(of: phaseMorph.shape.path(in: rect), in: rect),
+            curveSteps: 16
+        )
+        let surface = BubbleVessel.surface(
+            in: rect,
+            innerOutline: innerOutline,
+            fillRatio: frame.fillRatio,
+            reach: frame.amplitude
+        )
+        let sections = BubbleVessel.crossSections(of: innerOutline, count: crossSectionCount)
         let glow = isDark ? phaseMorph.tint.mix(with: .white, by: 0.45) : Color.white
         // The paler break colors absorb little light, so they need a denser liquid than amber to
         // read as color rather than gray.
@@ -160,7 +170,13 @@ enum BubbleLiquidShader {
                 renderingPolicy.rendersCaustic ? 1 : 0
             ),
             .float(Float(frame.boundaryCue)),
-            .floatArray(BubbleVessel.crossSections(of: innerOutline, in: rect, count: crossSectionCount))
+            .float4(
+                Float(sections.bounds.minY),
+                Float(sections.bounds.maxY),
+                Float(sections.bounds.minX),
+                Float(sections.bounds.maxX)
+            ),
+            .floatArray(sections.values)
         )
     }
 }
