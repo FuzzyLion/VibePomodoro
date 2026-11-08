@@ -69,7 +69,6 @@ struct FocusCompletionSummaryState: Equatable {
     let breakTimeText: String
     let breakTimeAccessibilityText: String
     let completedFocusText: String
-    let completedFocusAccessibilityText: String
 
     init?(session: SessionSnapshot?) {
         guard let session, session.runState == .completed else { return nil }
@@ -85,19 +84,10 @@ struct FocusCompletionSummaryState: Equatable {
         breakTimeText = FocusCompletionFormatting.durationText(statistics.breakTime)
         breakTimeAccessibilityText = FocusCompletionFormatting.accessibilityDurationText(statistics.breakTime)
         completedFocusText = completedFocusCount == 0
-            ? "No full focus blocks completed yet"
+            ? "No full focus blocks completed"
             : completedFocusCount == 1
                 ? "1 focus block completed"
                 : "\(completedFocusCount) focus blocks completed"
-        completedFocusAccessibilityText = completedFocusCount == 0
-            ? "No full focus blocks completed yet"
-            : completedFocusCount == 1
-                ? "1 focus block completed"
-                : "\(completedFocusCount) focus blocks completed"
-    }
-
-    static func make(from session: SessionSnapshot) -> FocusCompletionSummaryState {
-        FocusCompletionSummaryState(session: session)!
     }
 }
 

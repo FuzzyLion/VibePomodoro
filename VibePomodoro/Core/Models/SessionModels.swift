@@ -134,6 +134,20 @@ struct SessionSnapshot: Codable, Equatable {
         return now > currentSegmentStartDate
     }
 
+    /// A focus block counts as completed only when it reached its full planned duration.
+    static func isCompletedFocus(duration: TimeInterval, plannedDuration: TimeInterval) -> Bool {
+        duration >= plannedDuration - 0.5
+    }
+
+    /// Whether the focus block of `round` has been recorded for its full planned duration.
+    func isFocusRoundCompleted(_ round: Int) -> Bool {
+        guard let step = steps.first(where: { $0.phase == .focus && $0.roundNumber == round }) else {
+            return false
+        }
+
+        return Self.isCompletedFocus(duration: accumulatedDuration(for: step), plannedDuration: step.plannedDuration)
+    }
+
     func statistics(now: Date) -> SessionStatistics {
         var durationsByStepID: [UUID: TimeInterval] = [:]
 
@@ -156,7 +170,7 @@ struct SessionSnapshot: Codable, Equatable {
             switch step.phase {
             case .focus:
                 focusTime += actual
-                if actual >= step.plannedDuration - 0.5 {
+                if Self.isCompletedFocus(duration: actual, plannedDuration: step.plannedDuration) {
                     completedFocusCount += 1
                 }
             case .shortBreak:

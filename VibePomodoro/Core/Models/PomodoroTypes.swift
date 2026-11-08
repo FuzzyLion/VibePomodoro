@@ -25,28 +25,6 @@ enum SessionPhase: String, Codable, CaseIterable, Identifiable {
             return "Long Break"
         }
     }
-
-    var detailTitle: String {
-        switch self {
-        case .focus:
-            return "Focus Session"
-        case .shortBreak:
-            return "Short Break"
-        case .longBreak:
-            return "Long Break"
-        }
-    }
-
-    var systemImage: String {
-        switch self {
-        case .focus:
-            return "timer"
-        case .shortBreak:
-            return "cup.and.saucer"
-        case .longBreak:
-            return "sparkles"
-        }
-    }
 }
 
 enum SessionRunState: String, Codable {

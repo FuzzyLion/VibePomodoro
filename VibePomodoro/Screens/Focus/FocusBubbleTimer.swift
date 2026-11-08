@@ -5,7 +5,6 @@ struct BubbleTimerView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     let renderState: BubbleRenderState
-    var showsForegroundContent: Bool = true
 
     @State private var accumulatedWaveTime: TimeInterval = 0
     @State private var waveAnimationStart: Date?
@@ -27,30 +26,30 @@ struct BubbleTimerView: View {
             targetPhase: isPendingPhaseTransition ? renderState.phase : morphTargetPhase,
             progress: isPendingPhaseTransition ? 0 : morphProgress
         )
-        let waveClock = BubbleWaveClock(
-            accumulatedWaveTime: accumulatedWaveTime,
-            waveAnimationStart: waveAnimationStart,
-            isAnimating: renderingPolicy.animatesSurface
+        let driver = BubbleLiquidDriver(
+            renderState: renderState,
+            waveClock: BubbleWaveClock(
+                accumulatedWaveTime: accumulatedWaveTime,
+                waveAnimationStart: waveAnimationStart,
+                isAnimating: renderingPolicy.animatesSurface
+            ),
+            phaseMorph: phaseMorph,
+            liquidSourceVisuals: effectiveLiquidSourceVisuals,
+            renderingPolicy: renderingPolicy
         )
 
         ZStack {
+            BubbleGroundLayer(driver: driver)
             BubbleGlassBackdrop(phaseMorph: phaseMorph, sphereSize: sphereSize)
             BubbleGlowBackdrop(
                 phaseMorph: phaseMorph,
                 glowExpansion: 0.60,
                 stepBoundaryCueProgress: 0
             )
-            BubbleAnimatedSurfaceLayer(
-                renderState: renderState,
-                waveClock: waveClock,
-                phaseMorph: phaseMorph,
-                liquidSourceVisuals: effectiveLiquidSourceVisuals,
-                renderingPolicy: renderingPolicy
-            )
+            BubbleAnimatedSurfaceLayer(driver: driver)
+            BubbleVesselWall(phaseMorph: phaseMorph)
             BubbleGlassRimOverlay(phaseMorph: phaseMorph, sphereSize: sphereSize)
-            if showsForegroundContent {
-                BubbleForegroundContent(renderState: renderState)
-            }
+            BubbleForegroundContent(renderState: renderState, driver: driver)
         }
         .frame(width: sphereSize, height: sphereSize)
         .onAppear(perform: handleAppear)
@@ -125,6 +124,59 @@ struct BubbleTimerView: View {
 
         withAnimation(FocusScreenLayout.phaseMorphAnimation) {
             morphProgress = 1
+        }
+    }
+}
+
+/// The liquid at one moment: how full, and how the surface moves.
+struct BubbleLiquidFrame {
+    let fillRatio: Double
+    let wavePhase: Double
+    let amplitude: Double
+    let boundaryCue: Double
+}
+
+/// Computes the liquid for any moment. The liquid, its caustic, and the line that splits
+/// the digits all read from here, so they stay on the same wave.
+struct BubbleLiquidDriver {
+    let renderState: BubbleRenderState
+    let waveClock: BubbleWaveClock
+    let phaseMorph: BubblePhaseMorph
+    let liquidSourceVisuals: BubbleLiquidVisualState
+    let renderingPolicy: BubbleRenderingPolicy
+
+    func frame(at date: Date) -> BubbleLiquidFrame {
+        let wavePhase = waveClock.phase(at: date)
+        let glowExpansion = 0.44 + (sin(wavePhase * 0.42) + 1) * 0.16
+        let visuals = BubbleLiquidVisualState.interpolated(
+            from: liquidSourceVisuals,
+            to: BubbleLiquidVisualState(renderState: renderState, at: date),
+            progress: phaseMorph.clampedProgress
+        )
+        let profile = phaseMorph.shellProfile(for: FocusScreenLayout.bubbleDiameter)
+        let boundaryCue = max(0, min(visuals.stepBoundaryCueProgress, 1))
+
+        return BubbleLiquidFrame(
+            fillRatio: max(0, min(visuals.fillRatio, 1.08)),
+            wavePhase: wavePhase,
+            amplitude: (profile.waveAmplitudeBase + glowExpansion * profile.waveAmplitudeRange) * (1 - boundaryCue * 0.08),
+            boundaryCue: boundaryCue
+        )
+    }
+}
+
+/// Redraws on the liquid's animation schedule while the surface moves, otherwise once.
+struct BubbleLiquidTimeline<Content: View>: View {
+    let driver: BubbleLiquidDriver
+    @ViewBuilder let content: (BubbleLiquidFrame) -> Content
+
+    var body: some View {
+        if driver.renderingPolicy.animatesSurface {
+            TimelineView(.periodic(from: .now, by: driver.renderState.animationRefreshInterval)) { context in
+                content(driver.frame(at: context.date))
+            }
+        } else {
+            content(driver.frame(at: .now))
         }
     }
 }

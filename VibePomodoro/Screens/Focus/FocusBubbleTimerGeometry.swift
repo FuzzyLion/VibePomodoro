@@ -316,3 +316,185 @@ private extension SessionPhase {
         }
     }
 }
+
+/// The wave shared by the liquid, its surface, and the line that splits the digits.
+enum BubbleWave {
+    static func offset(atX x: CGFloat, width: CGFloat, height: CGFloat, amplitude: Double, phase: Double) -> CGFloat {
+        let mainAmplitude = min(height * 0.06, amplitude)
+        let relativeX = x / width
+        let primaryAngle = Double(relativeX) * Double.pi * 1.72 + phase
+        let secondaryAngle = Double(relativeX) * Double.pi * 3.34 + phase * 0.68
+        let wave = CGFloat(sin(primaryAngle)) * mainAmplitude
+        let secondaryWave = CGFloat(sin(secondaryAngle)) * mainAmplitude * 0.24
+        return wave + secondaryWave
+    }
+
+    static func waterlineY(fillRatio: Double, in rect: CGRect) -> CGFloat {
+        rect.height * (1 - CGFloat(max(0, min(fillRatio, 1.08))))
+    }
+}
+
+/// The bubble as a glass vessel: a wall of glass around the liquid, and a liquid surface
+/// seen slightly from above. Light comes from the top left.
+enum BubbleVessel {
+    /// The inside of the glass as a scale of the outer silhouette, about 6 pt of wall.
+    static let innerScale: CGFloat = 0.955
+
+    static func innerPath(of outer: Path, in rect: CGRect) -> Path {
+        let transform = CGAffineTransform(translationX: rect.midX, y: rect.midY)
+            .scaledBy(x: innerScale, y: innerScale)
+            .translatedBy(x: -rect.midX, y: -rect.midY)
+        return outer.applying(transform)
+    }
+
+    /// The path's outline as straight segments, for cheap horizontal cross-sections.
+    static func polygon(of path: Path, curveSteps: Int = 10) -> [CGPoint] {
+        var points: [CGPoint] = []
+        var current = CGPoint.zero
+
+        path.forEach { element in
+            switch element {
+            case let .move(to: point), let .line(to: point):
+                points.append(point)
+                current = point
+            case let .quadCurve(to: point, control: control):
+                for step in 1...curveSteps {
+                    let t = CGFloat(step) / CGFloat(curveSteps)
+                    let u = 1 - t
+                    points.append(CGPoint(
+                        x: u * u * current.x + 2 * u * t * control.x + t * t * point.x,
+                        y: u * u * current.y + 2 * u * t * control.y + t * t * point.y
+                    ))
+                }
+                current = point
+            case let .curve(to: point, control1: control1, control2: control2):
+                for step in 1...curveSteps {
+                    let t = CGFloat(step) / CGFloat(curveSteps)
+                    let u = 1 - t
+                    points.append(CGPoint(
+                        x: u * u * u * current.x + 3 * u * u * t * control1.x + 3 * u * t * t * control2.x + t * t * t * point.x,
+                        y: u * u * u * current.y + 3 * u * u * t * control1.y + 3 * u * t * t * control2.y + t * t * t * point.y
+                    ))
+                }
+                current = point
+            case .closeSubpath:
+                break
+            }
+        }
+
+        return points
+    }
+
+    /// Where a closed outline crosses a horizontal line, from its left to its right edge.
+    static func horizontalExtent(of polygon: [CGPoint], atY y: CGFloat) -> ClosedRange<CGFloat>? {
+        guard polygon.count > 2 else { return nil }
+
+        var lower = CGFloat.infinity
+        var upper = -CGFloat.infinity
+        for index in polygon.indices {
+            let start = polygon[index]
+            let end = polygon[(index + 1) % polygon.count]
+            guard (start.y <= y && end.y > y) || (end.y <= y && start.y > y) else { continue }
+
+            let x = start.x + (y - start.y) / (end.y - start.y) * (end.x - start.x)
+            lower = min(lower, x)
+            upper = max(upper, x)
+        }
+
+        return lower < upper ? lower...upper : nil
+    }
+
+    struct Surface {
+        let shape: Path
+        let farEdge: Path
+        let nearEdge: Path
+    }
+
+    /// The liquid's top surface: an ellipse spanning the inside of the vessel at the water line,
+    /// rippled by the same wave as the liquid.
+    static func surface(
+        in rect: CGRect,
+        innerOutline: [CGPoint],
+        fillRatio: Double,
+        amplitude: Double,
+        phase: Double
+    ) -> Surface? {
+        let baseY = BubbleWave.waterlineY(fillRatio: fillRatio, in: rect)
+        guard baseY > rect.minY + 4,
+              baseY < rect.maxY - 4,
+              let extent = horizontalExtent(of: innerOutline, atY: baseY) else {
+            return nil
+        }
+
+        let center = (extent.lowerBound + extent.upperBound) / 2
+        let radius = (extent.upperBound - extent.lowerBound) / 2
+        let depth = min(12, radius * 0.09)
+        var farPoints: [CGPoint] = []
+        var nearPoints: [CGPoint] = []
+        var x = extent.lowerBound
+
+        while true {
+            let u = (x - center) / radius
+            let spread = depth * sqrt(max(0, 1 - u * u))
+            let wave = BubbleWave.offset(atX: x, width: rect.width, height: rect.height, amplitude: amplitude, phase: phase)
+            farPoints.append(CGPoint(x: x, y: baseY - spread + wave))
+            nearPoints.append(CGPoint(x: x, y: baseY + spread + wave))
+            guard x < extent.upperBound else { break }
+            x = min(x + 3, extent.upperBound)
+        }
+
+        var shape = Path()
+        shape.addLines(farPoints + nearPoints.reversed())
+        shape.closeSubpath()
+
+        var farEdge = Path()
+        farEdge.addLines(farPoints)
+        var nearEdge = Path()
+        nearEdge.addLines(nearPoints)
+
+        return Surface(shape: shape, farEdge: farEdge, nearEdge: nearEdge)
+    }
+}
+
+/// The glass wall: the band between the outer silhouette and the inside of the vessel.
+struct BubbleWallShape: Shape {
+    let phaseMorph: BubblePhaseMorph
+
+    func path(in rect: CGRect) -> Path {
+        let outer = phaseMorph.shape.path(in: rect)
+        var path = outer
+        path.addPath(BubbleVessel.innerPath(of: outer, in: rect))
+        return path
+    }
+}
+
+/// The part of the bubble frame above or below the liquid's wave line.
+struct BubbleLiquidRegionShape: Shape {
+    let frame: BubbleLiquidFrame
+    let below: Bool
+    /// Extends the region past the wave line so two complementary masks leave no seam.
+    var overlap: CGFloat = 0
+
+    func path(in rect: CGRect) -> Path {
+        let baseY = BubbleWave.waterlineY(fillRatio: frame.fillRatio, in: rect) + (below ? -overlap : overlap)
+        let edgeY = below ? rect.maxY : rect.minY
+
+        var path = Path()
+        path.move(to: CGPoint(x: rect.minX, y: edgeY))
+        var x = rect.minX
+        while x <= rect.maxX + 0.5 {
+            let wave = BubbleWave.offset(
+                atX: x,
+                width: rect.width,
+                height: rect.height,
+                amplitude: frame.amplitude,
+                phase: frame.wavePhase
+            )
+            path.addLine(to: CGPoint(x: x, y: baseY + wave))
+            x += 4
+        }
+        path.addLine(to: CGPoint(x: rect.maxX, y: edgeY))
+        path.closeSubpath()
+        return path
+    }
+}

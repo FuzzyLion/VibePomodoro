@@ -18,22 +18,6 @@ enum VibePalette {
     static let focusTint = amberGold
     static let labelPrimary = Color(red: 0.24, green: 0.24, blue: 0.27)
     static let labelSecondary = Color(red: 0.46, green: 0.46, blue: 0.50)
-
-    static func glassTextStrong(for colorScheme: ColorScheme) -> Color {
-        colorScheme == .dark ? warmBackground.opacity(0.96) : Color.black.opacity(0.50)
-    }
-
-    static func glassTextMedium(for colorScheme: ColorScheme) -> Color {
-        colorScheme == .dark ? warmBackground.opacity(0.92) : Color.black.opacity(0.45)
-    }
-
-    static func glassTextSoft(for colorScheme: ColorScheme) -> Color {
-        colorScheme == .dark ? warmBackground.opacity(0.88) : Color.black.opacity(0.40)
-    }
-
-    static func inactiveGlassDot(for colorScheme: ColorScheme) -> Color {
-        colorScheme == .dark ? warmBackground.opacity(0.22) : Color.black.opacity(0.10)
-    }
 }
 
 extension SessionPhase {

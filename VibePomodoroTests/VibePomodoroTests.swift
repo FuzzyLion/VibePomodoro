@@ -44,6 +44,28 @@ struct VibePomodoroTests {
         #expect(stats.completedFocusCount == 0)
     }
 
+    @Test func focusRoundCompletionSeparatesFinishedAndSkippedBlocks() async throws {
+        var settings = PomodoroSettings.default
+        settings.targetRounds = 2
+
+        let start = Date(timeIntervalSince1970: 3_000)
+        var session = SessionSnapshot.makeNew(settings: settings, now: start)
+        _ = PomodoroEngine.startOrResume(session: &session, now: start)
+
+        // Round 1 runs its full duration; round 2 is skipped after five minutes.
+        let firstBreakStart = start.addingTimeInterval(settings.focusDuration)
+        _ = PomodoroEngine.reconcile(session: &session, now: firstBreakStart)
+        let secondFocusStart = firstBreakStart.addingTimeInterval(60)
+        _ = PomodoroEngine.skip(session: &session, now: secondFocusStart)
+        let secondFocusSkip = secondFocusStart.addingTimeInterval(5 * 60)
+        _ = PomodoroEngine.skip(session: &session, now: secondFocusSkip)
+
+        #expect(session.currentPhase == .longBreak)
+        #expect(session.isFocusRoundCompleted(1))
+        #expect(!session.isFocusRoundCompleted(2))
+        #expect(session.statistics(now: secondFocusSkip).completedFocusCount == 1)
+    }
+
     @Test func skipFinalRunningStepEmitsPhaseSkippedBeforeSessionComplete() async throws {
         var settings = PomodoroSettings.default
         settings.targetRounds = 1
@@ -667,7 +689,6 @@ struct VibePomodoroTests {
     @Test func bubbleRenderingPolicyKeepsLowPowerAnimationAtTwelveHertz() async throws {
         let renderState = BubbleRenderState(
             phase: .focus,
-            actionTitle: "Pause",
             targetEndDate: Date().addingTimeInterval(60),
             remainingDuration: 60,
             progress: 0.5,
@@ -694,9 +715,31 @@ struct VibePomodoroTests {
         #expect(renderState.animationRefreshInterval == 1.0 / 12.0)
         #expect(normalPolicy.animatesSurface)
         #expect(normalPolicy.rendersDepthPool)
+        #expect(normalPolicy.rendersCaustic)
         #expect(lowPowerPolicy.animatesSurface)
         #expect(!lowPowerPolicy.rendersDepthPool)
+        #expect(!lowPowerPolicy.rendersCaustic)
         #expect(!reduceMotionPolicy.animatesSurface)
+    }
+
+    @Test func vesselCrossSectionAndSurfaceFollowTheWaterLine() async throws {
+        let rect = CGRect(x: 0, y: 0, width: 280, height: 280)
+        let outline = BubbleVessel.polygon(of: Path(ellipseIn: rect.insetBy(dx: 40, dy: 40)))
+
+        // A circle of radius 100 centered in the frame is 200 wide at its middle.
+        let middle = try #require(BubbleVessel.horizontalExtent(of: outline, atY: 140))
+        #expect(abs(middle.lowerBound - 40) < 1)
+        #expect(abs(middle.upperBound - 240) < 1)
+        #expect(BubbleVessel.horizontalExtent(of: outline, atY: 20) == nil)
+
+        // Half full: the surface spans the vessel around the middle; full or empty: no surface.
+        let surface = try #require(
+            BubbleVessel.surface(in: rect, innerOutline: outline, fillRatio: 0.5, amplitude: 0, phase: 0)
+        )
+        #expect(abs(surface.shape.boundingRect.midY - 140) < 1)
+        #expect(surface.shape.boundingRect.width > 195)
+        #expect(BubbleVessel.surface(in: rect, innerOutline: outline, fillRatio: 1.08, amplitude: 0, phase: 0) == nil)
+        #expect(BubbleVessel.surface(in: rect, innerOutline: outline, fillRatio: 0, amplitude: 0, phase: 0) == nil)
     }
 
     @Test func appearanceModeDefaultsToSystemAndPersistsUpdates() async throws {

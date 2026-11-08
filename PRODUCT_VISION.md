@@ -142,7 +142,9 @@ The bubble gives the timer a quiet physical presence. A conventional progress ri
 
 It should read as a stable glass container. A slightly rounded-square outline can give Focus some character; short and long breaks can use gentler contours. Across all three phases, the numerals stay centered, stable, and easy to read.
 
-Use restrained edge refraction, highlights, inner shading, and soft caustic light. A subtle pool of light beneath the bubble can respond to the liquid surface. Native Liquid Glass is the first choice for system controls. The custom bubble may use `UltraThinMaterial` with additional light and shading where needed.
+Use restrained edge refraction, highlights, inner shading, and soft caustic light. A subtle pool of light beneath the bubble can respond to the liquid surface. Native Liquid Glass is the first choice for system controls.
+
+The bubble is drawn as a small glass vessel standing on the page rather than a shape floating over it. Its wall has visible thickness, so the liquid sits inside the glass instead of reaching the outline. One light comes from the top left: it catches the wall and the far edge of the liquid surface, and the vessel casts a soft shadow toward the lower right, with a tighter contact shadow where the glass meets the page. Inside that shadow, a caustic, the light the liquid focuses, brightens as the bubble fills and drifts gently with the surface. The custom bubble may use `UltraThinMaterial` with additional light and shading where needed.
 
 Light and dark mode share the same geometry and material character. Adapt brightness, transparency, and contrast. Avoid separate visual identities for the two modes.
 
@@ -150,19 +152,19 @@ Light and dark mode share the same geometry and material character. Adapt bright
 
 The liquid gives a quiet sense of progress. Movement should be slow enough to leave alone. Pause holds it still; a phase change may have a short transition. Floating particle bubbles, spiral effects, and constant wobbling are outside this design.
 
-Use two readable wave layers, including in light mode. The liquid must fit the bubble mask without visible gaps at the top, sides, or bottom. The final fill should happen during the displayed `00:01` second: the container should visibly fill at the end without looking full several seconds early.
+Use two readable wave layers, including in light mode. On a light background, highlights alone disappear: there the glass edge needs a thin line and a soft phase-tinted ring, and the liquid is tinted from its surface down with a slightly deeper surface line, so the level reads at a glance in both appearances. The liquid's top is a surface seen slightly from above, an ellipse whose far edge catches the light and whose near edge is the water line. The liquid must fill the inside of the glass wall without visible gaps at the top, sides, or bottom. The final fill should happen during the displayed `00:01` second: the container should visibly fill at the end without looking full several seconds early.
 
-The countdown remains the most important information. Highlights, outlines, shadows, and glass shading must preserve its contrast, especially in light mode.
+The countdown remains the most important information. Highlights, outlines, shadows, and glass shading must preserve its contrast, especially in light mode. The numerals sit inside the liquid: below the surface they take on the liquid's color with a slight refraction offset, above it they keep their glass treatment. Only the dividing line follows the waves; the numerals themselves still refresh once a second.
 
 ### Controls and layout
 
-Keep all frequent actions on one screen. **Start / Pause / Resume** is the primary control beneath the bubble. Reset and Skip are secondary; Back is a quieter, less frequent action. Show Back only after timing has begun.
+Keep all frequent actions on one screen. **Start / Pause / Resume** is the primary control beneath the bubble. Reset and Skip are secondary; Back is a quieter, less frequent action. Show Back only after timing has begun. Secondary controls appear only when they can act, and each keeps its slot so the primary control does not move; before a session starts, Focus shows only the bubble and **Start**.
 
 Align the main controls with the bubble. Leave enough space beneath it for the group to feel balanced. The current controls sit low, near the upper edge of the tab bar, with a clear gap above system navigation.
 
 The top row contains Reset, the status light and title, and Finish early. Keep it close to the top safe area and light enough to read as page navigation. Its buttons should feel comparable to system toolbar items. The title and light stay subordinate to the countdown.
 
-Pause has a quiet, neutral appearance. Start, Resume, and Start Again may be a little brighter or more tinted. Reserve enough button width for the longest label, and keep the top and bottom icons consistent in weight. Use warm white control text and icons in dark mode and restrained dark foregrounds in light mode.
+Pause has a quiet, neutral appearance, so the bubble stays the strongest color while a step runs. Start, Resume, and Start Again carry a light wash of the current phase color. Reserve enough button width for the longest label, and keep the top and bottom icons consistent in weight. Use warm white control text and icons in dark mode and restrained dark foregrounds in light mode.
 
 For the circular `.glass` controls, the button itself carries the visible glass circle. An outer slot owns its hit area and alignment. Keep custom pressed-opacity animations off the glass surface so they do not compete with system interaction feedback.
 
@@ -172,7 +174,7 @@ Back, Pause/Resume, and Skip must remain visibly separate during interaction. Th
 
 The status vocabulary is `READY / FOCUS / SHORT BREAK / LONG BREAK / COMPLETE`. During a session, the badge names the phase. The primary control communicates whether the timer can pause or resume. Let the badge width follow its content and keep its text on one line.
 
-The strip beneath the bubble contains one marker per focus round. The current focus round uses a half-filled marker; its marker fills when the session reaches the following break. Future rounds stay subdued. Keep the strip compact, close to the status badge's height, so it connects the bubble to the controls without becoming a separate visual focus.
+The strip beneath the bubble contains one marker per focus round. The current focus round uses a half-filled marker. Once the session moves past it, the marker fills only if that focus block reached its full planned duration; a block that was skipped or ended early keeps an outlined marker, matching what the statistics count. Future rounds stay subdued. Keep the strip compact, close to the status badge's height, so it connects the bubble to the controls without becoming a separate visual focus.
 
 ### Completion
 
@@ -263,7 +265,7 @@ The app process creates one `PomodoroStore`. `SessionSnapshot` owns the active s
 
 Persistence currently uses `UserDefaults`, with separate write scopes for settings, the active session, completed sessions, and the cache. A setting change should write only the affected data. Productivity shares a statistics snapshot within each page render and reads the aggregate cache. Long-history performance still needs measurement.
 
-Bubble surface animation and countdown refreshes have separate schedules. The visible running surface currently uses a 12 Hz budget; the digits refresh every second. Pausing, leaving Focus, or backgrounding stops continuous surface animation. Reduce Motion disables surface movement, and Low Power Mode omits the depth-pool layer. Real-device testing is still needed to judge the energy cost.
+Bubble surface animation and countdown refreshes have separate schedules. The visible running surface currently uses a 12 Hz budget; the digits refresh every second. Pausing, leaving Focus, or backgrounding stops continuous surface animation. Reduce Motion disables surface movement, and Low Power Mode omits the depth-pool layer and the caustic. Real-device testing is still needed to judge the energy cost.
 
 | Area | What to verify |
 | --- | --- |

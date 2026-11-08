@@ -38,7 +38,6 @@ struct FocusCompletionSummaryCard: View {
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.top, 12)
                 .padding(.bottom, dynamicTypeSize.isAccessibilitySize ? 2 : 4)
-                .accessibilityLabel(state.completedFocusAccessibilityText)
         }
         .padding(.horizontal, 20)
         .padding(.top, dynamicTypeSize.isAccessibilitySize ? 14 : 12)
@@ -121,12 +120,13 @@ struct FocusCompletionSummaryCard: View {
             : Color.black.opacity(0.44)
     }
 
+    // Same meaning as everywhere else: amber is focus, jade is break time.
     private var focusAccent: Color {
-        colorScheme == .dark ? VibePalette.softMist : VibePalette.softMistDeep
+        colorScheme == .dark ? VibePalette.warmAmberAccent : VibePalette.warmAmberAccentDeep
     }
 
     private var breakAccent: Color {
-        colorScheme == .dark ? VibePalette.warmAmberAccent : VibePalette.warmAmberAccentDeep
+        colorScheme == .dark ? VibePalette.softJade : VibePalette.softJadeDeep
     }
 
     private var summaryCardGlassTint: Color {

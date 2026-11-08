@@ -2,10 +2,11 @@ import SwiftUI
 
 struct BubbleForegroundContent: View {
     let renderState: BubbleRenderState
+    let driver: BubbleLiquidDriver
 
     var body: some View {
-        BubbleTimerDigitsView(renderState: renderState)
-            .frame(maxWidth: 208)
+        BubbleTimerDigitsView(renderState: renderState, driver: driver)
+            .frame(width: FocusScreenLayout.bubbleDiameter, height: FocusScreenLayout.bubbleDiameter)
     }
 }
 
@@ -13,24 +14,96 @@ private struct BubbleTimerDigitsView: View {
     @Environment(\.colorScheme) private var colorScheme
 
     let renderState: BubbleRenderState
+    let driver: BubbleLiquidDriver
 
     var body: some View {
         Group {
             if renderState.shouldTickSeconds {
                 TimelineView(.periodic(from: .now, by: renderState.textRefreshInterval)) { context in
-                    digits(
-                        for: renderState.timeText(at: context.date),
-                        stepBoundaryCueProgress: renderState.stepBoundaryCueProgress(at: context.date)
-                    )
+                    digitsInLiquid(at: context.date)
                 }
             } else {
-                digits(
-                    for: renderState.timeText(at: .now),
-                    stepBoundaryCueProgress: renderState.stepBoundaryCueProgress(at: .now)
-                )
+                digitsInLiquid(at: .now)
             }
         }
         .allowsHitTesting(false)
+    }
+
+    /// Above the liquid the digits keep their glass treatment; below the surface they take on
+    /// the liquid's color. The text refreshes once a second; only the masks follow the waves.
+    @ViewBuilder
+    private func digitsInLiquid(at date: Date) -> some View {
+        let timeText = renderState.timeText(at: date)
+        let cue = renderState.stepBoundaryCueProgress(at: date)
+        let size = FocusScreenLayout.bubbleDiameter
+
+        switch Self.level(of: driver.frame(at: date)) {
+        case .dry:
+            digits(for: timeText, stepBoundaryCueProgress: cue)
+        case .submerged:
+            submergedDigits(for: timeText)
+        case .crossing:
+            ZStack {
+                digits(for: timeText, stepBoundaryCueProgress: cue)
+                    .frame(width: size, height: size)
+                    .mask {
+                        BubbleLiquidTimeline(driver: driver) { frame in
+                            BubbleLiquidRegionShape(frame: frame, below: false, overlap: 1.5)
+                        }
+                    }
+
+                submergedDigits(for: timeText)
+                    .frame(width: size, height: size)
+                    .mask {
+                        BubbleLiquidTimeline(driver: driver) { frame in
+                            BubbleLiquidRegionShape(frame: frame, below: true)
+                        }
+                    }
+            }
+        }
+    }
+
+    private enum Level {
+        case dry
+        case crossing
+        case submerged
+    }
+
+    /// Where the water line sits relative to the digits, leaving room for waves and the surface.
+    private static func level(of frame: BubbleLiquidFrame) -> Level {
+        let size = FocusScreenLayout.bubbleDiameter
+        let waterline = BubbleWave.waterlineY(fillRatio: frame.fillRatio, in: CGRect(x: 0, y: 0, width: size, height: size))
+        let reach = CGFloat(frame.amplitude) + 16
+        let digitsHalfHeight: CGFloat = 40
+
+        if waterline - reach > size / 2 + digitsHalfHeight {
+            return .dry
+        }
+        if waterline + reach < size / 2 - digitsHalfHeight {
+            return .submerged
+        }
+        return .crossing
+    }
+
+    private func submergedDigits(for timeText: String) -> some View {
+        BubbleTimerTextLabel(display: BubbleTimeDisplay(text: timeText))
+            .padding(.horizontal, 2)
+            .padding(.vertical, 6)
+            .foregroundStyle(submergedFill)
+            // Seen through the liquid, the digits shift a little, as if refracted.
+            .blur(radius: 0.3)
+            .offset(x: 1.2, y: 0.6)
+    }
+
+    private var submergedFill: LinearGradient {
+        let phase = renderState.phase
+        return LinearGradient(
+            colors: colorScheme == .dark
+                ? [Color.white.opacity(0.90), phase.tintColor.opacity(0.95)]
+                : [phase.shadowColor.opacity(0.95), Color(red: 0.26, green: 0.22, blue: 0.17)],
+            startPoint: .top,
+            endPoint: .bottom
+        )
     }
 
     @ViewBuilder
@@ -48,7 +121,8 @@ private struct BubbleTimerDigitsView: View {
                 .foregroundStyle(
                     LinearGradient(
                         colors: [
-                            Color(red: 0.47 - cue * 0.03, green: 0.48 - cue * 0.03, blue: 0.51 - cue * 0.01),
+                            // Kept a little darker so the digits hold contrast over the tinted liquid.
+                            Color(red: 0.42 - cue * 0.03, green: 0.43 - cue * 0.03, blue: 0.46 - cue * 0.01),
                             Color(red: 0.36 - cue * 0.03, green: 0.37 - cue * 0.03, blue: 0.40 - cue * 0.01),
                             Color(red: 0.24 - cue * 0.01, green: 0.25 - cue * 0.01, blue: 0.28 + cue * 0.01)
                         ],

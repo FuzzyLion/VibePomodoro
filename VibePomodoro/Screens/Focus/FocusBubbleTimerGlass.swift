@@ -267,10 +267,13 @@ struct BubbleGlassRimOverlay: View {
                 )
                 .blur(radius: isDark ? 0.26 : 0.22)
 
-            bubbleShape
-                .stroke(Color.black.opacity(isDark ? 0.26 : 0.06), lineWidth: isDark ? 0.72 : 0.58)
-                .blur(radius: isDark ? 0.24 : 0.16)
-                .offset(y: isDark ? 0.9 : 0.7)
+            if !isDark {
+                // On a light page a faint dark edge keeps the silhouette readable.
+                bubbleShape
+                    .stroke(Color.black.opacity(0.11), lineWidth: 0.58)
+                    .blur(radius: 0.16)
+                    .offset(y: 0.7)
+            }
 
             Ellipse()
                 .fill(
@@ -340,6 +343,37 @@ struct BubbleGlassRimOverlay: View {
                 .blur(radius: isDark ? 10 : 9)
                 .offset(profile.lowerCausticOffset)
                 .mask(bubbleShape)
+        }
+        .allowsHitTesting(false)
+    }
+}
+
+/// The glass wall between the outer silhouette and the liquid, lit from the top left.
+struct BubbleVesselWall: View {
+    @Environment(\.colorScheme) private var colorScheme
+
+    let phaseMorph: BubblePhaseMorph
+
+    var body: some View {
+        let isDark = colorScheme == .dark
+        let phase = phaseMorph.visualPhase
+
+        ZStack {
+            BubbleWallShape(phaseMorph: phaseMorph)
+                .fill(
+                    LinearGradient(
+                        colors: isDark
+                            ? [Color.white.opacity(0.13), Color.white.opacity(0.03), phase.tintColor.opacity(0.10)]
+                            : [Color.white.opacity(0.85), Color.white.opacity(0.25), phase.shadowColor.opacity(0.10)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    style: FillStyle(eoFill: true)
+                )
+
+            phaseMorph.shape
+                .scale(BubbleVessel.innerScale)
+                .stroke(isDark ? Color.white.opacity(0.10) : Color.black.opacity(0.07), lineWidth: 0.7)
         }
         .allowsHitTesting(false)
     }
