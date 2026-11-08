@@ -307,18 +307,9 @@ private extension SessionPhase {
     }
 }
 
-/// The wave shared by the liquid, its surface, and the line that splits the digits.
+/// The water line. The wave that ripples it, the surface, and the digit split are computed per
+/// pixel by `bubbleLiquid` in FocusBubbleLiquid.metal.
 enum BubbleWave {
-    static func offset(atX x: CGFloat, width: CGFloat, height: CGFloat, amplitude: Double, phase: Double) -> CGFloat {
-        let mainAmplitude = min(height * 0.06, amplitude)
-        let relativeX = x / width
-        let primaryAngle = Double(relativeX) * Double.pi * 1.72 + phase
-        let secondaryAngle = Double(relativeX) * Double.pi * 3.34 + phase * 0.68
-        let wave = CGFloat(sin(primaryAngle)) * mainAmplitude
-        let secondaryWave = CGFloat(sin(secondaryAngle)) * mainAmplitude * 0.24
-        return wave + secondaryWave
-    }
-
     static func waterlineY(fillRatio: Double, in rect: CGRect) -> CGFloat {
         rect.height * (1 - CGFloat(max(0, min(fillRatio, 1.08))))
     }
@@ -394,67 +385,46 @@ enum BubbleVessel {
         return lower < upper ? lower...upper : nil
     }
 
-    struct Surface {
-        let shape: Path
-        let farEdge: Path
-        let nearEdge: Path
+    /// The liquid's top surface seen slightly from above: an ellipse spanning the inside of the
+    /// vessel at the water line. The shader draws it and ripples its two edges.
+    struct Surface: Equatable {
+        let waterlineY: CGFloat
+        let centerX: CGFloat
+        let radius: CGFloat
+        /// Half the ellipse's height, its near and far edges' distance from the water line.
+        let depth: CGFloat
     }
 
-    /// The liquid's top surface: an ellipse spanning the inside of the vessel at the water line.
-    /// Its near edge rides the same wave as the liquid and the digit split; its far edge rides
-    /// a slower, offset second wave, so the two edges read as two wave layers on one surface.
-    /// The second wave eases into the first at the glass, where the edges meet.
-    static func surface(
-        in rect: CGRect,
-        innerOutline: [CGPoint],
-        fillRatio: Double,
-        amplitude: Double,
-        phase: Double
-    ) -> Surface? {
-        let baseY = BubbleWave.waterlineY(fillRatio: fillRatio, in: rect)
-        guard baseY > rect.minY + 4,
-              baseY < rect.maxY - 4,
-              let extent = horizontalExtent(of: innerOutline, atY: baseY) else {
+    static func surface(in rect: CGRect, innerOutline: [CGPoint], fillRatio: Double) -> Surface? {
+        let waterlineY = BubbleWave.waterlineY(fillRatio: fillRatio, in: rect)
+        guard waterlineY > rect.minY + 4,
+              waterlineY < rect.maxY - 4,
+              let extent = horizontalExtent(of: innerOutline, atY: waterlineY) else {
             return nil
         }
 
-        let center = (extent.lowerBound + extent.upperBound) / 2
         let radius = (extent.upperBound - extent.lowerBound) / 2
-        let depth = min(12, radius * 0.09)
-        var farPoints: [CGPoint] = []
-        var nearPoints: [CGPoint] = []
-        var x = extent.lowerBound
+        return Surface(
+            waterlineY: waterlineY,
+            centerX: (extent.lowerBound + extent.upperBound) / 2,
+            radius: radius,
+            depth: min(12, radius * 0.09)
+        )
+    }
 
-        while true {
-            let u = (x - center) / radius
-            let span = sqrt(max(0, 1 - u * u))
-            let spread = depth * span
-            let wave = BubbleWave.offset(atX: x, width: rect.width, height: rect.height, amplitude: amplitude, phase: phase)
-            let farWave = BubbleWave.offset(
-                atX: x,
-                width: rect.width,
-                height: rect.height,
-                amplitude: amplitude * 0.6,
-                phase: phase * 1.08 + .pi / 5
-            )
-            let nearY = baseY + spread + wave
-            let farY = baseY - spread + interpolate(wave, farWave, span)
-            farPoints.append(CGPoint(x: x, y: min(farY, nearY)))
-            nearPoints.append(CGPoint(x: x, y: nearY))
-            guard x < extent.upperBound else { break }
-            x = min(x + 3, extent.upperBound)
+    /// The inside of the glass as `count` (left, right) pairs on rows spread evenly down `rect`,
+    /// for the shader's sense of how far a point is from the glass. Rows outside the vessel
+    /// collapse to the middle.
+    static func crossSections(of innerOutline: [CGPoint], in rect: CGRect, count: Int) -> [Float] {
+        var values: [Float] = []
+        values.reserveCapacity(count * 2)
+        for row in 0..<count {
+            let y = rect.minY + rect.height * CGFloat(row) / CGFloat(max(count - 1, 1))
+            let extent = horizontalExtent(of: innerOutline, atY: y) ?? rect.midX...rect.midX
+            values.append(Float(extent.lowerBound))
+            values.append(Float(extent.upperBound))
         }
-
-        var shape = Path()
-        shape.addLines(farPoints + nearPoints.reversed())
-        shape.closeSubpath()
-
-        var farEdge = Path()
-        farEdge.addLines(farPoints)
-        var nearEdge = Path()
-        nearEdge.addLines(nearPoints)
-
-        return Surface(shape: shape, farEdge: farEdge, nearEdge: nearEdge)
+        return values
     }
 }
 
@@ -466,37 +436,6 @@ struct BubbleWallShape: Shape {
         let outer = phaseMorph.shape.path(in: rect)
         var path = outer
         path.addPath(BubbleVessel.innerPath(of: outer, in: rect))
-        return path
-    }
-}
-
-/// The part of the bubble frame above or below the liquid's wave line.
-struct BubbleLiquidRegionShape: Shape {
-    let frame: BubbleLiquidFrame
-    let below: Bool
-    /// Extends the region past the wave line so two complementary masks leave no seam.
-    var overlap: CGFloat = 0
-
-    func path(in rect: CGRect) -> Path {
-        let baseY = BubbleWave.waterlineY(fillRatio: frame.fillRatio, in: rect) + (below ? -overlap : overlap)
-        let edgeY = below ? rect.maxY : rect.minY
-
-        var path = Path()
-        path.move(to: CGPoint(x: rect.minX, y: edgeY))
-        var x = rect.minX
-        while x <= rect.maxX + 0.5 {
-            let wave = BubbleWave.offset(
-                atX: x,
-                width: rect.width,
-                height: rect.height,
-                amplitude: frame.amplitude,
-                phase: frame.wavePhase
-            )
-            path.addLine(to: CGPoint(x: x, y: baseY + wave))
-            x += 4
-        }
-        path.addLine(to: CGPoint(x: rect.maxX, y: edgeY))
-        path.closeSubpath()
         return path
     }
 }

@@ -35,7 +35,7 @@ The active product is the iOS app. Native macOS and Live Activity experiments ar
 
 ## How it is built
 
-The app uses Swift and SwiftUI, with Charts, Combine, UserNotifications, AVFoundation, and UserDefaults. One `PomodoroStore` owns runtime state for the app process. A running timer derives its remaining time from `Date` and `targetEndDate`; UI refreshes only display that state.
+The app uses Swift and SwiftUI, with Charts, Combine, UserNotifications, AVFoundation, and UserDefaults, plus one Metal shader for the Focus bubble's liquid. One `PomodoroStore` owns runtime state for the app process. A running timer derives its remaining time from `Date` and `targetEndDate`; UI refreshes only display that state.
 
 ```text
 VibePomodoro/
@@ -56,7 +56,11 @@ Completed sessions have their own archive, separate from the active timer. Produ
 
 ## Run it
 
-Use Xcode with an iOS SDK and simulator runtime that support the project's **iOS 26.2** deployment target or later. The app has no external package dependencies.
+Use Xcode with an iOS SDK and simulator runtime that support the project's **iOS 26.2** deployment target or later. The app has no external package dependencies. The Focus bubble's liquid is a Metal shader, and since Xcode 26 the Metal compiler is a separate download; if the build reports a missing Metal Toolchain, install it once:
+
+```bash
+xcodebuild -downloadComponent MetalToolchain
+```
 
 Open `VibePomodoro.xcodeproj`, select the `VibePomodoro` scheme, and choose an iPhone simulator. For a physical device, select your own signing team in Xcode first.
 

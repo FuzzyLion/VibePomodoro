@@ -1,16 +1,10 @@
 import SwiftUI
 
-struct BubbleForegroundContent: View {
-    let renderState: BubbleRenderState
-    let driver: BubbleLiquidDriver
-
-    var body: some View {
-        BubbleTimerDigitsView(renderState: renderState, driver: driver)
-            .frame(width: FocusScreenLayout.bubbleDiameter, height: FocusScreenLayout.bubbleDiameter)
-    }
-}
-
-private struct BubbleTimerDigitsView: View {
+/// The liquid with the countdown inside it. The digits are drawn once, in their glass treatment,
+/// and the liquid shader runs over their layer: above the wave line they stay as drawn, below it
+/// they are seen through the liquid, refracted and tinted. The text changes once a second; the
+/// liquid follows its own 12 Hz schedule.
+struct BubbleLiquidContent: View {
     @Environment(\.colorScheme) private var colorScheme
 
     let renderState: BubbleRenderState
@@ -20,98 +14,67 @@ private struct BubbleTimerDigitsView: View {
         Group {
             if renderState.shouldTickSeconds {
                 TimelineView(.periodic(from: .now, by: renderState.textRefreshInterval)) { context in
-                    digitsInLiquid(at: context.date)
+                    liquid(
+                        around: renderState.timeText(at: context.date),
+                        stepBoundaryCueProgress: renderState.stepBoundaryCueProgress(at: context.date)
+                    )
                 }
             } else {
-                digitsInLiquid(at: .now)
+                liquid(
+                    around: renderState.timeText(at: .now),
+                    stepBoundaryCueProgress: renderState.stepBoundaryCueProgress(at: .now)
+                )
             }
         }
+        .frame(width: FocusScreenLayout.bubbleDiameter, height: FocusScreenLayout.bubbleDiameter)
+        // The liquid stays inside the glass wall instead of reaching the outer edge.
+        .mask { driver.phaseMorph.shape.scale(BubbleVessel.innerScale) }
         .allowsHitTesting(false)
     }
 
-    /// Above the liquid the digits keep their glass treatment; below the surface they take on
-    /// the liquid's color. The text refreshes once a second; only the masks follow the waves.
-    @ViewBuilder
-    private func digitsInLiquid(at date: Date) -> some View {
-        let timeText = renderState.timeText(at: date)
-        let cue = renderState.stepBoundaryCueProgress(at: date)
+    private func liquid(around timeText: String, stepBoundaryCueProgress: Double) -> some View {
         let size = FocusScreenLayout.bubbleDiameter
+        let isDark = colorScheme == .dark
 
-        switch Self.level(of: driver.frame(at: date)) {
-        case .dry:
-            digits(for: timeText, stepBoundaryCueProgress: cue)
-        case .submerged:
-            submergedDigits(for: timeText)
-        case .crossing:
+        return BubbleLiquidTimeline(driver: driver) { frame in
             ZStack {
-                digits(for: timeText, stepBoundaryCueProgress: cue)
-                    .frame(width: size, height: size)
-                    .mask {
-                        BubbleLiquidTimeline(driver: driver) { frame in
-                            BubbleLiquidRegionShape(frame: frame, below: false, overlap: 1.5)
-                        }
-                    }
+                // A layer effect only shades what its content draws. This all but invisible fill
+                // makes that the whole vessel rather than the area around the digits.
+                Rectangle()
+                    .fill(Color.black.opacity(0.004))
 
-                submergedDigits(for: timeText)
-                    .frame(width: size, height: size)
-                    .mask {
-                        BubbleLiquidTimeline(driver: driver) { frame in
-                            BubbleLiquidRegionShape(frame: frame, below: true)
-                        }
-                    }
+                BubbleTimerDigits(
+                    timeText: timeText,
+                    stepBoundaryCueProgress: stepBoundaryCueProgress,
+                    glassTint: driver.phaseMorph.glassTint
+                )
             }
+            .frame(width: size, height: size)
+            // One flattened layer: without it the effect runs on each child view separately.
+            .compositingGroup()
+            .layerEffect(
+                BubbleLiquidShader.shader(
+                    phaseMorph: driver.phaseMorph,
+                    frame: frame,
+                    renderingPolicy: driver.renderingPolicy,
+                    isDark: isDark
+                ),
+                maxSampleOffset: BubbleLiquidShader.maxSampleOffset
+            )
         }
     }
+}
 
-    private enum Level {
-        case dry
-        case crossing
-        case submerged
-    }
+/// The countdown in its glass treatment, as it looks above the liquid.
+private struct BubbleTimerDigits: View {
+    @Environment(\.colorScheme) private var colorScheme
 
-    /// Where the water line sits relative to the digits, leaving room for waves and the surface.
-    private static func level(of frame: BubbleLiquidFrame) -> Level {
-        let size = FocusScreenLayout.bubbleDiameter
-        let waterline = BubbleWave.waterlineY(fillRatio: frame.fillRatio, in: CGRect(x: 0, y: 0, width: size, height: size))
-        let reach = CGFloat(frame.amplitude) + 16
-        let digitsHalfHeight: CGFloat = 40
+    let timeText: String
+    let stepBoundaryCueProgress: Double
+    let glassTint: Color
 
-        if waterline - reach > size / 2 + digitsHalfHeight {
-            return .dry
-        }
-        if waterline + reach < size / 2 - digitsHalfHeight {
-            return .submerged
-        }
-        return .crossing
-    }
-
-    private func submergedDigits(for timeText: String) -> some View {
-        BubbleTimerTextLabel(display: BubbleTimeDisplay(text: timeText))
-            .padding(.horizontal, 2)
-            .padding(.vertical, 6)
-            .foregroundStyle(submergedFill)
-            // Seen through the liquid, the digits shift a little, as if refracted.
-            .blur(radius: 0.3)
-            .offset(x: 1.2, y: 0.6)
-    }
-
-    private var submergedFill: LinearGradient {
-        let phaseMorph = driver.phaseMorph
-        let submergedInk = Color(red: 0.26, green: 0.22, blue: 0.17)
-        return LinearGradient(
-            colors: colorScheme == .dark
-                ? [Color.white.opacity(0.90), phaseMorph.tint.opacity(0.95)]
-                // The top stays dark enough to hold about 3.5:1 against the deepest light liquid.
-                : [phaseMorph.shadow.mix(with: submergedInk, by: 0.45), submergedInk],
-            startPoint: .top,
-            endPoint: .bottom
-        )
-    }
-
-    @ViewBuilder
-    private func digits(for timeText: String, stepBoundaryCueProgress: Double) -> some View {
-        let display = BubbleTimeDisplay(text: timeText)
-        let textLabel = BubbleTimerTextLabel(display: display)
+    var body: some View {
+        let textLabel = BubbleTimerTextLabel(display: BubbleTimeDisplay(text: timeText))
             .padding(.horizontal, 2)
             .padding(.vertical, 6)
         let cue = max(0, min(stepBoundaryCueProgress, 1))
@@ -164,7 +127,7 @@ private struct BubbleTimerDigitsView: View {
                         colors: [
                             Color.white.opacity(0.98 - cue * 0.03),
                             Color.white.opacity(0.88 - cue * 0.05),
-                            driver.phaseMorph.glassTint.opacity(0.26 - cue * 0.09)
+                            glassTint.opacity(0.26 - cue * 0.09)
                         ],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing

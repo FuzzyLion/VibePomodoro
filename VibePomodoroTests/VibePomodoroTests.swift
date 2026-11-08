@@ -731,13 +731,19 @@ struct VibePomodoroTests {
         #expect(BubbleVessel.horizontalExtent(of: outline, atY: 20) == nil)
 
         // Half full: the surface spans the vessel around the middle; full or empty: no surface.
-        let surface = try #require(
-            BubbleVessel.surface(in: rect, innerOutline: outline, fillRatio: 0.5, amplitude: 0, phase: 0)
-        )
-        #expect(abs(surface.shape.boundingRect.midY - 140) < 1)
-        #expect(surface.shape.boundingRect.width > 195)
-        #expect(BubbleVessel.surface(in: rect, innerOutline: outline, fillRatio: 1.08, amplitude: 0, phase: 0) == nil)
-        #expect(BubbleVessel.surface(in: rect, innerOutline: outline, fillRatio: 0, amplitude: 0, phase: 0) == nil)
+        let surface = try #require(BubbleVessel.surface(in: rect, innerOutline: outline, fillRatio: 0.5))
+        #expect(abs(surface.waterlineY - 140) < 1)
+        #expect(abs(surface.centerX - 140) < 1)
+        #expect(surface.radius * 2 > 195)
+        #expect(surface.depth > 0 && surface.depth <= 12)
+        #expect(BubbleVessel.surface(in: rect, innerOutline: outline, fillRatio: 1.08) == nil)
+        #expect(BubbleVessel.surface(in: rect, innerOutline: outline, fillRatio: 0) == nil)
+
+        // The shader's cross-sections follow the outline and collapse to the middle outside it.
+        let sections = BubbleVessel.crossSections(of: outline, in: rect, count: 5)
+        #expect(sections.count == 10)
+        #expect(abs(Double(sections[4]) - 40) < 1 && abs(Double(sections[5]) - 240) < 1)
+        #expect(sections[0] == 140 && sections[1] == 140)
     }
 
     @Test func appearanceModeDefaultsToSystemAndPersistsUpdates() async throws {

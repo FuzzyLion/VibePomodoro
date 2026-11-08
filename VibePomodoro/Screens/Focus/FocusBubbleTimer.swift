@@ -155,10 +155,9 @@ private struct BubbleVesselLayers: View, Animatable {
                 glowExpansion: 0.60,
                 stepBoundaryCueProgress: 0
             )
-            BubbleAnimatedSurfaceLayer(driver: driver)
+            BubbleLiquidContent(renderState: renderState, driver: driver)
             BubbleVesselWall(phaseMorph: phaseMorph)
             BubbleGlassRimOverlay(phaseMorph: phaseMorph, sphereSize: sphereSize)
-            BubbleForegroundContent(renderState: renderState, driver: driver)
         }
     }
 }
