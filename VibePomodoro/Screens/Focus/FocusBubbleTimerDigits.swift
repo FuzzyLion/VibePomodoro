@@ -96,11 +96,13 @@ private struct BubbleTimerDigitsView: View {
     }
 
     private var submergedFill: LinearGradient {
-        let phase = renderState.phase
+        let phaseMorph = driver.phaseMorph
+        let submergedInk = Color(red: 0.26, green: 0.22, blue: 0.17)
         return LinearGradient(
             colors: colorScheme == .dark
-                ? [Color.white.opacity(0.90), phase.tintColor.opacity(0.95)]
-                : [phase.shadowColor.opacity(0.95), Color(red: 0.26, green: 0.22, blue: 0.17)],
+                ? [Color.white.opacity(0.90), phaseMorph.tint.opacity(0.95)]
+                // The top stays dark enough to hold about 3.5:1 against the deepest light liquid.
+                : [phaseMorph.shadow.mix(with: submergedInk, by: 0.45), submergedInk],
             startPoint: .top,
             endPoint: .bottom
         )
@@ -162,7 +164,7 @@ private struct BubbleTimerDigitsView: View {
                         colors: [
                             Color.white.opacity(0.98 - cue * 0.03),
                             Color.white.opacity(0.88 - cue * 0.05),
-                            renderState.phase.glassTint.opacity(0.26 - cue * 0.09)
+                            driver.phaseMorph.glassTint.opacity(0.26 - cue * 0.09)
                         ],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing

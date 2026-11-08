@@ -11,8 +11,6 @@ struct BubbleShellProfile {
     let lowerCausticOffset: CGSize
     let outerGlowSize: CGSize
     let outerGlowOffset: CGSize
-    let depthPoolSize: CGSize
-    let depthPoolOffset: CGSize
     let innerLensSize: CGSize
     let innerLensOffset: CGSize
     let innerLensRotation: Double
@@ -40,8 +38,6 @@ extension BubbleShellProfile {
             lowerCausticOffset: interpolate(source.lowerCausticOffset, target.lowerCausticOffset, progress),
             outerGlowSize: interpolate(source.outerGlowSize, target.outerGlowSize, progress),
             outerGlowOffset: interpolate(source.outerGlowOffset, target.outerGlowOffset, progress),
-            depthPoolSize: interpolate(source.depthPoolSize, target.depthPoolSize, progress),
-            depthPoolOffset: interpolate(source.depthPoolOffset, target.depthPoolOffset, progress),
             innerLensSize: interpolate(source.innerLensSize, target.innerLensSize, progress),
             innerLensOffset: interpolate(source.innerLensOffset, target.innerLensOffset, progress),
             innerLensRotation: interpolate(source.innerLensRotation, target.innerLensRotation, progress),
@@ -91,8 +87,6 @@ extension SessionPhase {
                 lowerCausticOffset: CGSize(width: 0, height: sphereSize * 0.33),
                 outerGlowSize: CGSize(width: sphereSize * 0.61, height: sphereSize * 0.15),
                 outerGlowOffset: CGSize(width: 0, height: sphereSize * 0.45),
-                depthPoolSize: CGSize(width: sphereSize * 0.75, height: sphereSize * 0.23),
-                depthPoolOffset: CGSize(width: 0, height: sphereSize * 0.34),
                 innerLensSize: CGSize(width: sphereSize * 0.40, height: sphereSize * 0.22),
                 innerLensOffset: CGSize(width: sphereSize * 0.02, height: -sphereSize * 0.18),
                 innerLensRotation: 10,
@@ -114,8 +108,6 @@ extension SessionPhase {
                 lowerCausticOffset: CGSize(width: -sphereSize * 0.02, height: sphereSize * 0.34),
                 outerGlowSize: CGSize(width: sphereSize * 0.66, height: sphereSize * 0.16),
                 outerGlowOffset: CGSize(width: -sphereSize * 0.02, height: sphereSize * 0.44),
-                depthPoolSize: CGSize(width: sphereSize * 0.78, height: sphereSize * 0.24),
-                depthPoolOffset: CGSize(width: -sphereSize * 0.03, height: sphereSize * 0.34),
                 innerLensSize: CGSize(width: sphereSize * 0.42, height: sphereSize * 0.22),
                 innerLensOffset: CGSize(width: -sphereSize * 0.01, height: -sphereSize * 0.19),
                 innerLensRotation: -8,
@@ -137,8 +129,6 @@ extension SessionPhase {
                 lowerCausticOffset: CGSize(width: sphereSize * 0.03, height: sphereSize * 0.35),
                 outerGlowSize: CGSize(width: sphereSize * 0.67, height: sphereSize * 0.16),
                 outerGlowOffset: CGSize(width: sphereSize * 0.03, height: sphereSize * 0.44),
-                depthPoolSize: CGSize(width: sphereSize * 0.79, height: sphereSize * 0.24),
-                depthPoolOffset: CGSize(width: sphereSize * 0.03, height: sphereSize * 0.34),
                 innerLensSize: CGSize(width: sphereSize * 0.44, height: sphereSize * 0.23),
                 innerLensOffset: CGSize(width: sphereSize * 0.04, height: -sphereSize * 0.18),
                 innerLensRotation: 6,
@@ -410,8 +400,10 @@ enum BubbleVessel {
         let nearEdge: Path
     }
 
-    /// The liquid's top surface: an ellipse spanning the inside of the vessel at the water line,
-    /// rippled by the same wave as the liquid.
+    /// The liquid's top surface: an ellipse spanning the inside of the vessel at the water line.
+    /// Its near edge rides the same wave as the liquid and the digit split; its far edge rides
+    /// a slower, offset second wave, so the two edges read as two wave layers on one surface.
+    /// The second wave eases into the first at the glass, where the edges meet.
     static func surface(
         in rect: CGRect,
         innerOutline: [CGPoint],
@@ -435,10 +427,20 @@ enum BubbleVessel {
 
         while true {
             let u = (x - center) / radius
-            let spread = depth * sqrt(max(0, 1 - u * u))
+            let span = sqrt(max(0, 1 - u * u))
+            let spread = depth * span
             let wave = BubbleWave.offset(atX: x, width: rect.width, height: rect.height, amplitude: amplitude, phase: phase)
-            farPoints.append(CGPoint(x: x, y: baseY - spread + wave))
-            nearPoints.append(CGPoint(x: x, y: baseY + spread + wave))
+            let farWave = BubbleWave.offset(
+                atX: x,
+                width: rect.width,
+                height: rect.height,
+                amplitude: amplitude * 0.6,
+                phase: phase * 1.08 + .pi / 5
+            )
+            let nearY = baseY + spread + wave
+            let farY = baseY - spread + interpolate(wave, farWave, span)
+            farPoints.append(CGPoint(x: x, y: min(farY, nearY)))
+            nearPoints.append(CGPoint(x: x, y: nearY))
             guard x < extent.upperBound else { break }
             x = min(x + 3, extent.upperBound)
         }

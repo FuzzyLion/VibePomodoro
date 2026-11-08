@@ -17,40 +17,25 @@ struct BubbleTimerView: View {
 
     var body: some View {
         let sphereSize = FocusScreenLayout.bubbleDiameter
+        // Until `onChange` starts the morph, a new phase is drawn as the first frame of the
+        // morph from the previous one.
         let isPendingPhaseTransition = previousRenderState != nil && renderState.phase != morphTargetPhase
-        let effectiveLiquidSourceVisuals = isPendingPhaseTransition
-            ? BubbleLiquidVisualState(renderState: previousRenderState ?? renderState, at: .now)
-            : liquidSourceVisuals
-        let phaseMorph = BubblePhaseMorph(
+
+        BubbleVesselLayers(
+            renderState: renderState,
             sourcePhase: isPendingPhaseTransition ? morphTargetPhase : morphSourcePhase,
             targetPhase: isPendingPhaseTransition ? renderState.phase : morphTargetPhase,
-            progress: isPendingPhaseTransition ? 0 : morphProgress
-        )
-        let driver = BubbleLiquidDriver(
-            renderState: renderState,
+            morphProgress: isPendingPhaseTransition ? 0 : morphProgress,
+            liquidSourceVisuals: isPendingPhaseTransition
+                ? BubbleLiquidVisualState(renderState: previousRenderState ?? renderState, at: .now)
+                : liquidSourceVisuals,
             waveClock: BubbleWaveClock(
                 accumulatedWaveTime: accumulatedWaveTime,
                 waveAnimationStart: waveAnimationStart,
                 isAnimating: renderingPolicy.animatesSurface
             ),
-            phaseMorph: phaseMorph,
-            liquidSourceVisuals: effectiveLiquidSourceVisuals,
             renderingPolicy: renderingPolicy
         )
-
-        ZStack {
-            BubbleGroundLayer(driver: driver)
-            BubbleGlassBackdrop(phaseMorph: phaseMorph, sphereSize: sphereSize)
-            BubbleGlowBackdrop(
-                phaseMorph: phaseMorph,
-                glowExpansion: 0.60,
-                stepBoundaryCueProgress: 0
-            )
-            BubbleAnimatedSurfaceLayer(driver: driver)
-            BubbleVesselWall(phaseMorph: phaseMorph)
-            BubbleGlassRimOverlay(phaseMorph: phaseMorph, sphereSize: sphereSize)
-            BubbleForegroundContent(renderState: renderState, driver: driver)
-        }
         .frame(width: sphereSize, height: sphereSize)
         .onAppear(perform: handleAppear)
         .onChange(of: renderingPolicy.animatesSurface) { _, newValue in
@@ -107,8 +92,8 @@ struct BubbleTimerView: View {
             to: oldTargetVisuals,
             progress: morphProgress
         )
-        accumulatedWaveTime = 0
-        waveAnimationStart = renderingPolicy.animatesSurface ? .now : nil
+        // The wave clock keeps running through a phase change, so the surface carries on
+        // moving instead of snapping back to its starting shape.
 
         if reduceMotion {
             morphSourcePhase = newValue.phase
@@ -124,6 +109,56 @@ struct BubbleTimerView: View {
 
         withAnimation(FocusScreenLayout.phaseMorphAnimation) {
             morphProgress = 1
+        }
+    }
+}
+
+/// The whole vessel at one point of the phase morph. SwiftUI animates `morphProgress` and
+/// redraws every layer for each frame, so the outline, glass wall, glow, liquid, and shadow
+/// change shape together. When only the outline shape was animatable, layers that cannot
+/// interpolate (the glass wall, the liquid canvas, the phase colors) jumped to the next
+/// phase on the first frame and the outline caught up with them afterwards.
+private struct BubbleVesselLayers: View, Animatable {
+    let renderState: BubbleRenderState
+    let sourcePhase: SessionPhase
+    let targetPhase: SessionPhase
+    var morphProgress: CGFloat
+    let liquidSourceVisuals: BubbleLiquidVisualState
+    let waveClock: BubbleWaveClock
+    let renderingPolicy: BubbleRenderingPolicy
+
+    var animatableData: CGFloat {
+        get { morphProgress }
+        set { morphProgress = newValue }
+    }
+
+    var body: some View {
+        let sphereSize = FocusScreenLayout.bubbleDiameter
+        let phaseMorph = BubblePhaseMorph(
+            sourcePhase: sourcePhase,
+            targetPhase: targetPhase,
+            progress: morphProgress
+        )
+        let driver = BubbleLiquidDriver(
+            renderState: renderState,
+            waveClock: waveClock,
+            phaseMorph: phaseMorph,
+            liquidSourceVisuals: liquidSourceVisuals,
+            renderingPolicy: renderingPolicy
+        )
+
+        ZStack {
+            BubbleGroundLayer(driver: driver)
+            BubbleGlassBackdrop(phaseMorph: phaseMorph, sphereSize: sphereSize)
+            BubbleGlowBackdrop(
+                phaseMorph: phaseMorph,
+                glowExpansion: 0.60,
+                stepBoundaryCueProgress: 0
+            )
+            BubbleAnimatedSurfaceLayer(driver: driver)
+            BubbleVesselWall(phaseMorph: phaseMorph)
+            BubbleGlassRimOverlay(phaseMorph: phaseMorph, sphereSize: sphereSize)
+            BubbleForegroundContent(renderState: renderState, driver: driver)
         }
     }
 }
@@ -198,8 +233,25 @@ struct BubblePhaseMorph: Equatable {
         )
     }
 
-    var visualPhase: SessionPhase {
-        clampedProgress < 0.5 ? sourcePhase : targetPhase
+    /// Phase colors follow the morph, so the tint shifts with the outline instead of
+    /// switching halfway through it.
+    var tint: Color { blended { $0.tintColor } }
+    var shadow: Color { blended { $0.shadowColor } }
+    var glassTint: Color { blended { $0.glassTint } }
+
+    func blended(_ color: (SessionPhase) -> Color) -> Color {
+        let progress = clampedProgress
+        if sourcePhase == targetPhase || progress >= 1 {
+            return color(targetPhase)
+        }
+        if progress <= 0 {
+            return color(sourcePhase)
+        }
+        return color(sourcePhase).mix(with: color(targetPhase), by: Double(progress))
+    }
+
+    func blendedValue(_ value: (SessionPhase) -> Double) -> Double {
+        interpolate(value(sourcePhase), value(targetPhase), clampedProgress)
     }
 
     func shellProfile(for sphereSize: CGFloat) -> BubbleShellProfile {

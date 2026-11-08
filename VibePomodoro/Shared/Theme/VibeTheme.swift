@@ -53,27 +53,4 @@ extension SessionPhase {
             return VibePalette.softJadeDeep
         }
     }
-
-    var liquidGradientColors: [Color] {
-        switch self {
-        case .focus:
-            return [
-                VibePalette.amberGold.opacity(0.08),
-                VibePalette.amberGold.opacity(0.12),
-                VibePalette.amberGoldDeep.opacity(0.17)
-            ]
-        case .shortBreak:
-            return [
-                VibePalette.softMist.opacity(0.10),
-                VibePalette.softMist.opacity(0.16),
-                VibePalette.softMistDeep.opacity(0.20)
-            ]
-        case .longBreak:
-            return [
-                VibePalette.softJade.opacity(0.08),
-                VibePalette.softJade.opacity(0.13),
-                VibePalette.softJadeDeep.opacity(0.18)
-            ]
-        }
-    }
 }

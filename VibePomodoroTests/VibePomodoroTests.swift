@@ -714,10 +714,8 @@ struct VibePomodoroTests {
 
         #expect(renderState.animationRefreshInterval == 1.0 / 12.0)
         #expect(normalPolicy.animatesSurface)
-        #expect(normalPolicy.rendersDepthPool)
         #expect(normalPolicy.rendersCaustic)
         #expect(lowPowerPolicy.animatesSurface)
-        #expect(!lowPowerPolicy.rendersDepthPool)
         #expect(!lowPowerPolicy.rendersCaustic)
         #expect(!reduceMotionPolicy.animatesSurface)
     }

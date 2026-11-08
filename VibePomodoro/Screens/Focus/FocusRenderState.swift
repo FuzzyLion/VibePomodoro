@@ -57,13 +57,12 @@ struct BubbleRenderState: Equatable {
 
 struct BubbleRenderingPolicy: Equatable {
     let animatesSurface: Bool
-    let rendersDepthPool: Bool
-    /// The caustic under the bubble is extra blur work, so Low Power Mode leaves it out.
+    /// The caustic light, the threads inside the liquid and the glow beneath the vessel, is
+    /// extra layer and blur work, so Low Power Mode leaves it out.
     let rendersCaustic: Bool
 
     init(isAnimating: Bool, reduceMotion: Bool, lowPowerModeEnabled: Bool) {
         animatesSurface = isAnimating && !reduceMotion
-        rendersDepthPool = !lowPowerModeEnabled
         rendersCaustic = !lowPowerModeEnabled
     }
 }
