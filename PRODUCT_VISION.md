@@ -126,13 +126,13 @@ The range choices are rolling windows:
 | Month | The last 30 days, including today. |
 | Year | The last 12 months, including the current month. |
 
-Week and Month read daily aggregates. The month chart may combine neighboring days into display buckets; Year rolls daily values into months. Display grouping must preserve the totals.
+Week and Month read daily aggregates and draw one bar per day; Year rolls daily values into calendar months. Display grouping must preserve the totals. Month does not merge days into weeks: thirty days never split evenly, and a short last group would read as a drop.
 
 Skip keeps the time already spent without awarding an unfinished focus block. Reset clears the current step's recorded time. Back rolls back the affected steps. Those edits must carry through to the session's eventual archived statistics.
 
 **Clear Productivity History** deletes both completed-session records and their aggregate cache. Productivity immediately returns to its empty state, and later sessions start a new history. The active session and settings remain intact.
 
-With no archived history, the summary and charts show zero values alongside **No finished sessions yet**. Sample bars belong only in tests and clearly labeled documentation previews.
+With no archived history, the summary and charts show zero values alongside **No finished sessions yet**, and a short note says that sessions appear once they end, including ones finished early. Sample bars belong only in tests and clearly labeled documentation previews.
 
 ## Focus design
 
@@ -202,11 +202,19 @@ The first card is headed **ALL TIME COMPLETED SESSIONS**. Its hierarchy is fixed
 | Supporting metrics | Daily Focus Avg and Streak |
 | Footer | Finished-session count and completed focus-block count |
 
-The summary always shows all-time values. The three trend cards below it show **Focus Sessions**, **Focus Time**, and **Break Time**, with totals for the selected range. Session Time belongs in the summary.
+Session Time reads in hours, never days, so it can't be mistaken for the streak; from 100 hours on, the minutes drop. A focus block is one focus round, and a session is the whole cycle, so the page never uses one word for the other.
+
+The summary always shows all-time values. The three trend cards below it show **Focus Blocks**, **Focus Time**, and **Break Time**, with totals for the selected range. Session Time belongs in the summary. One quiet line above the trend cards names the range and the dates it covers, such as *Last 7 days • 3–9 Nov*; the cards carry no range badges.
 
 All four cards share the same glass language. The summary has more visual weight, while the trend cards stay quiet. Keep the current spacing and natural title wrapping. The single summary card is the accepted baseline; earlier equal-column summary strips and compressed layouts are not.
 
-Charts use evenly spaced buckets, with labels and bars centered on the same slots. The rightmost label must remain readable. In light mode, semantic accent colors need enough depth to maintain contrast.
+Charts use evenly spaced buckets, with labels and bars centered on the same slots. Week labels every day, Month every seventh day counted back from today, and Year every month. The rightmost label must remain readable.
+
+The value axis uses round steps and at most four intervals. Up to an hour it reads 0–60 minutes in 20-minute steps; above that it uses whole hours only, so no axis label needs minutes. Axis labels sit in a fixed-width column, so the three charts share one plot width and their days line up from card to card.
+
+Bars carry no value labels. Tapping a bar puts that day's or month's value in each card's figure and its date at the card's top right, and dims the other bars; all three cards follow the same tap, since their days line up. Tapping the same bar again, or the axis labels beside the chart, returns to the totals, and changing the range clears the selection. The month in progress names the days it covers so far, such as *1–9 Nov*. Selection is by tap only, so a drag that starts on a chart still scrolls the page. VoiceOver reads each bar's date and value.
+
+In light mode, semantic accent colors need enough depth to maintain contrast. Text in an accent color uses a deeper ink version of it, and all text on the cards reaches at least 4.5:1.
 
 The range menu can produce the system console message `Called -[UIContextMenuInteraction updateVisibleMenuWithBlock:] while no context menu is visible.` Treat that message as diagnostic context. Reopen it as a product issue if it accompanies broken interaction, inconsistent state, or a crash.
 

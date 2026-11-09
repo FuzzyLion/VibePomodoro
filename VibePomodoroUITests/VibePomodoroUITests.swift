@@ -37,8 +37,8 @@ final class VibePomodoroUITests: XCTestCase {
 
         XCTAssertTrue(app.navigationBars["Productivity"].waitForExistence(timeout: 8), app.debugDescription)
         XCTAssertTrue(app.staticTexts["No finished sessions yet"].exists)
-        XCTAssertTrue(app.staticTexts["Complete a full session to start filling these charts. Productivity only reflects finished sessions."].exists)
-        XCTAssertTrue(app.staticTexts["Focus Sessions"].exists)
+        XCTAssertTrue(app.staticTexts["Sessions appear here once they end, including ones you finish early. A session in progress isn't counted until then."].exists)
+        XCTAssertTrue(app.staticTexts["Focus Blocks"].exists)
         XCTAssertTrue(app.staticTexts["Focus Time"].exists)
         XCTAssertTrue(app.staticTexts["Break Time"].exists)
         XCTAssertTrue(app.buttons["Time Range"].exists)
@@ -53,23 +53,69 @@ final class VibePomodoroUITests: XCTestCase {
         app.launch()
 
         XCTAssertTrue(app.navigationBars["Productivity"].waitForExistence(timeout: 8), app.debugDescription)
-        XCTAssertTrue(app.staticTexts["Focus Sessions"].exists)
+        XCTAssertTrue(app.staticTexts["Focus Blocks"].exists)
         XCTAssertTrue(app.staticTexts["Focus Time"].exists)
         XCTAssertTrue(app.staticTexts["Break Time"].exists)
         XCTAssertFalse(app.staticTexts["No finished sessions yet"].exists)
         XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'finished sessions'")).firstMatch.exists)
+        XCTAssertTrue(rangeCaption(in: app, startingWith: "Last 7 days").exists, app.debugDescription)
 
         app.buttons["Time Range"].tap()
         XCTAssertTrue(app.buttons["Month"].waitForExistence(timeout: 2), app.debugDescription)
         app.buttons["Month"].tap()
-        XCTAssertTrue(app.staticTexts["MONTH"].waitForExistence(timeout: 2), app.debugDescription)
-        XCTAssertTrue(app.staticTexts["Focus Sessions"].exists)
+        XCTAssertTrue(rangeCaption(in: app, startingWith: "Last 30 days").waitForExistence(timeout: 2), app.debugDescription)
+        XCTAssertTrue(app.staticTexts["Focus Blocks"].exists)
 
         app.buttons["Time Range"].tap()
         XCTAssertTrue(app.buttons["Year"].waitForExistence(timeout: 2), app.debugDescription)
         app.buttons["Year"].tap()
-        XCTAssertTrue(app.staticTexts["YEAR"].waitForExistence(timeout: 2), app.debugDescription)
+        XCTAssertTrue(rangeCaption(in: app, startingWith: "Last 12 months").waitForExistence(timeout: 2), app.debugDescription)
         XCTAssertTrue(app.staticTexts["Break Time"].exists)
+    }
+
+    @MainActor
+    func testProductivityTappingABarShowsThatDayInEveryCard() throws {
+        let app = makeCleanApp(
+            arguments: ["--open-productivity"],
+            environment: ["VIBE_PRODUCTIVITY_FIXTURE": "long-extreme"]
+        )
+        app.launch()
+        XCTAssertTrue(app.navigationBars["Productivity"].waitForExistence(timeout: 8), app.debugDescription)
+
+        let today = Date()
+        let spokenDay = englishDateText(today, format: "EEEE d MMMM")
+        let shownDay = englishDateText(today, format: "EEE d MMM")
+        let todaysBars = app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", spokenDay))
+        XCTAssertTrue(todaysBars.firstMatch.waitForExistence(timeout: 2), app.debugDescription)
+
+        // Each card has a bar for today; tap one that is clear of the navigation and tab bars.
+        let visibleTop = app.navigationBars.firstMatch.frame.maxY + 8
+        let visibleBottom = app.tabBars.firstMatch.frame.minY - 8
+        func uncoveredBar() -> XCUIElement? {
+            todaysBars.allElementsBoundByIndex.first { $0.frame.minY > visibleTop && $0.frame.maxY < visibleBottom }
+        }
+        if uncoveredBar() == nil {
+            app.swipeUp()
+        }
+        let todaysBar = try XCTUnwrap(uncoveredBar(), app.debugDescription)
+        todaysBar.tap()
+        XCTAssertTrue(app.staticTexts[shownDay].waitForExistence(timeout: 2), app.debugDescription)
+        XCTAssertEqual(app.staticTexts.matching(NSPredicate(format: "label == %@", shownDay)).count, 3)
+
+        todaysBar.tap()
+        let cleared = expectation(for: NSPredicate(format: "exists == false"), evaluatedWith: app.staticTexts[shownDay])
+        wait(for: [cleared], timeout: 2)
+    }
+
+    private func rangeCaption(in app: XCUIApplication, startingWith title: String) -> XCUIElement {
+        app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", title)).firstMatch
+    }
+
+    private func englishDateText(_ date: Date, format: String) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = format
+        return formatter.string(from: date)
     }
 
     @MainActor

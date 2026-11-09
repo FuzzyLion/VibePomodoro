@@ -10,6 +10,11 @@ enum VibePalette {
     static let softJade = Color(red: 0.66, green: 0.80, blue: 0.74)
     static let softJadeDeep = Color(red: 0.48, green: 0.66, blue: 0.60)
 
+    /// Text versions of the phase colors for light mode, deep enough for 4.5:1 on the light cards.
+    static let amberGoldInk = Color(red: 0.50, green: 0.38, blue: 0.17)
+    static let softMistInk = Color(red: 0.33, green: 0.41, blue: 0.47)
+    static let softJadeInk = Color(red: 0.31, green: 0.43, blue: 0.39)
+
     static let warmBackground = Color(red: 0.96, green: 0.96, blue: 0.97)
     static let mistBackground = Color(red: 0.93, green: 0.93, blue: 0.95)
     static let darkBackground = Color(red: 0.08, green: 0.09, blue: 0.11)

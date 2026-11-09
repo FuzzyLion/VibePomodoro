@@ -9,6 +9,8 @@ enum ProductivityLayout {
     enum TrendGroup {
         static let populatedTopInset: CGFloat = 8
         static let emptyTopInset: CGFloat = 4
+        static let captionSpacing: CGFloat = 10
+        static let captionHorizontalPadding: CGFloat = 6
     }
 
     enum SummaryCard {
@@ -18,15 +20,14 @@ enum ProductivityLayout {
         static let verticalPadding: CGFloat = 20
         static let titleTracking: CGFloat = 0.72
         static let titleDarkOpacity: Double = 0.54
-        static let titleLightOpacity: Double = 0.45
+        static let titleLightOpacity: Double = 0.58
         static let valueDarkOpacity: Double = 0.98
         static let valueLightOpacity: Double = 0.84
         static let metaDarkOpacity: Double = 0.64
-        static let metaLightOpacity: Double = 0.52
+        static let metaLightOpacity: Double = 0.58
         static let dividerDarkOpacity: Double = 0.10
         static let dividerLightOpacity: Double = 0.08
         static let accentDarkOpacity: Double = 0.94
-        static let accentLightOpacity: Double = 0.94
         static let accentGlowDarkPrimaryOpacity: Double = 0.12
         static let accentGlowLightPrimaryOpacity: Double = 0.07
         static let accentGlowDarkSecondaryOpacity: Double = 0.05
@@ -49,7 +50,6 @@ enum ProductivityLayout {
         static let standardSpacing: CGFloat = 16
         static let valueSpacing: CGFloat = 6
         static let titleDarkOpacity: Double = 0.94
-        static let titleLightOpacity: Double = 0.94
         static let dividerDarkOpacity: Double = 0.10
         static let dividerLightOpacity: Double = 0.08
         static let valueDarkOpacity: Double = 0.94
@@ -76,11 +76,10 @@ enum ProductivityLayout {
         static let iconChipDarkOpacity: Double = 0.085
         static let iconChipLightOpacity: Double = 0.058
         static let accentLabelDarkOpacity: Double = 0.90
-        static let accentLabelLightOpacity: Double = 0.84
         static let primaryTextDarkOpacity: Double = 0.94
         static let primaryTextLightOpacity: Double = 0.80
         static let secondaryTextDarkOpacity: Double = 0.54
-        static let secondaryTextLightOpacity: Double = 0.48
+        static let secondaryTextLightOpacity: Double = 0.58
         static let gridDarkOpacity: Double = 0.10
         static let gridLightOpacity: Double = 0.08
         static let accentOverlayDarkOpacity: Double = 0.022
@@ -88,23 +87,12 @@ enum ProductivityLayout {
         static let chartHeight: CGFloat = 186
         static let chartBottomPadding: CGFloat = 22
         static let xAxisOffset: CGFloat = 8
-    }
-
-    enum RangeBadge {
-        static let titleTracking: CGFloat = 0.45
-        static let horizontalPadding: CGFloat = 10
-        static let verticalPadding: CGFloat = 6
-        static let fillDarkOpacity: Double = 0.16
-        static let fillLightOpacity: Double = 0.10
-        static let strokeDarkOpacity: Double = 0.18
-        static let strokeLightOpacity: Double = 0.10
-        static let textDarkOpacity: Double = 0.95
-        static let textLightOpacity: Double = 0.88
-        static let strokeWidth: CGFloat = 0.8
+        static let unselectedBarOpacity: Double = 0.32
     }
 
     enum ChartAxis {
         static let labelMinimumScaleFactor: CGFloat = 0.72
+        static let valueLabelWidth: CGFloat = 32
     }
 }
 
@@ -140,6 +128,7 @@ private struct ProductivityRenderState: Equatable {
 struct ProductivityScreen: View {
     @EnvironmentObject private var store: PomodoroStore
     @State private var selectedRange: ProductivityRange = .week
+    @State private var selectedSlot: Int?
 
     var body: some View {
         let renderState = ProductivityRenderState.build(store: store, selectedRange: selectedRange)
@@ -156,13 +145,21 @@ struct ProductivityScreen: View {
                             ProductivityEmptyStateNote()
                         }
 
-                        VStack(alignment: .leading, spacing: ProductivityLayout.sectionSpacing) {
-                            ForEach(ProductivityChartMetricKind.allCases) { metric in
-                                ProductivityTrendCard(
-                                    metric: metric,
-                                    buckets: renderState.displayBuckets,
-                                    range: renderState.selectedRange
-                                )
+                        VStack(alignment: .leading, spacing: ProductivityLayout.TrendGroup.captionSpacing) {
+                            ProductivityRangeCaption(
+                                range: renderState.selectedRange,
+                                buckets: renderState.displayBuckets
+                            )
+
+                            VStack(alignment: .leading, spacing: ProductivityLayout.sectionSpacing) {
+                                ForEach(ProductivityChartMetricKind.allCases) { metric in
+                                    ProductivityTrendCard(
+                                        metric: metric,
+                                        buckets: renderState.displayBuckets,
+                                        range: renderState.selectedRange,
+                                        selectedSlot: $selectedSlot
+                                    )
+                                }
                             }
                         }
                         .padding(.top, renderState.trendTopInset)
@@ -179,6 +176,9 @@ struct ProductivityScreen: View {
                     }
                 }
             }
+        }
+        .onChange(of: selectedRange) {
+            selectedSlot = nil
         }
     }
 }

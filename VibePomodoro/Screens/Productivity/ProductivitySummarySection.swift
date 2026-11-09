@@ -94,7 +94,7 @@ struct ProductivitySummaryStrip: View {
     private var sessionTitleColor: Color {
         colorScheme == .dark
             ? VibePalette.warmAmberAccent.opacity(ProductivityLayout.SummaryCard.accentDarkOpacity)
-            : VibePalette.warmAmberAccentDeep.opacity(ProductivityLayout.SummaryCard.accentLightOpacity)
+            : VibePalette.amberGoldInk
     }
 
     private var summaryAccentOverlay: some View {
@@ -253,13 +253,13 @@ private struct ProductivitySecondaryMetricsRow: View {
     private var averageTitleColor: Color {
         colorScheme == .dark
             ? VibePalette.softJade.opacity(ProductivityLayout.SecondaryMetrics.titleDarkOpacity)
-            : VibePalette.softJadeDeep.opacity(ProductivityLayout.SecondaryMetrics.titleLightOpacity)
+            : VibePalette.softJadeInk
     }
 
     private var streakTitleColor: Color {
         colorScheme == .dark
             ? VibePalette.softMist.opacity(ProductivityLayout.SecondaryMetrics.titleDarkOpacity)
-            : VibePalette.softMistDeep.opacity(ProductivityLayout.SecondaryMetrics.titleLightOpacity)
+            : VibePalette.softMistInk
     }
 }
 
@@ -308,12 +308,21 @@ private struct ProductivitySecondarySummaryItem: View {
 }
 
 struct ProductivityEmptyStateNote: View {
+    @Environment(\.colorScheme) private var colorScheme
+
     var body: some View {
-        Text("Complete a full session to start filling these charts. Productivity only reflects finished sessions.")
+        Text("Sessions appear here once they end, including ones you finish early. A session in progress isn't counted until then.")
             .font(.system(size: 13, weight: .medium))
-            .foregroundStyle(.secondary)
+            .foregroundStyle(textColor)
             .padding(.horizontal, ProductivityLayout.EmptyState.horizontalPadding)
             .padding(.top, ProductivityLayout.EmptyState.topPadding)
             .padding(.bottom, ProductivityLayout.EmptyState.bottomPadding)
+    }
+
+    /// Same gray as the range line beneath it, so the two read as one block.
+    private var textColor: Color {
+        colorScheme == .dark
+            ? VibePalette.warmBackground.opacity(ProductivityLayout.TrendCard.secondaryTextDarkOpacity)
+            : Color.black.opacity(ProductivityLayout.TrendCard.secondaryTextLightOpacity)
     }
 }

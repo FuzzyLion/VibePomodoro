@@ -11,50 +11,52 @@ enum ProductivityValueFormatting {
         if hours > 0 {
             return minutes > 0 ? "\(hours)h \(minutes)m" : "\(hours)h"
         }
-        if minutes > 0 {
+        if minutes > 0 || seconds == 0 {
             return "\(minutes)m"
         }
         return "\(seconds)s"
     }
 
-    static func summarySessionTimeText(_ duration: TimeInterval) -> String {
-        let totalSeconds = max(0, Int(duration.rounded()))
-        let totalHours = totalSeconds / 3600
-        let totalMinutes = totalSeconds / 60
-        let days = totalHours / 24
-        let hours = totalHours % 24
+    /// Spelled out for VoiceOver: "1 hour 30 minutes".
+    static func durationAccessibilityText(_ duration: TimeInterval) -> String {
+        let totalMinutes = max(0, Int(duration.rounded())) / 60
+        let hours = totalMinutes / 60
         let minutes = totalMinutes % 60
 
-        if days >= 100 {
-            return "\(days)d"
+        if hours > 0 {
+            return minutes > 0 ? "\(hourUnitText(hours)) \(minuteUnitText(minutes))" : hourUnitText(hours)
         }
-        if days > 0 {
-            return hours > 0 ? "\(days)d \(hours)h" : "\(days)d"
+        return minuteUnitText(minutes)
+    }
+
+    /// The lifetime total reads in hours, never days, so it can't be mistaken for the streak.
+    /// From 100 hours on, the minutes drop.
+    static func summarySessionTimeText(_ duration: TimeInterval) -> String {
+        let totalMinutes = max(0, Int(duration.rounded())) / 60
+        let hours = totalMinutes / 60
+        let minutes = totalMinutes % 60
+
+        if hours >= 100 || (hours > 0 && minutes == 0) {
+            return "\(hours)h"
         }
-        if totalHours > 0 {
-            return minutes > 0 ? "\(totalHours)h \(minutes)m" : "\(totalHours)h"
+        if hours > 0 {
+            return "\(hours)h \(minutes)m"
         }
-        return "\(totalMinutes)m"
+        return "\(minutes)m"
     }
 
     static func summarySessionTimeAccessibilityValue(_ duration: TimeInterval) -> String {
-        let totalSeconds = max(0, Int(duration.rounded()))
-        let totalHours = totalSeconds / 3600
-        let totalMinutes = totalSeconds / 60
-        let days = totalHours / 24
-        let hours = totalHours % 24
+        let totalMinutes = max(0, Int(duration.rounded())) / 60
+        let hours = totalMinutes / 60
         let minutes = totalMinutes % 60
 
-        if days >= 100 {
-            return dayUnitText(days)
+        if hours >= 100 || (hours > 0 && minutes == 0) {
+            return hourUnitText(hours)
         }
-        if days > 0 {
-            return hours > 0 ? "\(dayUnitText(days)) \(hourUnitText(hours))" : dayUnitText(days)
+        if hours > 0 {
+            return "\(hourUnitText(hours)) \(minuteUnitText(minutes))"
         }
-        if totalHours > 0 {
-            return minutes > 0 ? "\(hourUnitText(totalHours)) \(minuteUnitText(minutes))" : hourUnitText(totalHours)
-        }
-        return minuteUnitText(totalMinutes)
+        return minuteUnitText(minutes)
     }
 
     static func summaryAverageFocusText(_ hoursPerDay: Double) -> String {
@@ -134,6 +136,8 @@ struct ProductivityDisplayBucket: Identifiable, Equatable {
 }
 
 struct ProductivityNumericAxisStyle: Equatable {
+    static let maximumIntervals: Double = 4
+
     let step: Double
     let upperBound: Double
 
@@ -141,55 +145,37 @@ struct ProductivityNumericAxisStyle: Equatable {
         let count = max(1, Int((upperBound / step).rounded()))
         return (0...count).map { Double($0) * step }
     }
+
+    /// Uses the first round step that covers `maxValue` in at most four intervals.
+    static func fitting(_ maxValue: Double, minimumUpperBound: Double, steps: [Double]) -> Self {
+        let target = max(maxValue, minimumUpperBound)
+        let largestStep = steps.last ?? 1
+        let step = steps.first { (target / $0).rounded(.up) <= maximumIntervals }
+            ?? largestStep * (target / (largestStep * maximumIntervals)).rounded(.up)
+
+        return Self(step: step, upperBound: (target / step).rounded(.up) * step)
+    }
 }
 
 enum ProductivityChartDisplay {
     private static let calendar = Calendar.autoupdatingCurrent
 
+    /// One slot per point: a day for Week and Month, a month for Year. Month keeps daily bars
+    /// because 30 days never split into equal weeks, and a short group would read as a drop.
     static func displayBuckets(from points: [ProductivityChartPoint], range: ProductivityRange) -> [ProductivityDisplayBucket] {
-        let sortedPoints = points.sorted { $0.startDate < $1.startDate }
-        let unslottedBuckets: [ProductivityDisplayBucket]
-
-        switch range {
-        case .week:
-            unslottedBuckets = sortedPoints.compactMap { point in
+        let bucketLength: Calendar.Component = range == .year ? .month : .day
+        let unslottedBuckets = points
+            .sorted { $0.startDate < $1.startDate }
+            .compactMap { point in
                 makeBucket(
                     startDate: point.startDate,
-                    endDate: calendar.date(byAdding: .day, value: 1, to: point.startDate),
+                    endDate: calendar.date(byAdding: bucketLength, value: 1, to: point.startDate),
                     labelDate: point.startDate,
                     focusTime: point.focusTime,
                     breakTime: point.breakTime,
                     completedFocusCount: point.completedFocusCount
                 )
             }
-        case .month:
-            unslottedBuckets = stride(from: 0, to: sortedPoints.count, by: 7).compactMap { startIndex in
-                let endIndex = min(startIndex + 7, sortedPoints.count)
-                let chunk = sortedPoints[startIndex..<endIndex]
-                guard let first = chunk.first else { return nil }
-                let endDate = calendar.date(byAdding: .day, value: chunk.count, to: first.startDate)
-
-                return makeBucket(
-                    startDate: first.startDate,
-                    endDate: endDate,
-                    labelDate: first.startDate,
-                    focusTime: chunk.reduce(0) { $0 + $1.focusTime },
-                    breakTime: chunk.reduce(0) { $0 + $1.breakTime },
-                    completedFocusCount: chunk.reduce(0) { $0 + $1.completedFocusCount }
-                )
-            }
-        case .year:
-            unslottedBuckets = sortedPoints.compactMap { point in
-                makeBucket(
-                    startDate: point.startDate,
-                    endDate: calendar.date(byAdding: .month, value: 1, to: point.startDate),
-                    labelDate: point.startDate,
-                    focusTime: point.focusTime,
-                    breakTime: point.breakTime,
-                    completedFocusCount: point.completedFocusCount
-                )
-            }
-        }
 
         return unslottedBuckets.enumerated().map { index, bucket in
             ProductivityDisplayBucket(
@@ -203,6 +189,12 @@ enum ProductivityChartDisplay {
                 completedFocusCount: bucket.completedFocusCount
             )
         }
+    }
+
+    /// The slot under a tap, `x` measured from the plot's leading edge.
+    static func slotIndex(atX x: CGFloat, plotWidth: CGFloat, slotCount: Int) -> Int? {
+        guard slotCount > 0, plotWidth > 0, x >= 0, x < plotWidth else { return nil }
+        return min(slotCount - 1, Int(x / (plotWidth / CGFloat(slotCount))))
     }
 
     private static func makeBucket(
@@ -248,6 +240,74 @@ enum ProductivityChartFormatting {
         formatter.locale = englishLocale
         return formatter.shortMonthSymbols
     }()
+    private static let dayFormatter = englishFormatter("d")
+    private static let monthYearFormatter = englishFormatter("MMM yyyy")
+    private static let selectedDayFormatter = englishFormatter("EEE d MMM")
+    private static let spokenDayFormatter = englishFormatter("EEEE d MMMM")
+    private static let spokenMonthFormatter = englishFormatter("MMMM yyyy")
+
+    private static func englishFormatter(_ format: String) -> DateFormatter {
+        let formatter = DateFormatter()
+        formatter.locale = englishLocale
+        formatter.dateFormat = format
+        return formatter
+    }
+
+    /// The span the trend cards cover, such as "3–9 Nov", "11 Oct – 9 Nov", or "Dec 2025 – Nov 2026".
+    static func rangeDatesText(
+        for buckets: [ProductivityDisplayBucket],
+        range: ProductivityRange,
+        calendar: Calendar = .autoupdatingCurrent
+    ) -> String {
+        guard let first = buckets.first?.startDate, let last = buckets.last?.startDate else { return "" }
+
+        switch range {
+        case .week, .month:
+            return dayRangeText(from: first, to: last, calendar: calendar)
+        case .year:
+            return "\(monthYearFormatter.string(from: first)) – \(monthYearFormatter.string(from: last))"
+        }
+    }
+
+    /// The day or month a tapped bar stands for. The month in progress names the days it covers so far.
+    static func selectionText(
+        for bucket: ProductivityDisplayBucket,
+        range: ProductivityRange,
+        now: Date = .now,
+        calendar: Calendar = .autoupdatingCurrent
+    ) -> String {
+        switch range {
+        case .week, .month:
+            return selectedDayFormatter.string(from: bucket.startDate)
+        case .year:
+            guard bucket.endDate > now else { return monthYearFormatter.string(from: bucket.startDate) }
+            return dayRangeText(from: bucket.startDate, to: now, calendar: calendar)
+        }
+    }
+
+    static func selectionAccessibilityText(
+        for bucket: ProductivityDisplayBucket,
+        range: ProductivityRange,
+        now: Date = .now
+    ) -> String {
+        switch range {
+        case .week, .month:
+            return spokenDayFormatter.string(from: bucket.startDate)
+        case .year:
+            let month = spokenMonthFormatter.string(from: bucket.startDate)
+            return bucket.endDate > now ? "\(month) so far" : month
+        }
+    }
+
+    private static func dayRangeText(from start: Date, to end: Date, calendar: Calendar) -> String {
+        if calendar.isDate(start, inSameDayAs: end) {
+            return monthAxisFormatter.string(from: end)
+        }
+        if calendar.isDate(start, equalTo: end, toGranularity: .month) {
+            return "\(dayFormatter.string(from: start))–\(monthAxisFormatter.string(from: end))"
+        }
+        return "\(monthAxisFormatter.string(from: start)) – \(monthAxisFormatter.string(from: end))"
+    }
 
     static func xAxisLabel(for date: Date, range: ProductivityRange) -> String {
         switch range {
@@ -279,6 +339,9 @@ enum ProductivityChartFormatting {
         let hours = totalMinutes / 60
         let minutes = totalMinutes % 60
 
+        if totalMinutes == 0 {
+            return "0"
+        }
         if hours > 0 && minutes > 0 {
             return "\(hours)h \(minutes)m"
         }
@@ -288,35 +351,23 @@ enum ProductivityChartFormatting {
         return "\(totalMinutes)m"
     }
 
-    static func annotationDurationText(_ value: Double) -> String {
-        let totalSeconds = max(0, Int(value.rounded()))
-        let hours = totalSeconds / 3600
-        let minutes = (totalSeconds % 3600) / 60
-        let seconds = totalSeconds % 60
+    private static let hourAxisSteps: [TimeInterval] = [1, 2, 3, 4, 5, 10, 15, 20, 25, 50, 100, 150, 200, 250, 500, 1_000]
+        .map { $0 * 3_600 }
+    private static let countAxisSteps: [Double] = [1, 2, 5, 10, 20, 25, 50, 100, 200, 250, 500, 1_000]
 
-        if hours > 0 {
-            return "\(hours)h \(minutes)m"
+    /// Up to an hour the axis stays at 0–60m in 20-minute steps. Above that it uses whole hours,
+    /// so no label needs minutes, and at most four intervals however long the bucket is.
+    static func timeAxisStyle(for maxValue: Double) -> ProductivityNumericAxisStyle {
+        guard maxValue > 3_600 else {
+            return ProductivityNumericAxisStyle(step: 20 * 60, upperBound: 3_600)
         }
-        if minutes > 0 {
-            return "\(minutes)m"
-        }
-        return "\(seconds)s"
+
+        return .fitting(maxValue, minimumUpperBound: 3_600, steps: hourAxisSteps)
     }
 
-    static func timeAxisStyle(for maxValue: Double) -> ProductivityNumericAxisStyle {
-        let step: Double
-
-        switch maxValue {
-        case ..<3600:
-            step = 20 * 60
-        case ..<7200:
-            step = 40 * 60
-        default:
-            step = 60 * 60
-        }
-
-        let upperBound = max(step * 3, ceil(maxValue / step) * step)
-        return ProductivityNumericAxisStyle(step: step, upperBound: upperBound)
+    /// Counts start from a 0–4 axis, one default four-round session.
+    static func countAxisStyle(for maxValue: Double) -> ProductivityNumericAxisStyle {
+        .fitting(maxValue, minimumUpperBound: 4, steps: countAxisSteps)
     }
 }
 
@@ -337,7 +388,7 @@ extension ProductivityRange {
         case .week:
             return 18
         case .month:
-            return 26
+            return 6
         case .year:
             return 15
         }
@@ -347,32 +398,28 @@ extension ProductivityRange {
         switch self {
         case .week:
             return 4
-        case .month:
-            return 3
-        case .year:
+        case .month, .year:
             return 2
         }
     }
 
-    var annotationFontSize: CGFloat {
+    var windowTitle: String {
         switch self {
         case .week:
-            return 10
+            return "Last 7 days"
         case .month:
-            return 9
+            return "Last 30 days"
         case .year:
-            return 10
+            return "Last 12 months"
         }
     }
 
-    var annotationBottomPadding: CGFloat {
-        switch self {
-        case .week:
-            return 2
-        case .month:
-            return 1
-        case .year:
-            return 2
-        }
+    /// Month labels every seventh day, counted back from today so the rightmost label is today.
+    var axisLabelStride: Int {
+        self == .month ? 7 : 1
+    }
+
+    func showsAxisLabel(atSlot index: Int, slotCount: Int) -> Bool {
+        (slotCount - 1 - index) % axisLabelStride == 0
     }
 }

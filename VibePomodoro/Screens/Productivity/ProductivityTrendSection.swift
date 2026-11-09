@@ -1,12 +1,39 @@
 import Charts
 import SwiftUI
 
+struct ProductivityRangeCaption: View {
+    @Environment(\.colorScheme) private var colorScheme
+
+    let range: ProductivityRange
+    let buckets: [ProductivityDisplayBucket]
+
+    var body: some View {
+        let dates = ProductivityChartFormatting.rangeDatesText(for: buckets, range: range)
+        let caption = "\(range.windowTitle) • \(dates)"
+
+        Text(caption)
+            .font(.system(size: 13, weight: .medium))
+            .foregroundStyle(textColor)
+            .monospacedDigit()
+            .padding(.horizontal, ProductivityLayout.TrendGroup.captionHorizontalPadding)
+            .accessibilityLabel("\(range.windowTitle), \(dates)")
+    }
+
+    private var textColor: Color {
+        colorScheme == .dark
+            ? VibePalette.warmBackground.opacity(ProductivityLayout.TrendCard.secondaryTextDarkOpacity)
+            : Color.black.opacity(ProductivityLayout.TrendCard.secondaryTextLightOpacity)
+    }
+}
+
 struct ProductivityTrendCard: View {
     @Environment(\.colorScheme) private var colorScheme
 
     let metric: ProductivityChartMetricKind
     let buckets: [ProductivityDisplayBucket]
     let range: ProductivityRange
+    /// Shared by the three cards: their days line up, so one tap shows the same day in each.
+    @Binding var selectedSlot: Int?
 
     private let contentInset = ProductivityLayout.TrendCard.contentInset
     private let cornerRadius = ProductivityLayout.TrendCard.cornerRadius
@@ -16,18 +43,22 @@ struct ProductivityTrendCard: View {
     }
 
     private var accentLabelColor: Color {
-        accentColor.opacity(
-            colorScheme == .dark
-                ? ProductivityLayout.TrendCard.accentLabelDarkOpacity
-                : ProductivityLayout.TrendCard.accentLabelLightOpacity
-        )
+        colorScheme == .dark
+            ? accentColor.opacity(ProductivityLayout.TrendCard.accentLabelDarkOpacity)
+            : metric.inkColor
+    }
+
+    private var selectedBucket: ProductivityDisplayBucket? {
+        guard let selectedSlot, buckets.indices.contains(selectedSlot) else { return nil }
+        return buckets[selectedSlot]
     }
 
     var body: some View {
         let axisStyle = metric.axisStyle(for: buckets)
         let bucketCount = max(buckets.count, 1)
         let slotDomain = -0.5...(Double(bucketCount) - 0.5)
-        let rangeValueText = metric.rangeValueText(from: buckets)
+        let headlineText = selectedBucket.map { metric.valueText(for: metric.bucketValue(for: $0)) }
+            ?? metric.rangeValueText(from: buckets)
 
         VStack(alignment: .leading, spacing: ProductivityLayout.TrendCard.stackSpacing) {
             HStack(spacing: ProductivityLayout.TrendCard.headerSpacing) {
@@ -53,16 +84,18 @@ struct ProductivityTrendCard: View {
                     .font(.system(size: 19, weight: .semibold))
                     .foregroundStyle(accentLabelColor)
 
-                Spacer()
+                Spacer(minLength: ProductivityLayout.TrendCard.headerSpacing)
 
-                ProductivityRangeBadge(
-                    title: range.displayTitle,
-                    tint: accentLabelColor,
-                    colorScheme: colorScheme
-                )
+                if let selectedBucket {
+                    Text(ProductivityChartFormatting.selectionText(for: selectedBucket, range: range))
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(secondaryTextColor)
+                        .lineLimit(1)
+                        .monospacedDigit()
+                }
             }
 
-            Text(rangeValueText)
+            Text(headlineText)
                 .font(.system(size: 28, weight: .semibold))
                 .foregroundStyle(primaryTextColor)
                 .minimumScaleFactor(0.76)
@@ -79,17 +112,9 @@ struct ProductivityTrendCard: View {
                 )
                 .clipShape(TopRoundedBarShape(radius: range.barTopCornerRadius))
                 .foregroundStyle(metric.barFill(for: colorScheme))
-                .opacity(value > 0 ? 1 : 0.10)
-                .annotation(position: .top, alignment: .center) {
-                    if shouldShowAnnotation(for: value) {
-                        Text(metric.annotationText(for: value))
-                            .font(.system(size: range.annotationFontSize, weight: .semibold))
-                            .foregroundStyle(accentLabelColor)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.65)
-                            .padding(.bottom, range.annotationBottomPadding)
-                    }
-                }
+                .opacity(barOpacity(for: bucket, value: value))
+                .accessibilityLabel(ProductivityChartFormatting.selectionAccessibilityText(for: bucket, range: range))
+                .accessibilityValue(metric.valueAccessibilityText(for: value))
             }
             .frame(height: ProductivityLayout.TrendCard.chartHeight)
             .padding(.bottom, ProductivityLayout.TrendCard.chartBottomPadding)
@@ -104,23 +129,39 @@ struct ProductivityTrendCard: View {
                     AxisTick().foregroundStyle(.clear)
                     AxisValueLabel {
                         if let axisValue = value.as(Double.self) {
+                            // A fixed column keeps the three plots the same width, so days line up across cards.
                             Text(metric.axisLabelText(for: axisValue))
                                 .font(.system(size: 11, weight: .medium))
                                 .foregroundStyle(secondaryTextColor)
+                                .lineLimit(1)
+                                .minimumScaleFactor(ProductivityLayout.ChartAxis.labelMinimumScaleFactor)
+                                .frame(width: ProductivityLayout.ChartAxis.valueLabelWidth, alignment: .leading)
                         }
                     }
                 }
             }
             .chartOverlay { proxy in
                 GeometryReader { geometry in
-                    if let plotFrame = proxy.plotFrame {
-                        ProductivityCustomXAxis(
-                            buckets: buckets,
-                            range: range,
-                            plotFrame: geometry[plotFrame],
-                            textColor: secondaryTextColor
-                        )
-                        .offset(y: geometry[plotFrame].maxY + ProductivityLayout.TrendCard.xAxisOffset)
+                    if let plotAnchor = proxy.plotFrame {
+                        let plotFrame = geometry[plotAnchor]
+
+                        ZStack(alignment: .topLeading) {
+                            // Taps only, so a drag that starts on the chart still scrolls the page.
+                            Color.clear
+                                .contentShape(Rectangle())
+                                .onTapGesture { location in
+                                    toggleSelection(atX: location.x - plotFrame.minX, plotWidth: plotFrame.width)
+                                }
+                                .accessibilityHidden(true)
+
+                            ProductivityCustomXAxis(
+                                buckets: buckets,
+                                range: range,
+                                plotFrame: plotFrame,
+                                textColor: secondaryTextColor
+                            )
+                            .offset(y: plotFrame.maxY + ProductivityLayout.TrendCard.xAxisOffset)
+                        }
                     }
                 }
             }
@@ -164,50 +205,19 @@ struct ProductivityTrendCard: View {
             )
     }
 
-    private func shouldShowAnnotation(for value: Double) -> Bool {
-        value > 0
-    }
-}
-
-private struct ProductivityRangeBadge: View {
-    let title: String
-    let tint: Color
-    let colorScheme: ColorScheme
-
-    var body: some View {
-        Text(title.uppercased())
-            .font(.system(size: 10, weight: .semibold))
-            .foregroundStyle(badgeTextColor)
-            .tracking(ProductivityLayout.RangeBadge.titleTracking)
-            .padding(.horizontal, ProductivityLayout.RangeBadge.horizontalPadding)
-            .padding(.vertical, ProductivityLayout.RangeBadge.verticalPadding)
-            .background(
-                Capsule(style: .continuous)
-                    .fill(
-                        tint.opacity(
-                            colorScheme == .dark
-                                ? ProductivityLayout.RangeBadge.fillDarkOpacity
-                                : ProductivityLayout.RangeBadge.fillLightOpacity
-                        )
-                    )
-            )
-            .overlay {
-                Capsule(style: .continuous)
-                    .strokeBorder(
-                        tint.opacity(
-                            colorScheme == .dark
-                                ? ProductivityLayout.RangeBadge.strokeDarkOpacity
-                                : ProductivityLayout.RangeBadge.strokeLightOpacity
-                        ),
-                        lineWidth: ProductivityLayout.RangeBadge.strokeWidth
-                    )
-            }
+    private func barOpacity(for bucket: ProductivityDisplayBucket, value: Double) -> Double {
+        guard value > 0 else { return 0.10 }
+        guard let selectedSlot else { return 1 }
+        return bucket.slotIndex == selectedSlot ? 1 : ProductivityLayout.TrendCard.unselectedBarOpacity
     }
 
-    private var badgeTextColor: Color {
-        colorScheme == .dark
-            ? tint.opacity(ProductivityLayout.RangeBadge.textDarkOpacity)
-            : tint.opacity(ProductivityLayout.RangeBadge.textLightOpacity)
+    /// Tapping a bar shows its day in every card; tapping it again, or the axis labels, returns to the totals.
+    private func toggleSelection(atX x: CGFloat, plotWidth: CGFloat) {
+        let slot = ProductivityChartDisplay.slotIndex(atX: x, plotWidth: plotWidth, slotCount: buckets.count)
+
+        withAnimation(.easeOut(duration: 0.15)) {
+            selectedSlot = slot == selectedSlot ? nil : slot
+        }
     }
 }
 
@@ -221,16 +231,18 @@ private struct ProductivityCustomXAxis: View {
         if hasValidPlotFrame {
             ZStack(alignment: .topLeading) {
                 ForEach(Array(buckets.enumerated()), id: \.element.id) { index, bucket in
-                    Text(ProductivityChartFormatting.xAxisLabel(for: bucket.labelDate, range: range))
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(textColor)
-                        .lineLimit(1)
-                        .minimumScaleFactor(ProductivityLayout.ChartAxis.labelMinimumScaleFactor)
-                        .frame(width: slotWidth, alignment: .center)
-                        .position(
-                            x: plotFrame.minX + slotWidth * (CGFloat(index) + 0.5),
-                            y: 8
-                        )
+                    if range.showsAxisLabel(atSlot: index, slotCount: buckets.count) {
+                        Text(ProductivityChartFormatting.xAxisLabel(for: bucket.labelDate, range: range))
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(textColor)
+                            .lineLimit(1)
+                            .minimumScaleFactor(ProductivityLayout.ChartAxis.labelMinimumScaleFactor)
+                            .frame(width: labelWidth, alignment: .center)
+                            .position(
+                                x: plotFrame.minX + slotWidth * (CGFloat(index) + 0.5),
+                                y: 8
+                            )
+                    }
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -248,6 +260,11 @@ private struct ProductivityCustomXAxis: View {
 
     private var slotWidth: CGFloat {
         plotFrame.width / CGFloat(max(buckets.count, 1))
+    }
+
+    /// A sparse label may use the empty slots around it.
+    private var labelWidth: CGFloat {
+        slotWidth * CGFloat(range.axisLabelStride)
     }
 }
 
@@ -288,7 +305,7 @@ enum ProductivityChartMetricKind: CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .focusSessions:
-            return "Focus Sessions"
+            return "Focus Blocks"
         case .focusTime:
             return "Focus Time"
         case .breakTime:
@@ -315,6 +332,18 @@ enum ProductivityChartMetricKind: CaseIterable, Identifiable {
             return colorScheme == .dark ? VibePalette.amberGold : VibePalette.amberGoldDeep
         case .breakTime:
             return colorScheme == .dark ? VibePalette.softJade : VibePalette.softJadeDeep
+        }
+    }
+
+    /// Light-mode text color for the card's title, badge, and bar values.
+    var inkColor: Color {
+        switch self {
+        case .focusSessions:
+            return VibePalette.softMistInk
+        case .focusTime:
+            return VibePalette.amberGoldInk
+        case .breakTime:
+            return VibePalette.softJadeInk
         }
     }
 
@@ -363,12 +392,23 @@ enum ProductivityChartMetricKind: CaseIterable, Identifiable {
         }
     }
 
-    func annotationText(for value: Double) -> String {
+    /// One bar's value, shown in the card's figure while the bar is selected.
+    func valueText(for value: Double) -> String {
         switch self {
         case .focusSessions:
             return "\(Int(value.rounded()))"
         case .focusTime, .breakTime:
-            return ProductivityChartFormatting.annotationDurationText(value)
+            return ProductivityValueFormatting.compactDurationText(value)
+        }
+    }
+
+    func valueAccessibilityText(for value: Double) -> String {
+        switch self {
+        case .focusSessions:
+            let count = Int(value.rounded())
+            return count == 1 ? "1 focus block" : "\(count) focus blocks"
+        case .focusTime, .breakTime:
+            return ProductivityValueFormatting.durationAccessibilityText(value)
         }
     }
 
@@ -377,7 +417,7 @@ enum ProductivityChartMetricKind: CaseIterable, Identifiable {
 
         switch self {
         case .focusSessions:
-            return Self.countAxisStyle(for: maxValue)
+            return ProductivityChartFormatting.countAxisStyle(for: maxValue)
         case .focusTime, .breakTime:
             return ProductivityChartFormatting.timeAxisStyle(for: maxValue)
         }
@@ -401,28 +441,5 @@ enum ProductivityChartMetricKind: CaseIterable, Identifiable {
                 VibePalette.softJadeDeep.opacity(colorScheme == .dark ? 0.66 : 0.54)
             ]
         }
-    }
-
-    private static func countAxisStyle(for maxValue: Double) -> ProductivityNumericAxisStyle {
-        guard maxValue > 0 else {
-            return ProductivityNumericAxisStyle(step: 1, upperBound: 4)
-        }
-
-        let padded = maxValue * 1.18
-        let step: Double
-
-        switch padded {
-        case ..<6:
-            step = 1
-        case ..<20:
-            step = 2
-        case ..<50:
-            step = 5
-        default:
-            step = 10
-        }
-
-        let upperBound = max(step * 4, ceil(padded / step) * step)
-        return ProductivityNumericAxisStyle(step: step, upperBound: upperBound)
     }
 }
