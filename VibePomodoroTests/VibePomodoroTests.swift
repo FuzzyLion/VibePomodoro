@@ -242,6 +242,49 @@ struct VibePomodoroTests {
         #expect(chartCompletedFocus == completedSession.completedFocusCount)
     }
 
+    @Test func streakHoldsThroughTodayUntilTheDayEnds() async throws {
+        let (defaults, suiteName) = makeDefaults()
+        defer { clear(defaults, suiteName: suiteName) }
+
+        let calendar = Calendar.autoupdatingCurrent
+        let now = try #require(calendar.date(from: DateComponents(year: 2026, month: 11, day: 9, hour: 8)))
+        let today = calendar.startOfDay(for: now)
+        func day(_ offset: Int) -> Date {
+            calendar.date(byAdding: .day, value: offset, to: today)!
+        }
+        func summaries(focusedOn offsets: [Int]) -> [ProductivityDailySummary] {
+            offsets.map {
+                ProductivityDailySummary(date: day($0), focusTime: 1_500, shortBreakTime: 0, longBreakTime: 0, completedFocusCount: 1)
+            }
+        }
+        let store = PomodoroStore(defaults: defaults)
+
+        store.productivityCache = ProductivityAggregateCache(dailySummaries: summaries(focusedOn: [-3, -2, -1]))
+        #expect(store.streakLength(now: now) == 3)
+
+        store.productivityCache = ProductivityAggregateCache(dailySummaries: summaries(focusedOn: [-3, -2, -1, 0]))
+        #expect(store.streakLength(now: now) == 4)
+
+        store.productivityCache = ProductivityAggregateCache(dailySummaries: summaries(focusedOn: [0]))
+        #expect(store.streakLength(now: now) == 1)
+
+        store.productivityCache = ProductivityAggregateCache(dailySummaries: summaries(focusedOn: [-3, -2]))
+        #expect(store.streakLength(now: now) == 0)
+
+        store.productivityCache = ProductivityAggregateCache(dailySummaries: [])
+        #expect(store.streakLength(now: now) == 0)
+
+        let recordedElsewhere = ProductivityDailySummary(
+            date: day(-1).addingTimeInterval(3_600),
+            focusTime: 600,
+            shortBreakTime: 0,
+            longBreakTime: 0,
+            completedFocusCount: 0
+        )
+        store.productivityCache = ProductivityAggregateCache(dailySummaries: summaries(focusedOn: [-2, -1]) + [recordedElsewhere])
+        #expect(store.streakLength(now: now) == 2)
+    }
+
     @Test func productivityCacheRebuildsFromCompletedSessionsAndSplitsAcrossDays() async throws {
         let (defaults, suiteName) = makeDefaults()
         defer { clear(defaults, suiteName: suiteName) }

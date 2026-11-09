@@ -114,7 +114,7 @@ Productivity counts effective running time from archived sessions. Pauses are ex
 | Session Time | Focus Time + Break Time. |
 | Completed Focus Count | Focus blocks that reached their full planned duration. |
 | Daily Focus Avg | Total archived focus time divided by the number of calendar days with recorded focus time. Days with no focus record are excluded. |
-| Streak | Consecutive days with archived focus time, counted backward from today. If today has none, the streak is zero. |
+| Streak | Consecutive days with archived focus time, counted backward from today. Until today has focus time of its own, the count starts from yesterday, so the streak holds through the day instead of reading zero every morning; it ends only after a whole day passes without focus. |
 
 Time that crosses midnight is split across calendar days. Totals come from an aggregate cache derived from completed sessions. A session must enter that cache only once, even after relaunch or repeated reconciliation.
 
