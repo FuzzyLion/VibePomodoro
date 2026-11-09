@@ -29,9 +29,9 @@ enum ProductivityValueFormatting {
         return minuteUnitText(minutes)
     }
 
-    /// The lifetime total reads in hours, never days, so it can't be mistaken for the streak.
+    /// Lifetime totals read in hours, never days, so they can't be mistaken for the streak.
     /// From 100 hours on, the minutes drop.
-    static func summarySessionTimeText(_ duration: TimeInterval) -> String {
+    static func lifetimeDurationText(_ duration: TimeInterval) -> String {
         let totalMinutes = max(0, Int(duration.rounded())) / 60
         let hours = totalMinutes / 60
         let minutes = totalMinutes % 60
@@ -45,7 +45,7 @@ enum ProductivityValueFormatting {
         return "\(minutes)m"
     }
 
-    static func summarySessionTimeAccessibilityValue(_ duration: TimeInterval) -> String {
+    static func lifetimeDurationAccessibilityValue(_ duration: TimeInterval) -> String {
         let totalMinutes = max(0, Int(duration.rounded())) / 60
         let hours = totalMinutes / 60
         let minutes = totalMinutes % 60
@@ -93,19 +93,29 @@ enum ProductivityValueFormatting {
         dayUnitText(max(0, streakLength))
     }
 
-    static func summaryMetaText(completedSessionCount: Int, completedFocusCount: Int) -> String {
+    /// The summary's footer, which carries Session Time now that Focus Time leads the card.
+    static func summaryMetaText(sessionTime: TimeInterval, completedSessionCount: Int, completedFocusCount: Int) -> String {
         guard completedSessionCount > 0 else {
             return "No finished sessions yet"
         }
 
-        let sessionsText = completedSessionCount == 1
-            ? "1 finished session"
-            : "\(completedSessionCount) finished sessions"
-        let focusBlocksText = completedFocusCount == 1
-            ? "1 focus block"
-            : "\(completedFocusCount) focus blocks"
+        return "\(lifetimeDurationText(sessionTime)) across \(sessionCountText(completedSessionCount)) • \(focusBlockCountText(completedFocusCount))"
+    }
 
-        return "\(sessionsText) • \(focusBlocksText)"
+    static func summaryMetaAccessibilityText(sessionTime: TimeInterval, completedSessionCount: Int, completedFocusCount: Int) -> String {
+        guard completedSessionCount > 0 else {
+            return "No finished sessions yet"
+        }
+
+        return "\(lifetimeDurationAccessibilityValue(sessionTime)) across \(sessionCountText(completedSessionCount)), \(focusBlockCountText(completedFocusCount))"
+    }
+
+    static func sessionCountText(_ count: Int) -> String {
+        count == 1 ? "1 session" : "\(count) sessions"
+    }
+
+    static func focusBlockCountText(_ count: Int) -> String {
+        count == 1 ? "1 focus block" : "\(count) focus blocks"
     }
 
     private static func dayUnitText(_ count: Int) -> String {
@@ -353,7 +363,6 @@ enum ProductivityChartFormatting {
 
     private static let hourAxisSteps: [TimeInterval] = [1, 2, 3, 4, 5, 10, 15, 20, 25, 50, 100, 150, 200, 250, 500, 1_000]
         .map { $0 * 3_600 }
-    private static let countAxisSteps: [Double] = [1, 2, 5, 10, 20, 25, 50, 100, 200, 250, 500, 1_000]
 
     /// Up to an hour the axis stays at 0–60m in 20-minute steps. Above that it uses whole hours,
     /// so no label needs minutes, and at most four intervals however long the bucket is.
@@ -365,9 +374,98 @@ enum ProductivityChartFormatting {
         return .fitting(maxValue, minimumUpperBound: 3_600, steps: hourAxisSteps)
     }
 
-    /// Counts start from a 0–4 axis, one default four-round session.
-    static func countAxisStyle(for maxValue: Double) -> ProductivityNumericAxisStyle {
-        .fitting(maxValue, minimumUpperBound: 4, steps: countAxisSteps)
+    private static let sessionTimeFormatter = englishFormatter("HH:mm")
+    private static let sessionDayFormatter = englishFormatter("EEE d MMM")
+
+    /// A session's start: "Today 08:30", "Yesterday 14:00", or "Sat 7 Nov 09:00".
+    static func sessionStartText(
+        _ start: Date,
+        now: Date = .now,
+        calendar: Calendar = .autoupdatingCurrent
+    ) -> String {
+        "\(relativeDayText(start, now: now, calendar: calendar) ?? sessionDayFormatter.string(from: start))\u{2002}\(sessionTimeFormatter.string(from: start))"
+    }
+
+    static func sessionStartAccessibilityText(
+        _ start: Date,
+        now: Date = .now,
+        calendar: Calendar = .autoupdatingCurrent
+    ) -> String {
+        "\(relativeDayText(start, now: now, calendar: calendar) ?? spokenDayFormatter.string(from: start)) at \(sessionTimeFormatter.string(from: start))"
+    }
+
+    private static func relativeDayText(_ date: Date, now: Date, calendar: Calendar) -> String? {
+        if calendar.isDate(date, inSameDayAs: now) {
+            return "Today"
+        }
+        if let yesterday = calendar.date(byAdding: .day, value: -1, to: now), calendar.isDate(date, inSameDayAs: yesterday) {
+            return "Yesterday"
+        }
+        return nil
+    }
+}
+
+/// Focus, breaks, and completed blocks over some slots: the whole range or one tapped slot.
+struct ProductivityRhythmTotals: Equatable {
+    let focusTime: TimeInterval
+    let breakTime: TimeInterval
+    let completedFocusCount: Int
+
+    init<Buckets: Sequence>(_ buckets: Buckets) where Buckets.Element == ProductivityDisplayBucket {
+        var focusTime: TimeInterval = 0
+        var breakTime: TimeInterval = 0
+        var completedFocusCount = 0
+
+        for bucket in buckets {
+            focusTime += bucket.focusTime
+            breakTime += bucket.breakTime
+            completedFocusCount += bucket.completedFocusCount
+        }
+
+        self.focusTime = focusTime
+        self.breakTime = breakTime
+        self.completedFocusCount = completedFocusCount
+    }
+
+    /// Mean focus over the slots that have any, the rule Daily Focus Avg uses for days.
+    static func averageFocus(over buckets: [ProductivityDisplayBucket]) -> TimeInterval {
+        let activeBuckets = buckets.filter { $0.focusTime > 0 }
+        guard !activeBuckets.isEmpty else { return 0 }
+        return activeBuckets.reduce(0) { $0 + $1.focusTime } / Double(activeBuckets.count)
+    }
+
+    /// What VoiceOver reads for one slot.
+    var accessibilityText: String {
+        [
+            "\(ProductivityValueFormatting.durationAccessibilityText(focusTime)) of focus",
+            "\(ProductivityValueFormatting.durationAccessibilityText(breakTime)) of breaks",
+            ProductivityValueFormatting.focusBlockCountText(completedFocusCount)
+        ].joined(separator: ", ")
+    }
+}
+
+/// The sessions listed under the chart.
+enum ProductivitySessionList {
+    static let rowLimit = 5
+
+    struct Rows: Equatable {
+        let sessions: [CompletedSession]
+        /// Sessions in the interval beyond the row limit.
+        let hiddenCount: Int
+    }
+
+    /// The latest sessions that started in `[start, end)`, newest first.
+    static func rows(
+        from sessions: [CompletedSession],
+        startingFrom start: Date,
+        before end: Date,
+        limit: Int = rowLimit
+    ) -> Rows {
+        let matching = sessions
+            .filter { $0.startDate >= start && $0.startDate < end }
+            .sorted { $0.startDate > $1.startDate }
+
+        return Rows(sessions: Array(matching.prefix(limit)), hiddenCount: max(0, matching.count - limit))
     }
 }
 
@@ -412,6 +510,12 @@ extension ProductivityRange {
         case .year:
             return "Last 12 months"
         }
+    }
+
+    /// Empty glass columns behind the bars show the days without focus. Thirty of them read as
+    /// stripes, so Month leaves them out.
+    var showsBarTracks: Bool {
+        self != .month
     }
 
     /// Month labels every seventh day, counted back from today so the rightmost label is today.

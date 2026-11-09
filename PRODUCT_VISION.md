@@ -26,7 +26,7 @@ These screenshots come from the built app on an iPhone 14 Pro simulator running 
 | Productivity: all-time summary and recent trends | <img src="docs/screenshots/productivity-light.png" alt="Productivity in light mode, showing generated sample history" width="230"> | <img src="docs/screenshots/productivity-dark.png" alt="Productivity in dark mode, showing the same sample history" width="230"> |
 | Settings: session rhythm and alert preferences | <img src="docs/screenshots/settings-light.png" alt="Settings in light mode, showing session rhythm and alerts" width="230"> | <img src="docs/screenshots/settings-dark.png" alt="Settings in dark mode, showing the same preferences" width="230"> |
 
-Productivity and Settings scroll. These captures show the top of each page; more trend cards and settings continue below. The [screenshot notes](./docs/screenshots/README.md) record the capture environment and demo states.
+Productivity and Settings scroll. These captures show the top of each page; more cards and settings continue below. The [screenshot notes](./docs/screenshots/README.md) record the capture environment and demo states.
 
 ## What the app should feel like
 
@@ -132,7 +132,7 @@ Skip keeps the time already spent without awarding an unfinished focus block. Re
 
 **Clear Productivity History** deletes both completed-session records and their aggregate cache. Productivity immediately returns to its empty state, and later sessions start a new history. The active session and settings remain intact.
 
-With no archived history, the summary and charts show zero values alongside **No finished sessions yet**, and a short note says that sessions appear once they end, including ones finished early. Sample bars belong only in tests and clearly labeled documentation previews.
+With no archived history, the summary and the Rhythm card show zero values alongside **No finished sessions yet**, the Sessions card is left out, and a short note says that sessions appear once they end, including ones finished early. Sample bars belong only in tests and clearly labeled documentation previews.
 
 ## Focus design
 
@@ -198,25 +198,29 @@ The first card is headed **ALL TIME COMPLETED SESSIONS**. Its hierarchy is fixed
 
 | Level | Content |
 | --- | --- |
-| Primary metric | Session Time |
+| Primary metric | Focus Time |
 | Supporting metrics | Daily Focus Avg and Streak |
-| Footer | Finished-session count and completed focus-block count |
+| Footer | Session Time, finished-session count, and completed focus-block count, such as *456h across 231 sessions • 841 focus blocks* |
 
-Session Time reads in hours, never days, so it can't be mistaken for the streak; from 100 hours on, the minutes drop. A focus block is one focus round, and a session is the whole cycle, so the page never uses one word for the other.
+Focus Time leads because focus is what the app is for; Session Time also grows with longer breaks, so it moves to the footer. Lifetime totals read in hours, never days, so they can't be mistaken for the streak; from 100 hours on, the minutes drop. A focus block is one focus round, and a session is the whole cycle, so the page never uses one word for the other.
 
-The summary always shows all-time values. The three trend cards below it show **Focus Blocks**, **Focus Time**, and **Break Time**, with totals for the selected range. Session Time belongs in the summary. One quiet line above the trend cards names the range and the dates it covers, such as *Last 7 days • 3–9 Nov*; the cards carry no range badges.
+The summary always shows all-time values. Below it, one quiet line names the selected range and the dates it covers, such as *Last 7 days • 3–9 Nov*, and two cards follow: **Rhythm** and **Sessions**. The cards carry no range badges and no icons beside their titles.
 
-All four cards share the same glass language. The summary has more visual weight, while the trend cards stay quiet. Keep the current spacing and natural title wrapping. The single summary card is the accepted baseline; earlier equal-column summary strips and compressed layouts are not.
+**Rhythm** shows the range in one chart. Its top row gives **Focus**, **Breaks**, and **Blocks**; small amber and jade dots before the first two double as the chart's legend. Each slot's bar stacks focus below breaks, like layered liquid in a glass: the liquid runs deeper toward the bottom, following the Focus vessel's rule that a longer light path takes more tint, and a faint line of light rests on its surface, fading toward the walls. In Week and Year, an empty glass column stands behind every bar, so a day or month without focus still shows its place; thirty of them would read as stripes, so Month leaves them out. A dashed line marks the average focus per slot, counted over the slots that have any, the same rule Daily Focus Avg uses for days; an amber **avg** in the axis column names it, and a step label right beside it steps aside. The card adds no sentence about the numbers; the row and the chart carry them.
+
+**Sessions** lists the sessions behind the bars: the latest five in the range, newest first. Each row gives the start, such as *Today 08:30* or *Sat 7 Nov 09:00*, one marker per round as on the Focus page (filled when the focus block ran its full length, outlined when it didn't), and the focus time. With no history at all, the card is left out and the empty-state note speaks for it.
+
+All three cards share the same glass language. The summary has more visual weight, while the Rhythm and Sessions cards stay quiet. Text and figures use the system's standard SF Pro with monospaced digits. The Focus countdown's expanded numerals stay on the Focus page: beside these titles they read as a second voice, and three of them in one row crowd the card. Color marks meaning only: amber for focus, jade for breaks, and neutral text elsewhere, with the focus labels in the summary taking the focus amber.
 
 Charts use evenly spaced buckets, with labels and bars centered on the same slots. Week labels every day, Month every seventh day counted back from today, and Year every month. The rightmost label must remain readable.
 
-The value axis uses round steps and at most four intervals. Up to an hour it reads 0–60 minutes in 20-minute steps; above that it uses whole hours only, so no axis label needs minutes. Axis labels sit in a fixed-width column, so the three charts share one plot width and their days line up from card to card.
+The value axis uses round steps and at most four intervals. Up to an hour it reads 0–60 minutes in 20-minute steps; above that it uses whole hours only, so no axis label needs minutes. Axis labels sit in a fixed-width column, so the plot keeps its width whatever the axis reads.
 
-Bars carry no value labels. Tapping a bar puts that day's or month's value in each card's figure and its date at the card's top right, and dims the other bars; all three cards follow the same tap, since their days line up. Tapping the same bar again, or the axis labels beside the chart, returns to the totals, and changing the range clears the selection. The month in progress names the days it covers so far, such as *1–9 Nov*. Selection is by tap only, so a drag that starts on a chart still scrolls the page. VoiceOver reads each bar's date and value.
+Bars carry no value labels. Tapping a slot puts its date at the top right of the Rhythm card, its figures in the top row, and dims the other bars; the Sessions card then lists the sessions that started in that slot. The figures keep their columns while a slot is selected, so the row doesn't shift. A tapped month can hold dozens of sessions, so the list shows its latest five and a line such as *29 more*. Tapping the same slot again, or the axis labels beside the chart, returns to the range, and changing the range clears the selection. The month in progress names the days it covers so far, such as *1–9 Nov*. Selection is by tap only, so a drag that starts on the chart still scrolls the page. VoiceOver reads each slot's date with its focus, breaks, and blocks, and each session's start with its completed rounds and focus time.
 
-In light mode, semantic accent colors need enough depth to maintain contrast. Text in an accent color uses a deeper ink version of it, and all text on the cards reaches at least 4.5:1.
+In light mode, semantic accent colors need enough depth to maintain contrast. Text in amber uses a deeper ink version of it, and all text on the cards reaches at least 4.5:1.
 
-Text on the page grows with Dynamic Type. Each size follows the system text style closest to it, so the page looks the same at the default size. At accessibility sizes the summary's metrics stack, a trend card drops its icon, which only repeats the title, and a selected bar's date takes its own line under the title. Chart axis labels stop growing at xxLarge, because seven day names share the plot's width with the value column; a tapped bar's date and value in the card's header carry the detail at any size. The range button keeps its size, like other bar items.
+Text on the page grows with Dynamic Type. Each size follows the system text style closest to it, so the page looks the same at the default size. At accessibility sizes the summary's metrics and the Rhythm row stack, a selected slot's date takes its own line under the title, and a session row puts its start on one line and its markers and focus time on the next. Chart axis labels stop growing at xxLarge, because seven day names share the plot's width with the value column; a tapped slot's date and figures above the chart carry the detail at any size. The range button keeps its size, like other bar items.
 
 The range menu can produce the system console message `Called -[UIContextMenuInteraction updateVisibleMenuWithBlock:] while no context menu is visible.` Treat that message as diagnostic context. Reopen it as a product issue if it accompanies broken interaction, inconsistent state, or a crash.
 

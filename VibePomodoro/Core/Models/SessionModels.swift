@@ -212,6 +212,23 @@ struct CompletedSession: Codable, Equatable, Identifiable {
         completedFocusCompletionDates().count
     }
 
+    /// When the first recorded step began; a session with no segments falls back to its creation.
+    var startDate: Date {
+        segments.map(\.startDate).min() ?? createdAt
+    }
+
+    /// Whether a round's focus block reached its full planned length, by the same threshold as
+    /// the completed-focus count.
+    func isFocusRoundCompleted(_ round: Int) -> Bool {
+        let completionThreshold = max(0, settingsSnapshot.focusDuration - 0.5)
+        guard completionThreshold > 0 else { return false }
+
+        let focusTime = segments.reduce(0) { total, segment in
+            total + (segment.phase == .focus && segment.roundNumber == round ? segment.duration : 0)
+        }
+        return focusTime >= completionThreshold
+    }
+
     func completedFocusCompletionDates() -> [Date] {
         let completionThreshold = max(0, settingsSnapshot.focusDuration - 0.5)
         guard completionThreshold > 0 else { return [] }

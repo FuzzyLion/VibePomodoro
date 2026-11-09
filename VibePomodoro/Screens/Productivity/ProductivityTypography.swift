@@ -7,28 +7,31 @@ enum ProductivityTextRole {
     case axisLabel
     /// Daily Focus Avg and Streak.
     case metricLabel
-    /// Uppercase card headings such as SESSION TIME.
+    /// Uppercase card headings such as FOCUS TIME.
     case sectionLabel
     /// The summary's finished-session line.
     case footnote
-    /// The range line, the empty-state note, and a selected bar's date.
+    /// The range line, the empty-state note, a selected slot's date, and a session's start.
     case caption
-    case cardIcon
+    /// A session row's focus time.
+    case rowValue
     case cardTitle
-    /// A trend card's total or selected value.
+    /// Breaks and Blocks in the rhythm card.
+    case statFigure
+    /// Focus in the rhythm card.
     case cardFigure
     /// Daily Focus Avg and Streak values.
     case secondaryFigure
-    /// Session Time.
+    /// Focus Time, the summary's lead.
     case primaryFigure
 
     var size: CGFloat {
         switch self {
         case .axisLabel, .metricLabel: 11
         case .sectionLabel, .footnote: 12
-        case .caption: 13
-        case .cardIcon: 15
+        case .caption, .rowValue: 13
         case .cardTitle: 19
+        case .statFigure: 20
         case .secondaryFigure: 24
         case .cardFigure: 28
         case .primaryFigure: 44
@@ -38,7 +41,7 @@ enum ProductivityTextRole {
     var weight: Font.Weight {
         switch self {
         case .axisLabel, .footnote, .caption: .medium
-        case .metricLabel, .sectionLabel, .cardIcon, .cardTitle, .secondaryFigure, .cardFigure, .primaryFigure: .semibold
+        case .metricLabel, .sectionLabel, .rowValue, .cardTitle, .statFigure, .secondaryFigure, .cardFigure, .primaryFigure: .semibold
         }
     }
 
@@ -46,8 +49,8 @@ enum ProductivityTextRole {
         switch self {
         case .axisLabel, .metricLabel: .caption2
         case .sectionLabel, .footnote: .caption
-        case .caption: .footnote
-        case .cardIcon, .cardTitle: .title3
+        case .caption, .rowValue: .footnote
+        case .cardTitle, .statFigure: .title3
         case .secondaryFigure: .title2
         case .cardFigure: .title
         case .primaryFigure: .largeTitle

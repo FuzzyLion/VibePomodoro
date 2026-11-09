@@ -13,10 +13,10 @@ struct ProductivitySummaryStrip: View {
             header
 
             ProductivityPrimarySummaryMetric(
-                title: "Session Time",
-                value: ProductivityValueFormatting.summarySessionTimeText(snapshot.totalSessionTime),
-                accessibilityValue: ProductivityValueFormatting.summarySessionTimeAccessibilityValue(snapshot.totalSessionTime),
-                titleColor: sessionTitleColor,
+                title: "Focus Time",
+                value: ProductivityValueFormatting.lifetimeDurationText(snapshot.totalFocusTime),
+                accessibilityValue: ProductivityValueFormatting.lifetimeDurationAccessibilityValue(snapshot.totalFocusTime),
+                titleColor: focusTitleColor,
                 valueColor: primaryValueColor,
                 dynamicTypeSize: dynamicTypeSize
             )
@@ -26,13 +26,21 @@ struct ProductivitySummaryStrip: View {
             ProductivitySecondaryMetricsRow(
                 snapshot: snapshot,
                 colorScheme: colorScheme,
-                dynamicTypeSize: dynamicTypeSize
+                dynamicTypeSize: dynamicTypeSize,
+                focusLabelColor: focusTitleColor
             )
 
             Text(metaSummaryText)
                 .productivityFont(.footnote)
                 .foregroundStyle(metaTextColor)
                 .fixedSize(horizontal: false, vertical: true)
+                .accessibilityLabel(
+                    ProductivityValueFormatting.summaryMetaAccessibilityText(
+                        sessionTime: snapshot.totalSessionTime,
+                        completedSessionCount: snapshot.completedSessionCount,
+                        completedFocusCount: snapshot.completedFocusCount
+                    )
+                )
         }
         .padding(.horizontal, contentInset)
         .padding(.vertical, ProductivityLayout.SummaryCard.verticalPadding)
@@ -62,6 +70,7 @@ struct ProductivitySummaryStrip: View {
 
     private var metaSummaryText: String {
         ProductivityValueFormatting.summaryMetaText(
+            sessionTime: snapshot.totalSessionTime,
             completedSessionCount: snapshot.completedSessionCount,
             completedFocusCount: snapshot.completedFocusCount
         )
@@ -91,7 +100,8 @@ struct ProductivitySummaryStrip: View {
             : Color.black.opacity(ProductivityLayout.SummaryCard.dividerLightOpacity)
     }
 
-    private var sessionTitleColor: Color {
+    /// Labels of focus metrics take the focus amber; other labels stay neutral.
+    private var focusTitleColor: Color {
         colorScheme == .dark
             ? VibePalette.warmAmberAccent.opacity(ProductivityLayout.SummaryCard.accentDarkOpacity)
             : VibePalette.amberGoldInk
@@ -160,6 +170,7 @@ private struct ProductivitySecondaryMetricsRow: View {
     let snapshot: ProductivityMetricsSnapshot
     let colorScheme: ColorScheme
     let dynamicTypeSize: DynamicTypeSize
+    let focusLabelColor: Color
 
     var body: some View {
         Group {
@@ -178,13 +189,13 @@ private struct ProductivitySecondaryMetricsRow: View {
                 title: "Daily Focus Avg",
                 value: ProductivityValueFormatting.summaryAverageFocusText(snapshot.averageFocusHoursPerDay),
                 accessibilityValue: ProductivityValueFormatting.summaryAverageFocusActiveDayAccessibilityValue(snapshot.averageFocusHoursPerDay),
-                titleColor: averageTitleColor
+                titleColor: focusLabelColor
             ),
             ProductivitySecondaryMetricDescriptor(
                 title: "Streak",
                 value: ProductivityValueFormatting.summaryStreakText(snapshot.streakLength),
                 accessibilityValue: ProductivityValueFormatting.summaryStreakAccessibilityValue(snapshot.streakLength),
-                titleColor: streakTitleColor
+                titleColor: ProductivityTextColors.secondary(colorScheme)
             )
         ]
     }
@@ -243,17 +254,6 @@ private struct ProductivitySecondaryMetricsRow: View {
             : Color.black.opacity(ProductivityLayout.SecondaryMetrics.dividerLightOpacity)
     }
 
-    private var averageTitleColor: Color {
-        colorScheme == .dark
-            ? VibePalette.softJade.opacity(ProductivityLayout.SecondaryMetrics.titleDarkOpacity)
-            : VibePalette.softJadeInk
-    }
-
-    private var streakTitleColor: Color {
-        colorScheme == .dark
-            ? VibePalette.softMist.opacity(ProductivityLayout.SecondaryMetrics.titleDarkOpacity)
-            : VibePalette.softMistInk
-    }
 }
 
 private struct ProductivitySecondaryMetricDescriptor: Identifiable {

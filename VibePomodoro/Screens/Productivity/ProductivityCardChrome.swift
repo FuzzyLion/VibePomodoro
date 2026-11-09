@@ -163,3 +163,29 @@ extension View {
         )
     }
 }
+
+/// Text colors shared by the Productivity cards.
+enum ProductivityTextColors {
+    static func primary(_ colorScheme: ColorScheme) -> Color {
+        colorScheme == .dark
+            ? VibePalette.warmBackground.opacity(ProductivityLayout.TrendCard.primaryTextDarkOpacity)
+            : Color.black.opacity(ProductivityLayout.TrendCard.primaryTextLightOpacity)
+    }
+
+    static func secondary(_ colorScheme: ColorScheme) -> Color {
+        colorScheme == .dark
+            ? VibePalette.warmBackground.opacity(ProductivityLayout.TrendCard.secondaryTextDarkOpacity)
+            : Color.black.opacity(ProductivityLayout.TrendCard.secondaryTextLightOpacity)
+    }
+}
+
+/// Phase colors as Productivity marks them: amber for focus, jade for breaks.
+enum ProductivityPhaseColors {
+    static func focus(_ colorScheme: ColorScheme) -> Color {
+        colorScheme == .dark ? VibePalette.amberGold : VibePalette.amberGoldDeep
+    }
+
+    static func breaks(_ colorScheme: ColorScheme) -> Color {
+        colorScheme == .dark ? VibePalette.softJade : VibePalette.softJadeDeep
+    }
+}

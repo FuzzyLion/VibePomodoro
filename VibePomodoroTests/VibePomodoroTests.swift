@@ -931,10 +931,10 @@ struct VibePomodoroTests {
     }
 
     @Test func productivityEmptySummaryFormattingUsesZeroStateText() async throws {
-        #expect(ProductivityValueFormatting.summarySessionTimeText(0) == "0m")
+        #expect(ProductivityValueFormatting.lifetimeDurationText(0) == "0m")
         #expect(ProductivityValueFormatting.summaryAverageFocusText(0) == "0m")
         #expect(ProductivityValueFormatting.summaryStreakText(0) == "0d")
-        #expect(ProductivityValueFormatting.summaryMetaText(completedSessionCount: 0, completedFocusCount: 0) == "No finished sessions yet")
+        #expect(ProductivityValueFormatting.summaryMetaText(sessionTime: 0, completedSessionCount: 0, completedFocusCount: 0) == "No finished sessions yet")
     }
 
     @Test func productivityMonthDisplayBucketsKeepOneSlotPerDay() async throws {
@@ -1074,37 +1074,29 @@ struct VibePomodoroTests {
         #expect(ProductivityValueFormatting.compactDurationText(-42) == "0m")
         #expect(ProductivityValueFormatting.compactDurationText(42) == "42s")
         #expect(ProductivityValueFormatting.compactDurationText((27 * 3_600) + (14 * 60)) == "27h 14m")
-        #expect(ProductivityValueFormatting.summarySessionTimeText(27 * 3_600 + 14 * 60) == "27h 14m")
-        #expect(ProductivityValueFormatting.summarySessionTimeText(99 * 3_600 + 59 * 60) == "99h 59m")
-        #expect(ProductivityValueFormatting.summarySessionTimeText(460 * 3_600 + 12 * 60) == "460h")
-        #expect(ProductivityValueFormatting.summarySessionTimeText(100 * 24 * 3_600 + 23 * 3_600) == "2423h")
-        #expect(ProductivityValueFormatting.summarySessionTimeAccessibilityValue(460 * 3_600 + 12 * 60) == "460 hours")
-        #expect(ProductivityValueFormatting.summarySessionTimeAccessibilityValue(3_600 + 60) == "1 hour 1 minute")
+        #expect(ProductivityValueFormatting.lifetimeDurationText(27 * 3_600 + 14 * 60) == "27h 14m")
+        #expect(ProductivityValueFormatting.lifetimeDurationText(99 * 3_600 + 59 * 60) == "99h 59m")
+        #expect(ProductivityValueFormatting.lifetimeDurationText(460 * 3_600 + 12 * 60) == "460h")
+        #expect(ProductivityValueFormatting.lifetimeDurationText(100 * 24 * 3_600 + 23 * 3_600) == "2423h")
+        #expect(ProductivityValueFormatting.lifetimeDurationAccessibilityValue(460 * 3_600 + 12 * 60) == "460 hours")
+        #expect(ProductivityValueFormatting.lifetimeDurationAccessibilityValue(3_600 + 60) == "1 hour 1 minute")
         #expect(ProductivityValueFormatting.summaryAverageFocusText(12.5) == "12h 30m")
         #expect(ProductivityValueFormatting.summaryStreakText(-8) == "0d")
-        #expect(ProductivityValueFormatting.summaryMetaText(completedSessionCount: 24_000, completedFocusCount: 123_456) == "24000 finished sessions • 123456 focus blocks")
+        #expect(
+            ProductivityValueFormatting.summaryMetaText(sessionTime: 2_423 * 3_600, completedSessionCount: 24_000, completedFocusCount: 123_456)
+                == "2423h across 24000 sessions • 123456 focus blocks"
+        )
     }
 
-    @Test func productivityCountAxisHandlesZeroAndLargeCounts() async throws {
-        let zero = ProductivityChartMetricKind.focusSessions.axisStyle(for: [])
-        let low = ProductivityChartMetricKind.focusSessions.axisStyle(for: [
-            makeDisplayBucket(completedFocusCount: 4)
-        ])
-        let medium = ProductivityChartMetricKind.focusSessions.axisStyle(for: [
-            makeDisplayBucket(completedFocusCount: 17)
-        ])
-        let high = ProductivityChartMetricKind.focusSessions.axisStyle(for: [
-            makeDisplayBucket(completedFocusCount: 123)
-        ])
-
-        #expect(zero.step == 1)
-        #expect(zero.upperBound == 4)
-        #expect(low.step == 1)
-        #expect(low.upperBound == 4)
-        #expect(medium.step == 5)
-        #expect(medium.upperBound == 20)
-        #expect(high.step == 50)
-        #expect(high.upperBound == 150)
+    @Test func productivitySummaryFooterCarriesSessionTime() async throws {
+        #expect(
+            ProductivityValueFormatting.summaryMetaText(sessionTime: 100 * 60, completedSessionCount: 1, completedFocusCount: 1)
+                == "1h 40m across 1 session • 1 focus block"
+        )
+        #expect(
+            ProductivityValueFormatting.summaryMetaAccessibilityText(sessionTime: 456 * 3_600, completedSessionCount: 231, completedFocusCount: 841)
+                == "456 hours across 231 sessions, 841 focus blocks"
+        )
     }
 
     @Test func productivityTimeAxisUsesRoundSteps() async throws {
@@ -1143,7 +1135,6 @@ struct VibePomodoroTests {
 
     @Test func productivityAxesStayReadableForAnyBucketSize() async throws {
         let durations = (0...220).map { 60 * pow(1.07, Double($0)) }
-        let counts = (0...200).map { pow(1.06, Double($0)).rounded(.up) }
 
         for duration in durations {
             let style = ProductivityChartFormatting.timeAxisStyle(for: duration)
@@ -1156,33 +1147,97 @@ struct VibePomodoroTests {
                 #expect(labels.allSatisfy { !$0.contains("m") }, "\(labels)")
             }
         }
-
-        for count in counts {
-            let style = ProductivityChartFormatting.countAxisStyle(for: count)
-
-            #expect(style.values.count <= 5, "\(count) gave \(style.values.count) ticks")
-            #expect(style.upperBound >= count)
-            #expect(style.step == style.step.rounded())
-        }
     }
 
     @Test func productivityChartLabelsStayShort() async throws {
-        #expect(ProductivityChartMetricKind.focusTime.valueText(for: 2 * 3_600) == "2h")
-        #expect(ProductivityChartMetricKind.breakTime.valueText(for: 3_600 + 5 * 60) == "1h 5m")
-        #expect(ProductivityChartMetricKind.breakTime.valueText(for: 0) == "0m")
-        #expect(ProductivityChartMetricKind.focusSessions.valueText(for: 12) == "12")
-        #expect(ProductivityChartMetricKind.focusSessions.title == "Focus Blocks")
-        #expect(ProductivityChartMetricKind.focusTime.axisLabelText(for: 0) == "0")
-        #expect(ProductivityChartMetricKind.breakTime.axisLabelText(for: 40 * 60) == "40m")
-        #expect(ProductivityChartMetricKind.focusTime.axisLabelText(for: 25 * 3_600) == "25h")
+        #expect(ProductivityValueFormatting.compactDurationText(2 * 3_600) == "2h")
+        #expect(ProductivityValueFormatting.compactDurationText(3_600 + 5 * 60) == "1h 5m")
+        #expect(ProductivityValueFormatting.compactDurationText(0) == "0m")
+        #expect(ProductivityChartFormatting.axisDurationText(0) == "0")
+        #expect(ProductivityChartFormatting.axisDurationText(40 * 60) == "40m")
+        #expect(ProductivityChartFormatting.axisDurationText(25 * 3_600) == "25h")
     }
 
-    @Test func productivityBarsReadTheirValueForVoiceOver() async throws {
-        #expect(ProductivityChartMetricKind.focusSessions.valueAccessibilityText(for: 1) == "1 focus block")
-        #expect(ProductivityChartMetricKind.focusSessions.valueAccessibilityText(for: 12) == "12 focus blocks")
-        #expect(ProductivityChartMetricKind.focusTime.valueAccessibilityText(for: 5 * 3_600) == "5 hours")
-        #expect(ProductivityChartMetricKind.breakTime.valueAccessibilityText(for: 3_600 + 30 * 60) == "1 hour 30 minutes")
-        #expect(ProductivityChartMetricKind.breakTime.valueAccessibilityText(for: 0) == "0 minutes")
+    @Test func productivityRhythmSlotsReadFocusBreaksAndBlocks() async throws {
+        let day = makeDisplayBucket(focusTime: 5 * 3_600, breakTime: 3_600 + 30 * 60, completedFocusCount: 12)
+        let single = makeDisplayBucket(focusTime: 25 * 60, breakTime: 5 * 60, completedFocusCount: 1)
+
+        #expect(ProductivityRhythmTotals([day]).accessibilityText == "5 hours of focus, 1 hour 30 minutes of breaks, 12 focus blocks")
+        #expect(ProductivityRhythmTotals([single]).accessibilityText == "25 minutes of focus, 5 minutes of breaks, 1 focus block")
+        #expect(ProductivityRhythmTotals([makeDisplayBucket()]).accessibilityText == "0 minutes of focus, 0 minutes of breaks, 0 focus blocks")
+    }
+
+    @Test func productivityRhythmTotalsAddUpAndAverageOnlyActiveSlots() async throws {
+        let buckets = [
+            makeDisplayBucket(focusTime: 3 * 3_600, breakTime: 30 * 60, completedFocusCount: 7),
+            makeDisplayBucket(),
+            makeDisplayBucket(focusTime: 3_600, breakTime: 15 * 60, completedFocusCount: 2),
+            makeDisplayBucket(breakTime: 10 * 60)
+        ]
+        let totals = ProductivityRhythmTotals(buckets)
+
+        #expect(totals.focusTime == 4 * 3_600)
+        #expect(totals.breakTime == 55 * 60)
+        #expect(totals.completedFocusCount == 9)
+        // Like Daily Focus Avg, slots without focus stay out of the average.
+        #expect(ProductivityRhythmTotals.averageFocus(over: buckets) == 2 * 3_600)
+        #expect(ProductivityRhythmTotals.averageFocus(over: [makeDisplayBucket()]) == 0)
+    }
+
+    @Test func productivitySessionListShowsTheLatestInTheInterval() async throws {
+        let base = Date(timeIntervalSince1970: 1_800_000_000)
+        let hourly = (0..<8).map { makeStartedSession(at: base.addingTimeInterval(Double($0) * 3_600)) }
+        let earlier = makeStartedSession(at: base.addingTimeInterval(-3_600))
+
+        let latest = ProductivitySessionList.rows(
+            from: hourly + [earlier],
+            startingFrom: base,
+            before: base.addingTimeInterval(8 * 3_600)
+        )
+        let twoHours = ProductivitySessionList.rows(
+            from: hourly,
+            startingFrom: base.addingTimeInterval(2 * 3_600),
+            before: base.addingTimeInterval(4 * 3_600)
+        )
+
+        #expect(latest.sessions.map(\.startDate) == (3..<8).reversed().map { base.addingTimeInterval(Double($0) * 3_600) })
+        #expect(latest.hiddenCount == 3)
+        #expect(twoHours.sessions.map(\.startDate) == [base.addingTimeInterval(3 * 3_600), base.addingTimeInterval(2 * 3_600)])
+        #expect(twoHours.hiddenCount == 0)
+    }
+
+    @Test func completedSessionKnowsWhichRoundsRanTheirFullLength() async throws {
+        let start = Date(timeIntervalSince1970: 1_800_000_000)
+        let session = makeCompletedSession(
+            settings: .default,
+            createdAt: start.addingTimeInterval(-60),
+            completedAt: start.addingTimeInterval(3_600),
+            segments: [
+                makeSegment(phase: .focus, roundNumber: 1, startDate: start, endDate: start.addingTimeInterval(25 * 60)),
+                makeSegment(phase: .shortBreak, roundNumber: 1, startDate: start.addingTimeInterval(25 * 60), endDate: start.addingTimeInterval(30 * 60)),
+                makeSegment(phase: .focus, roundNumber: 2, startDate: start.addingTimeInterval(30 * 60), endDate: start.addingTimeInterval(40 * 60)),
+                makeSegment(phase: .focus, roundNumber: 2, startDate: start.addingTimeInterval(45 * 60), endDate: start.addingTimeInterval(50 * 60))
+            ]
+        )
+
+        #expect(session.startDate == start)
+        #expect(session.isFocusRoundCompleted(1))
+        #expect(!session.isFocusRoundCompleted(2))
+        #expect(!session.isFocusRoundCompleted(3))
+        #expect(session.completedFocusCount == 1)
+    }
+
+    @Test func productivitySessionStartsReadTodayYesterdayOrTheDate() async throws {
+        let calendar = Calendar(identifier: .gregorian)
+        let now = try #require(calendar.date(from: DateComponents(year: 2026, month: 11, day: 9, hour: 12)))
+        let today = try #require(calendar.date(from: DateComponents(year: 2026, month: 11, day: 9, hour: 8, minute: 30)))
+        let yesterday = try #require(calendar.date(from: DateComponents(year: 2026, month: 11, day: 8, hour: 14)))
+        let saturday = try #require(calendar.date(from: DateComponents(year: 2026, month: 11, day: 7, hour: 9)))
+
+        #expect(ProductivityChartFormatting.sessionStartText(today, now: now, calendar: calendar) == "Today\u{2002}08:30")
+        #expect(ProductivityChartFormatting.sessionStartText(yesterday, now: now, calendar: calendar) == "Yesterday\u{2002}14:00")
+        #expect(ProductivityChartFormatting.sessionStartText(saturday, now: now, calendar: calendar) == "Sat 7 Nov\u{2002}09:00")
+        #expect(ProductivityChartFormatting.sessionStartAccessibilityText(saturday, now: now, calendar: calendar) == "Saturday 7 November at 09:00")
     }
 
     @Test func productivityRangeCaptionNamesTheDatesCovered() async throws {
@@ -1639,6 +1694,17 @@ struct VibePomodoroTests {
             )
         }
         return ProductivityChartDisplay.displayBuckets(from: points, range: range)
+    }
+
+    private func makeStartedSession(at start: Date) -> CompletedSession {
+        makeCompletedSession(
+            settings: .default,
+            createdAt: start,
+            completedAt: start.addingTimeInterval(25 * 60),
+            segments: [
+                makeSegment(phase: .focus, roundNumber: 1, startDate: start, endDate: start.addingTimeInterval(25 * 60))
+            ]
+        )
     }
 
     private func makeDisplayBucket(

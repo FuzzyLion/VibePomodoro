@@ -47,7 +47,6 @@ enum ProductivityLayout {
         static let accessibilitySpacing: CGFloat = 14
         static let standardSpacing: CGFloat = 16
         static let valueSpacing: CGFloat = 6
-        static let titleDarkOpacity: Double = 0.94
         static let dividerDarkOpacity: Double = 0.10
         static let dividerLightOpacity: Double = 0.08
         static let valueDarkOpacity: Double = 0.94
@@ -68,11 +67,6 @@ enum ProductivityLayout {
         static let cornerRadius: CGFloat = 26
         static let stackSpacing: CGFloat = 14
         static let headerSpacing: CGFloat = 10
-        static let iconFrame: CGFloat = 36
-        static let iconCornerRadius: CGFloat = 12
-        static let iconChipDarkOpacity: Double = 0.085
-        static let iconChipLightOpacity: Double = 0.058
-        static let accentLabelDarkOpacity: Double = 0.90
         static let primaryTextDarkOpacity: Double = 0.94
         static let primaryTextLightOpacity: Double = 0.80
         static let secondaryTextDarkOpacity: Double = 0.54
@@ -85,6 +79,38 @@ enum ProductivityLayout {
         static let chartBottomPadding: CGFloat = 22
         static let xAxisOffset: CGFloat = 8
         static let unselectedBarOpacity: Double = 0.32
+    }
+
+    enum RhythmStats {
+        static let columnSpacing: CGFloat = 24
+        static let labelSpacing: CGFloat = 6
+        static let stackedSpacing: CGFloat = 12
+        static let dotSize: CGFloat = 7
+        static let dotSpacing: CGFloat = 6
+        static let valueMinimumScaleFactor: CGFloat = 0.7
+    }
+
+    enum RhythmChart {
+        static let surfaceLineHeight: CGFloat = 2
+        static let trackCornerExtra: CGFloat = 2
+        static let trackLightOpacity: Double = 0.035
+        static let trackDarkOpacity: Double = 0.045
+        /// A step label closer than this to the average yields to the "avg" marker. Points at the
+        /// default text size, scaled with the axis labels.
+        static let averageLabelClearance: CGFloat = 15
+    }
+
+    enum Sessions {
+        static let stackSpacing: CGFloat = 12
+        static let rowVerticalPadding: CGFloat = 11
+        static let stackedRowSpacing: CGFloat = 6
+        static let columnSpacing: CGFloat = 12
+        static let markerSize: CGFloat = 8.5
+        static let markerSpacing: CGFloat = 7
+        static let compactMarkerSpacing: CGFloat = 4
+        static let focusColumnWidth: CGFloat = 64
+        static let dividerLightOpacity: Double = 0.06
+        static let dividerDarkOpacity: Double = 0.08
     }
 
     enum ChartAxis {
@@ -149,12 +175,19 @@ struct ProductivityScreen: View {
                             )
 
                             VStack(alignment: .leading, spacing: ProductivityLayout.sectionSpacing) {
-                                ForEach(ProductivityChartMetricKind.allCases) { metric in
-                                    ProductivityTrendCard(
-                                        metric: metric,
+                                ProductivityRhythmCard(
+                                    buckets: renderState.displayBuckets,
+                                    range: renderState.selectedRange,
+                                    selectedSlot: $selectedSlot
+                                )
+
+                                // With no history, the empty-state note above already says what will appear here.
+                                if !renderState.showsEmptyState {
+                                    ProductivitySessionsCard(
+                                        sessions: store.completedSessions,
                                         buckets: renderState.displayBuckets,
                                         range: renderState.selectedRange,
-                                        selectedSlot: $selectedSlot
+                                        selectedSlot: selectedSlot
                                     )
                                 }
                             }
