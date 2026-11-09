@@ -257,6 +257,8 @@ Shape references may inform the bubble geometry without changing those phase col
 
 Use SF Symbols, usually in a single color. Reserve accents for selected items and meaningful states. The current interface needs few external assets: occasional vector details, subtle texture, and the bundled event sounds fit its direction. A photo library and imported sound collection are outside the MVP.
 
+The app icon nests the three phase bubbles as glass, ordered by their default lengths. The focus outline is outermost in amber gold, the long-break outline sits inside it in jade, and the short-break outline is at the center in mist. Each uses a slightly deeper version of its phase color, so the three stay distinct at home-screen size. The icon is an Icon Composer document, `AppIcon.icon`, so the system renders its glass and its default, dark, tinted, and clear appearances. In the tinted and clear appearances, the bubbles turn white and grow brighter toward the center.
+
 ## Engineering and verification
 
 The app process creates one `PomodoroStore`. `SessionSnapshot` owns the active session data, `CompletedSession` stores archived records, and `ProductivityAggregateCache` derives statistics from those records. The engine owns deterministic transitions. The store handles runtime coordination, persistence, lifecycle recovery, and reminders. Screens present state and send actions.
