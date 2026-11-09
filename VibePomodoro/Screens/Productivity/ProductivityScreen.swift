@@ -39,8 +39,6 @@ enum ProductivityLayout {
     enum PrimaryMetric {
         static let spacing: CGFloat = 10
         static let titleTracking: CGFloat = 0.65
-        static let accessibilityValueFontSize: CGFloat = 36
-        static let defaultValueFontSize: CGFloat = 44
         static let accessibilityMinimumScaleFactor: CGFloat = 0.9
         static let defaultMinimumScaleFactor: CGFloat = 0.72
     }
@@ -70,7 +68,6 @@ enum ProductivityLayout {
         static let cornerRadius: CGFloat = 26
         static let stackSpacing: CGFloat = 14
         static let headerSpacing: CGFloat = 10
-        static let iconSize: CGFloat = 15
         static let iconFrame: CGFloat = 36
         static let iconCornerRadius: CGFloat = 12
         static let iconChipDarkOpacity: Double = 0.085
@@ -190,15 +187,10 @@ private struct ProductivityRangeToolbarMenu: View {
 
     var body: some View {
         Menu {
+            // Each choice is a toggle, so the system draws its checkmark. A checkmark image in a
+            // button's label disappears at accessibility text sizes, where menus drop images.
             ForEach(ProductivityRange.allCases) { range in
-                Button {
-                    selectRange(range)
-                } label: {
-                    ProductivityRangeMenuItemLabel(
-                        title: range.displayTitle,
-                        isSelected: selectedRange == range
-                    )
-                }
+                Toggle(range.displayTitle, isOn: selection(of: range))
             }
         } label: {
             Image(systemName: "line.3.horizontal.decrease")
@@ -213,24 +205,15 @@ private struct ProductivityRangeToolbarMenu: View {
         colorScheme == .dark ? VibePalette.warmBackground.opacity(0.92) : Color.black.opacity(0.66)
     }
 
-    private func selectRange(_ range: ProductivityRange) {
-        selectedRange = range
-    }
-}
-
-private struct ProductivityRangeMenuItemLabel: View {
-    let title: String
-    let isSelected: Bool
-
-    var body: some View {
-        HStack(spacing: 10) {
-            Text(title)
-
-            Spacer(minLength: 12)
-
-            if isSelected {
-                Image(systemName: "checkmark")
+    /// Choosing the current range again leaves it chosen.
+    private func selection(of range: ProductivityRange) -> Binding<Bool> {
+        Binding(
+            get: { selectedRange == range },
+            set: { isOn in
+                if isOn {
+                    selectedRange = range
+                }
             }
-        }
+        )
     }
 }

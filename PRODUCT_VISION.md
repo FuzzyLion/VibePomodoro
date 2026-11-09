@@ -192,7 +192,7 @@ Dragging the main visual to change time is outside the MVP. It adds accidental g
 
 Productivity should help me understand my focus rhythm. Use clear bar charts, explainable values, and enough contrast to read them comfortably.
 
-Keep the system large title and the range control in the trailing toolbar. The control is an icon-only `Menu` listing **Week / Month / Year**, with a checkmark beside the current choice. Use explicit menu actions and the system toolbar material.
+Keep the system large title and the range control in the trailing toolbar. The control is an icon-only `Menu` listing **Week / Month / Year** as toggles, so the system draws the checkmark beside the current choice at every text size; a checkmark image in a button's label disappears at accessibility sizes, where menus drop images. Use the system toolbar material.
 
 The first card is headed **ALL TIME COMPLETED SESSIONS**. Its hierarchy is fixed:
 
@@ -215,6 +215,8 @@ The value axis uses round steps and at most four intervals. Up to an hour it rea
 Bars carry no value labels. Tapping a bar puts that day's or month's value in each card's figure and its date at the card's top right, and dims the other bars; all three cards follow the same tap, since their days line up. Tapping the same bar again, or the axis labels beside the chart, returns to the totals, and changing the range clears the selection. The month in progress names the days it covers so far, such as *1–9 Nov*. Selection is by tap only, so a drag that starts on a chart still scrolls the page. VoiceOver reads each bar's date and value.
 
 In light mode, semantic accent colors need enough depth to maintain contrast. Text in an accent color uses a deeper ink version of it, and all text on the cards reaches at least 4.5:1.
+
+Text on the page grows with Dynamic Type. Each size follows the system text style closest to it, so the page looks the same at the default size. At accessibility sizes the summary's metrics stack, a trend card drops its icon, which only repeats the title, and a selected bar's date takes its own line under the title. Chart axis labels stop growing at xxLarge, because seven day names share the plot's width with the value column; a tapped bar's date and value in the card's header carry the detail at any size. The range button keeps its size, like other bar items.
 
 The range menu can produce the system console message `Called -[UIContextMenuInteraction updateVisibleMenuWithBlock:] while no context menu is visible.` Treat that message as diagnostic context. Reopen it as a product issue if it accompanies broken interaction, inconsistent state, or a crash.
 

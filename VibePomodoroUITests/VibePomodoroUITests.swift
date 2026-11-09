@@ -82,6 +82,30 @@ final class VibePomodoroUITests: XCTestCase {
         app.launch()
         XCTAssertTrue(app.navigationBars["Productivity"].waitForExistence(timeout: 8), app.debugDescription)
 
+        try assertTappingTodaysBarShowsItInEveryCard(app)
+    }
+
+    @MainActor
+    func testProductivityWorksAtTheLargestTextSize() throws {
+        let app = makeCleanApp(
+            arguments: ["--open-productivity", "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"],
+            environment: ["VIBE_PRODUCTIVITY_FIXTURE": "long-extreme"]
+        )
+        app.launch()
+        XCTAssertTrue(app.navigationBars["Productivity"].waitForExistence(timeout: 8), app.debugDescription)
+        XCTAssertTrue(app.staticTexts["Focus Blocks"].exists)
+        XCTAssertTrue(rangeCaption(in: app, startingWith: "Last 7 days").exists, app.debugDescription)
+
+        try assertTappingTodaysBarShowsItInEveryCard(app)
+
+        app.buttons["Time Range"].tap()
+        XCTAssertTrue(app.buttons["Month"].waitForExistence(timeout: 2), app.debugDescription)
+        app.buttons["Month"].tap()
+        XCTAssertTrue(rangeCaption(in: app, startingWith: "Last 30 days").waitForExistence(timeout: 2), app.debugDescription)
+    }
+
+    @MainActor
+    private func assertTappingTodaysBarShowsItInEveryCard(_ app: XCUIApplication) throws {
         let today = Date()
         let spokenDay = englishDateText(today, format: "EEEE d MMMM")
         let shownDay = englishDateText(today, format: "EEE d MMM")
@@ -94,10 +118,12 @@ final class VibePomodoroUITests: XCTestCase {
         func uncoveredBar() -> XCUIElement? {
             todaysBars.allElementsBoundByIndex.first { $0.frame.minY > visibleTop && $0.frame.maxY < visibleBottom }
         }
-        if uncoveredBar() == nil {
+        var candidate = uncoveredBar()
+        for _ in 0..<3 where candidate == nil {
             app.swipeUp()
+            candidate = uncoveredBar()
         }
-        let todaysBar = try XCTUnwrap(uncoveredBar(), app.debugDescription)
+        let todaysBar = try XCTUnwrap(candidate, app.debugDescription)
         todaysBar.tap()
         XCTAssertTrue(app.staticTexts[shownDay].waitForExistence(timeout: 2), app.debugDescription)
         XCTAssertEqual(app.staticTexts.matching(NSPredicate(format: "label == %@", shownDay)).count, 3)

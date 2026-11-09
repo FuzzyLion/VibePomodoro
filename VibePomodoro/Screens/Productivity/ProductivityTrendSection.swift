@@ -12,7 +12,7 @@ struct ProductivityRangeCaption: View {
         let caption = "\(range.windowTitle) • \(dates)"
 
         Text(caption)
-            .font(.system(size: 13, weight: .medium))
+            .productivityFont(.caption)
             .foregroundStyle(textColor)
             .monospacedDigit()
             .padding(.horizontal, ProductivityLayout.TrendGroup.captionHorizontalPadding)
@@ -28,6 +28,8 @@ struct ProductivityRangeCaption: View {
 
 struct ProductivityTrendCard: View {
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @ScaledMetric(relativeTo: .title3) private var iconFrame = ProductivityLayout.TrendCard.iconFrame
 
     let metric: ProductivityChartMetricKind
     let buckets: [ProductivityDisplayBucket]
@@ -54,117 +56,50 @@ struct ProductivityTrendCard: View {
     }
 
     var body: some View {
-        let axisStyle = metric.axisStyle(for: buckets)
-        let bucketCount = max(buckets.count, 1)
-        let slotDomain = -0.5...(Double(bucketCount) - 0.5)
+        let isAccessibilitySize = dynamicTypeSize.isAccessibilitySize
+        let selectionText = selectedBucket.map { ProductivityChartFormatting.selectionText(for: $0, range: range) }
         let headlineText = selectedBucket.map { metric.valueText(for: metric.bucketValue(for: $0)) }
             ?? metric.rangeValueText(from: buckets)
 
         VStack(alignment: .leading, spacing: ProductivityLayout.TrendCard.stackSpacing) {
             HStack(spacing: ProductivityLayout.TrendCard.headerSpacing) {
-                Image(systemName: metric.systemImage)
-                    .font(.system(size: ProductivityLayout.TrendCard.iconSize, weight: .semibold))
-                    .foregroundStyle(accentLabelColor)
-                    .frame(
-                        width: ProductivityLayout.TrendCard.iconFrame,
-                        height: ProductivityLayout.TrendCard.iconFrame
-                    )
-                    .background(
-                        RoundedRectangle(cornerRadius: ProductivityLayout.TrendCard.iconCornerRadius, style: .continuous)
-                            .fill(
-                                accentColor.opacity(
-                                    colorScheme == .dark
-                                        ? ProductivityLayout.TrendCard.iconChipDarkOpacity
-                                        : ProductivityLayout.TrendCard.iconChipLightOpacity
-                                )
-                            )
-                    )
+                // The icon only repeats the title, so at accessibility sizes the title takes its room.
+                if !isAccessibilitySize {
+                    icon
+                }
 
                 Text(metric.title)
-                    .font(.system(size: 19, weight: .semibold))
+                    .productivityFont(.cardTitle)
                     .foregroundStyle(accentLabelColor)
 
                 Spacer(minLength: ProductivityLayout.TrendCard.headerSpacing)
 
-                if let selectedBucket {
-                    Text(ProductivityChartFormatting.selectionText(for: selectedBucket, range: range))
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundStyle(secondaryTextColor)
-                        .lineLimit(1)
-                        .monospacedDigit()
+                if !isAccessibilitySize, let selectionText {
+                    selectionLabel(selectionText)
                 }
             }
 
+            if isAccessibilitySize, let selectionText {
+                selectionLabel(selectionText)
+            }
+
             Text(headlineText)
-                .font(.system(size: 28, weight: .semibold))
+                .productivityFont(.cardFigure)
                 .foregroundStyle(primaryTextColor)
                 .minimumScaleFactor(0.76)
                 .lineLimit(1)
                 .monospacedDigit()
 
-            Chart(buckets) { bucket in
-                let value = metric.bucketValue(for: bucket)
-
-                BarMark(
-                    x: .value("Bucket", bucket.slotValue),
-                    y: .value(metric.title, value),
-                    width: .fixed(range.barWidth)
-                )
-                .clipShape(TopRoundedBarShape(radius: range.barTopCornerRadius))
-                .foregroundStyle(metric.barFill(for: colorScheme))
-                .opacity(barOpacity(for: bucket, value: value))
-                .accessibilityLabel(ProductivityChartFormatting.selectionAccessibilityText(for: bucket, range: range))
-                .accessibilityValue(metric.valueAccessibilityText(for: value))
-            }
-            .frame(height: ProductivityLayout.TrendCard.chartHeight)
-            .padding(.bottom, ProductivityLayout.TrendCard.chartBottomPadding)
-            .chartLegend(.hidden)
-            .chartYScale(domain: 0...axisStyle.upperBound)
-            .chartXScale(domain: slotDomain)
-            .chartXAxis(.hidden)
-            .chartYAxis {
-                AxisMarks(position: .trailing, values: axisStyle.values) { value in
-                    AxisGridLine(stroke: StrokeStyle(lineWidth: 1))
-                        .foregroundStyle(gridColor)
-                    AxisTick().foregroundStyle(.clear)
-                    AxisValueLabel {
-                        if let axisValue = value.as(Double.self) {
-                            // A fixed column keeps the three plots the same width, so days line up across cards.
-                            Text(metric.axisLabelText(for: axisValue))
-                                .font(.system(size: 11, weight: .medium))
-                                .foregroundStyle(secondaryTextColor)
-                                .lineLimit(1)
-                                .minimumScaleFactor(ProductivityLayout.ChartAxis.labelMinimumScaleFactor)
-                                .frame(width: ProductivityLayout.ChartAxis.valueLabelWidth, alignment: .leading)
-                        }
-                    }
-                }
-            }
-            .chartOverlay { proxy in
-                GeometryReader { geometry in
-                    if let plotAnchor = proxy.plotFrame {
-                        let plotFrame = geometry[plotAnchor]
-
-                        ZStack(alignment: .topLeading) {
-                            // Taps only, so a drag that starts on the chart still scrolls the page.
-                            Color.clear
-                                .contentShape(Rectangle())
-                                .onTapGesture { location in
-                                    toggleSelection(atX: location.x - plotFrame.minX, plotWidth: plotFrame.width)
-                                }
-                                .accessibilityHidden(true)
-
-                            ProductivityCustomXAxis(
-                                buckets: buckets,
-                                range: range,
-                                plotFrame: plotFrame,
-                                textColor: secondaryTextColor
-                            )
-                            .offset(y: plotFrame.maxY + ProductivityLayout.TrendCard.xAxisOffset)
-                        }
-                    }
-                }
-            }
+            ProductivityTrendChart(
+                metric: metric,
+                buckets: buckets,
+                range: range,
+                selectedSlot: $selectedSlot
+            )
+            // Seven day names share the plot's width with the value column, so axis labels stop
+            // growing at xxLarge; a tapped bar's date and value, in the header above, carry the
+            // detail at any size.
+            .dynamicTypeSize(...DynamicTypeSize.xxLarge)
         }
         .padding(.horizontal, contentInset)
         .padding(.vertical, contentInset)
@@ -174,6 +109,31 @@ struct ProductivityTrendCard: View {
         ) {
             trendAccentOverlay
         }
+    }
+
+    private var icon: some View {
+        Image(systemName: metric.systemImage)
+            .productivityFont(.cardIcon)
+            .foregroundStyle(accentLabelColor)
+            .frame(width: iconFrame, height: iconFrame)
+            .background(
+                RoundedRectangle(cornerRadius: ProductivityLayout.TrendCard.iconCornerRadius, style: .continuous)
+                    .fill(
+                        accentColor.opacity(
+                            colorScheme == .dark
+                                ? ProductivityLayout.TrendCard.iconChipDarkOpacity
+                                : ProductivityLayout.TrendCard.iconChipLightOpacity
+                        )
+                    )
+            )
+    }
+
+    private func selectionLabel(_ text: String) -> some View {
+        Text(text)
+            .productivityFont(.caption)
+            .foregroundStyle(secondaryTextColor)
+            .lineLimit(1)
+            .monospacedDigit()
     }
 
     private var primaryTextColor: Color {
@@ -188,12 +148,6 @@ struct ProductivityTrendCard: View {
             : Color.black.opacity(ProductivityLayout.TrendCard.secondaryTextLightOpacity)
     }
 
-    private var gridColor: Color {
-        colorScheme == .dark
-            ? Color.white.opacity(ProductivityLayout.TrendCard.gridDarkOpacity)
-            : Color.black.opacity(ProductivityLayout.TrendCard.gridLightOpacity)
-    }
-
     private var trendAccentOverlay: some View {
         RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
             .fill(
@@ -203,6 +157,93 @@ struct ProductivityTrendCard: View {
                         : ProductivityLayout.TrendCard.accentOverlayLightOpacity
                 )
             )
+    }
+}
+
+private struct ProductivityTrendChart: View {
+    @Environment(\.colorScheme) private var colorScheme
+    /// Room beneath the plot for the day labels, growing with them.
+    @ScaledMetric(relativeTo: .caption2) private var labelRowHeight = ProductivityLayout.TrendCard.chartBottomPadding
+
+    let metric: ProductivityChartMetricKind
+    let buckets: [ProductivityDisplayBucket]
+    let range: ProductivityRange
+    @Binding var selectedSlot: Int?
+
+    var body: some View {
+        let axisStyle = metric.axisStyle(for: buckets)
+        let bucketCount = max(buckets.count, 1)
+        let slotDomain = -0.5...(Double(bucketCount) - 0.5)
+
+        Chart(buckets) { bucket in
+            let value = metric.bucketValue(for: bucket)
+
+            BarMark(
+                x: .value("Bucket", bucket.slotValue),
+                y: .value(metric.title, value),
+                width: .fixed(range.barWidth)
+            )
+            .clipShape(TopRoundedBarShape(radius: range.barTopCornerRadius))
+            .foregroundStyle(metric.barFill(for: colorScheme))
+            .opacity(barOpacity(for: bucket, value: value))
+            .accessibilityLabel(ProductivityChartFormatting.selectionAccessibilityText(for: bucket, range: range))
+            .accessibilityValue(metric.valueAccessibilityText(for: value))
+        }
+        .frame(height: ProductivityLayout.TrendCard.chartHeight)
+        .padding(.bottom, labelRowHeight)
+        .chartLegend(.hidden)
+        .chartYScale(domain: 0...axisStyle.upperBound)
+        .chartXScale(domain: slotDomain)
+        .chartXAxis(.hidden)
+        .chartYAxis {
+            AxisMarks(position: .trailing, values: axisStyle.values) { value in
+                AxisGridLine(stroke: StrokeStyle(lineWidth: 1))
+                    .foregroundStyle(gridColor)
+                AxisTick().foregroundStyle(.clear)
+                AxisValueLabel {
+                    if let axisValue = value.as(Double.self) {
+                        ProductivityAxisValueLabel(text: metric.axisLabelText(for: axisValue), color: secondaryTextColor)
+                    }
+                }
+            }
+        }
+        .chartOverlay { proxy in
+            GeometryReader { geometry in
+                if let plotAnchor = proxy.plotFrame {
+                    let plotFrame = geometry[plotAnchor]
+
+                    ZStack(alignment: .topLeading) {
+                        // Taps only, so a drag that starts on the chart still scrolls the page.
+                        Color.clear
+                            .contentShape(Rectangle())
+                            .onTapGesture { location in
+                                toggleSelection(atX: location.x - plotFrame.minX, plotWidth: plotFrame.width)
+                            }
+                            .accessibilityHidden(true)
+
+                        ProductivityCustomXAxis(
+                            buckets: buckets,
+                            range: range,
+                            plotFrame: plotFrame,
+                            textColor: secondaryTextColor
+                        )
+                        .offset(y: plotFrame.maxY + ProductivityLayout.TrendCard.xAxisOffset)
+                    }
+                }
+            }
+        }
+    }
+
+    private var secondaryTextColor: Color {
+        colorScheme == .dark
+            ? VibePalette.warmBackground.opacity(ProductivityLayout.TrendCard.secondaryTextDarkOpacity)
+            : Color.black.opacity(ProductivityLayout.TrendCard.secondaryTextLightOpacity)
+    }
+
+    private var gridColor: Color {
+        colorScheme == .dark
+            ? Color.white.opacity(ProductivityLayout.TrendCard.gridDarkOpacity)
+            : Color.black.opacity(ProductivityLayout.TrendCard.gridLightOpacity)
     }
 
     private func barOpacity(for bucket: ProductivityDisplayBucket, value: Double) -> Double {
@@ -221,7 +262,26 @@ struct ProductivityTrendCard: View {
     }
 }
 
+/// A fixed column keeps the three plots the same width, so days line up across cards.
+private struct ProductivityAxisValueLabel: View {
+    @ScaledMetric(relativeTo: .caption2) private var width = ProductivityLayout.ChartAxis.valueLabelWidth
+
+    let text: String
+    let color: Color
+
+    var body: some View {
+        Text(text)
+            .productivityFont(.axisLabel)
+            .foregroundStyle(color)
+            .lineLimit(1)
+            .minimumScaleFactor(ProductivityLayout.ChartAxis.labelMinimumScaleFactor)
+            .frame(width: width, alignment: .leading)
+    }
+}
+
 private struct ProductivityCustomXAxis: View {
+    @ScaledMetric(relativeTo: .caption2) private var labelCenterY: CGFloat = 8
+
     let buckets: [ProductivityDisplayBucket]
     let range: ProductivityRange
     let plotFrame: CGRect
@@ -233,14 +293,14 @@ private struct ProductivityCustomXAxis: View {
                 ForEach(Array(buckets.enumerated()), id: \.element.id) { index, bucket in
                     if range.showsAxisLabel(atSlot: index, slotCount: buckets.count) {
                         Text(ProductivityChartFormatting.xAxisLabel(for: bucket.labelDate, range: range))
-                            .font(.system(size: 11, weight: .medium))
+                            .productivityFont(.axisLabel)
                             .foregroundStyle(textColor)
                             .lineLimit(1)
                             .minimumScaleFactor(ProductivityLayout.ChartAxis.labelMinimumScaleFactor)
                             .frame(width: labelWidth, alignment: .center)
                             .position(
                                 x: plotFrame.minX + slotWidth * (CGFloat(index) + 0.5),
-                                y: 8
+                                y: labelCenterY
                             )
                     }
                 }

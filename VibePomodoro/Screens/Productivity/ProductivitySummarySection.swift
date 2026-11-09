@@ -30,7 +30,7 @@ struct ProductivitySummaryStrip: View {
             )
 
             Text(metaSummaryText)
-                .font(.system(size: 12, weight: .medium))
+                .productivityFont(.footnote)
                 .foregroundStyle(metaTextColor)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -46,10 +46,10 @@ struct ProductivitySummaryStrip: View {
 
     private var header: some View {
         Text("ALL TIME COMPLETED SESSIONS")
-            .font(.system(size: 12, weight: .semibold))
+            .productivityFont(.sectionLabel)
             .foregroundStyle(headerTextColor)
             .tracking(ProductivityLayout.SummaryCard.titleTracking)
-            .lineLimit(dynamicTypeSize.isAccessibilitySize ? 3 : 2)
+            .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
             .minimumScaleFactor(0.92)
             .fixedSize(horizontal: false, vertical: true)
     }
@@ -133,20 +133,13 @@ private struct ProductivityPrimarySummaryMetric: View {
     var body: some View {
         VStack(alignment: .leading, spacing: ProductivityLayout.PrimaryMetric.spacing) {
             Text(title)
-                .font(.system(size: 12, weight: .semibold))
+                .productivityFont(.sectionLabel)
                 .foregroundStyle(titleColor)
                 .textCase(.uppercase)
                 .tracking(ProductivityLayout.PrimaryMetric.titleTracking)
 
             Text(value)
-                .font(
-                    .system(
-                        size: dynamicTypeSize.isAccessibilitySize
-                            ? ProductivityLayout.PrimaryMetric.accessibilityValueFontSize
-                            : ProductivityLayout.PrimaryMetric.defaultValueFontSize,
-                        weight: .semibold
-                    )
-                )
+                .productivityFont(.primaryFigure)
                 .foregroundStyle(valueColor)
                 .lineLimit(dynamicTypeSize.isAccessibilitySize ? 2 : 1)
                 .minimumScaleFactor(
@@ -273,6 +266,8 @@ private struct ProductivitySecondaryMetricDescriptor: Identifiable {
 }
 
 private struct ProductivitySecondarySummaryItem: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
     let title: String
     let value: String
     let accessibilityValue: String
@@ -282,13 +277,13 @@ private struct ProductivitySecondarySummaryItem: View {
     var body: some View {
         VStack(alignment: .leading, spacing: ProductivityLayout.SecondaryMetrics.valueSpacing) {
             Text(title)
-                .font(.system(size: 11, weight: .semibold))
+                .productivityFont(.metricLabel)
                 .foregroundStyle(titleColor)
-                .lineLimit(2)
+                .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
                 .minimumScaleFactor(ProductivityLayout.SecondaryMetrics.labelMinimumScaleFactor)
 
             Text(value)
-                .font(.system(size: 24, weight: .semibold))
+                .productivityFont(.secondaryFigure)
                 .foregroundStyle(valueColor)
                 .minimumScaleFactor(ProductivityLayout.SecondaryMetrics.valueMinimumScaleFactor)
                 .lineLimit(1)
@@ -312,7 +307,7 @@ struct ProductivityEmptyStateNote: View {
 
     var body: some View {
         Text("Sessions appear here once they end, including ones you finish early. A session in progress isn't counted until then.")
-            .font(.system(size: 13, weight: .medium))
+            .productivityFont(.caption)
             .foregroundStyle(textColor)
             .padding(.horizontal, ProductivityLayout.EmptyState.horizontalPadding)
             .padding(.top, ProductivityLayout.EmptyState.topPadding)
