@@ -23,13 +23,14 @@ struct BubbleLiquidContent: View {
         }
         .frame(width: FocusScreenLayout.bubbleDiameter, height: FocusScreenLayout.bubbleDiameter)
         // The liquid stays inside the glass wall instead of reaching the outer edge.
-        .mask { driver.phaseMorph.shape.scale(BubbleVessel.innerScale) }
+        .mask { BubbleInnerShape(phaseMorph: driver.phaseMorph) }
         .allowsHitTesting(false)
     }
 
     private func liquid(around timeText: String, stepBoundaryCueProgress: Double) -> some View {
         let size = FocusScreenLayout.bubbleDiameter
         let isDark = colorScheme == .dark
+        let vessel = driver.phaseMorph.shape.path(in: CGRect(x: 0, y: 0, width: size, height: size)).boundingRect
 
         return BubbleLiquidTimeline(driver: driver) { frame in
             ZStack {
@@ -44,6 +45,9 @@ struct BubbleLiquidContent: View {
                     stepBoundaryCueProgress: stepBoundaryCueProgress,
                     phaseTint: driver.phaseMorph.tint
                 )
+                // The numerals float in the middle of the vessel, which stands on the bottom of
+                // the frame and is not always as tall as it.
+                .offset(y: vessel.midY - size / 2)
             }
             .frame(width: size, height: size)
             // One flattened layer: without it the effect runs on each child view separately.

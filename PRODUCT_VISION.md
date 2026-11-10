@@ -142,7 +142,7 @@ With no archived history, the summary and the Rhythm card show zero values along
 
 The bubble gives the timer a quiet physical presence. A conventional progress ring was considered, but the bubble better fits the feeling of a small companion object and gives the app a recognizable shape.
 
-It should read as a stable glass container. A slightly rounded-square outline can give Focus some character; short and long breaks can use gentler contours. Across all three phases, the numerals stay centered, stable, and easy to read.
+It should read as a stable glass container. Each phase has an outline of its own, and every outline is a smooth curve that bends gently all the way round, so the light on the glass glides along it instead of catching on corners. Focus is an upright drop, full and steady low down and gathered toward the top; the short break is a bubble on its way up, wider high up and leaning; the long break is broad and low, at rest. Focus stands taller than it is wide, so it does not read as a smaller version of the long break. An earlier set joined eight points with short handles: the curves turned sharply at those points and ran almost straight between them, so the glass looked cut rather than blown. All three vessels stand on the same line, so a phase change raises or lowers the top of the vessel instead of lifting it off the page, and the liquid fills each vessel from its own bottom to its own top. Across all three phases, the numerals stay centered in the vessel, stable, and easy to read.
 
 Use restrained edge refraction, highlights, inner shading, and soft caustic light. A subtle pool of light beneath the bubble can respond to the liquid surface. Native Liquid Glass is the first choice for system controls.
 

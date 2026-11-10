@@ -129,12 +129,15 @@ enum BubbleLiquidShader {
     ) -> Shader {
         let size = FocusScreenLayout.bubbleDiameter
         let rect = CGRect(x: 0, y: 0, width: size, height: size)
+        let outline = phaseMorph.shape.path(in: rect)
         let innerOutline = BubbleVessel.polygon(
-            of: BubbleVessel.innerPath(of: phaseMorph.shape.path(in: rect), in: rect),
+            of: BubbleVessel.innerPath(of: outline, in: rect),
             curveSteps: 16
         )
+        // The liquid rises from the bottom of the vessel to its top, wherever it stands in the frame.
+        let vessel = outline.boundingRect
         let surface = BubbleVessel.surface(
-            in: rect,
+            in: vessel,
             innerOutline: innerOutline,
             fillRatio: frame.fillRatio,
             reach: frame.amplitude
@@ -148,7 +151,7 @@ enum BubbleLiquidShader {
         return ShaderLibrary.bubbleLiquid(
             .float2(Float(size), Float(size)),
             .float4(
-                Float(BubbleWave.waterlineY(fillRatio: frame.fillRatio, in: rect)),
+                Float(BubbleWave.waterlineY(fillRatio: frame.fillRatio, in: vessel)),
                 Float(surface?.centerX ?? rect.midX),
                 Float(surface?.radius ?? 0),
                 Float(surface?.depth ?? 0)
