@@ -48,8 +48,8 @@ struct SettingsAlertsPresentation: Equatable {
     }
 }
 
-/// Text colors keep at least 4.5:1 on iOS 27, whose default glass draws the dark cards lighter than
-/// iOS 26 did (about RGB 78 instead of 49), and turn stronger when Increase Contrast is on.
+/// Text colors keep at least 4.5:1 on the cards in both appearances, with room to spare on the dark
+/// material, and turn stronger when Increase Contrast is on.
 enum SettingsTheme {
     static func primaryTextColor(for colorScheme: ColorScheme) -> ContrastAdaptiveColor {
         colorScheme == .dark
@@ -73,8 +73,8 @@ enum SettingsTheme {
         VibePalette.amberText(for: colorScheme)
     }
 
-    /// Clear Productivity History. Softer than system red in dark mode, which stays near 2.4:1 on the
-    /// frosted cards.
+    /// Clear Productivity History. Softer than system red in dark mode, which stays near 3:1 on the
+    /// dark cards.
     static func destructiveTextColor(for colorScheme: ColorScheme) -> ContrastAdaptiveColor {
         colorScheme == .dark
             ? ContrastAdaptiveColor(Color(red: 1.0, green: 0.71, blue: 0.68), increased: Color(red: 1.0, green: 0.80, blue: 0.77))

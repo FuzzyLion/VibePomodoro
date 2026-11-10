@@ -74,7 +74,7 @@ struct ProductivityRhythmCard: View {
         }
         .padding(.horizontal, contentInset)
         .padding(.vertical, contentInset)
-        .productivityGlassCard(
+        .productivityCardChrome(
             colorScheme: colorScheme,
             style: .trend(contentInset: contentInset, cornerRadius: cornerRadius)
         ) {

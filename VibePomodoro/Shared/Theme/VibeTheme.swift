@@ -12,7 +12,7 @@ enum VibePalette {
 
     /// Amber for light-mode text, deep enough for 4.5:1 on the light cards.
     static let amberGoldInk = Color(red: 0.50, green: 0.38, blue: 0.17)
-    /// Amber for dark-mode text, light enough for 4.5:1 on iOS 27's frosted dark cards.
+    /// Amber for dark-mode text, light enough for 4.5:1 on the dark cards.
     static let amberGoldInkDark = Color(red: 0.90, green: 0.77, blue: 0.51)
 
     static let warmBackground = Color(red: 0.96, green: 0.96, blue: 0.97)

@@ -44,7 +44,7 @@ struct ProductivitySummaryStrip: View {
         }
         .padding(.horizontal, contentInset)
         .padding(.vertical, ProductivityLayout.SummaryCard.verticalPadding)
-        .productivityGlassCard(
+        .productivityCardChrome(
             colorScheme: colorScheme,
             style: .summary(contentInset: contentInset, cornerRadius: cornerRadius)
         ) {

@@ -55,7 +55,7 @@ struct ProductivitySessionsCard: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, contentInset)
         .padding(.vertical, contentInset)
-        .productivityGlassCard(
+        .productivityCardChrome(
             colorScheme: colorScheme,
             style: .trend(contentInset: contentInset, cornerRadius: cornerRadius)
         ) {

@@ -212,7 +212,7 @@ The summary always shows all-time values. Below it, one quiet line names the sel
 
 **Sessions** lists the sessions behind the bars: the latest five in the range, newest first. Each row gives the start, such as *Today 08:30* or *Sat 7 Nov 09:00*, one marker per round as on the Focus page (filled when the focus block ran its full length, outlined when it didn't), and the focus time. With no history at all, the card is left out and the empty-state note speaks for it.
 
-All three cards share the same glass language. The summary has more visual weight, while the Rhythm and Sessions cards stay quiet. Text and figures use the system's standard SF Pro with monospaced digits. The Focus countdown's expanded numerals stay on the Focus page: beside these titles they read as a second voice, and three of them in one row crowd the card. Color marks meaning only: amber for focus, jade for breaks, and neutral text elsewhere, with the focus labels in the summary taking the focus amber.
+All three cards share the same card material and edge. The summary has more visual weight, while the Rhythm and Sessions cards stay quiet. Text and figures use the system's standard SF Pro with monospaced digits. The Focus countdown's expanded numerals stay on the Focus page: beside these titles they read as a second voice, and three of them in one row crowd the card. Color marks meaning only: amber for focus, jade for breaks, and neutral text elsewhere, with the focus labels in the summary taking the focus amber.
 
 Charts use evenly spaced buckets, with labels and bars centered on the same slots. Week labels every day, Month every seventh day counted back from today, and Year every month. The rightmost label must remain readable.
 
@@ -220,7 +220,7 @@ The value axis uses round steps and at most four intervals. Up to an hour it rea
 
 Bars carry no value labels. Tapping a slot puts its date at the top right of the Rhythm card, its figures in the top row, and dims the other bars; the Sessions card then lists the sessions that started in that slot. The figures keep their columns while a slot is selected, so the row doesn't shift. A tapped month can hold dozens of sessions, so the list shows its latest five and a line such as *29 more*. Tapping the same slot again, or the axis labels beside the chart, returns to the range, and changing the range clears the selection. The month in progress names the days it covers so far, such as *1–9 Nov*. Selection is by tap only, so a drag that starts on the chart still scrolls the page. VoiceOver reads each slot's date with its focus, breaks, and blocks, and each session's start with its completed rounds and focus time. Each slot's accessibility frame covers exactly that slot, so activating it selects that day.
 
-Semantic accent colors need enough contrast in both appearances. Text in amber uses an ink version of it: deeper in light mode, lighter in dark mode. All text on the page reaches at least 4.5:1 on iOS 27, whose glass draws the dark cards lighter than iOS 26 did, and gets stronger with Increase Contrast.
+Semantic accent colors need enough contrast in both appearances. Text in amber uses an ink version of it: deeper in light mode, lighter in dark mode. All text on the cards reaches at least 4.5:1 in both appearances and gets stronger with Increase Contrast.
 
 Text on the page grows with Dynamic Type. Each size follows the system text style closest to it, so the page looks the same at the default size. At accessibility sizes the summary's metrics and the Rhythm row stack, a selected slot's date takes its own line under the title, and a session row puts its start on one line and its markers and focus time on the next. Chart axis labels stop growing at xxLarge, because seven day names share the plot's width with the value column; a tapped slot's date and figures above the chart carry the detail at any size. The range button keeps its size, like other bar items.
 
@@ -230,7 +230,7 @@ The range menu can produce the system console message `Called -[UIContextMenuInt
 
 Settings should feel familiar and settled. **Session Rhythm** is the main card. **Alerts**, **Display**, and **Other** use quieter cards from the same visual family. Page-specific styling belongs in `Screens/Settings`, with names that reflect its role.
 
-At accessibility text sizes, a row's label and value stack, and every row stays aligned to the leading edge. Section labels and badges grow with the text. Text keeps at least 4.5:1 on iOS 27's glass, which draws the dark cards lighter than iOS 26 did. With Increase Contrast on, text and dividers get stronger.
+At accessibility text sizes, a row's label and value stack, and every row stays aligned to the leading edge. Section labels and badges grow with the text. Text on the cards keeps at least 4.5:1 in both appearances. With Increase Contrast on, text and dividers get stronger.
 
 ### Session Rhythm
 
@@ -264,6 +264,8 @@ The history row stays visible. With no history, disable it and show **No history
 Light mode uses warm white, mist gray, and pale gold. It should feel soft and clear. Countdown highlights can add depth while preserving contrast; the central Focus icon uses a solid dark gray from the same foreground family. Both wave layers remain visible.
 
 Dark mode uses smoky gray, deep charcoal, and warm amber highlights. Keep transitions soft and the liquid highlight broad. Supporting text and controls use warm white; the countdown may retain its layered glass treatment.
+
+Liquid Glass belongs to what floats above the content and can be touched: the tab bar, navigation buttons, value pills, menus, and the Focus controls. The bubble is the one deliberate exception, because it is the app's visual memory. The cards on Productivity and Settings are content, so they use the system's regular material, as the HIG asks for the content layer. In light mode a white lift takes them close to white, with a one-pixel rim and a soft shadow, so they read as panels above the page. In dark mode they stay a deep, warm gray, which keeps the glass controls on them easy to pick out. Unlike glass, the material keeps its brightness when Apple retunes Liquid Glass or people adjust it in iOS 27's Appearance settings.
 
 Phase colors stay consistent:
 
