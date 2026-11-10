@@ -1,68 +1,58 @@
 # VibePomodoro
 
-A quiet Pomodoro timer for iOS, and a small project I am building with AI.
+I'm building VibePomodoro, a native iOS Pomodoro timer in SwiftUI. It handles focus and break cycles, restores an unfinished session after relaunch, and records completed sessions in local productivity charts.
 
-I wanted a timer that feels like a small object beside me: easy to read, easy to trust, and easy to leave alone while I work. VibePomodoro brings that idea together through a liquid-glass bubble, a simple focus routine, and a clear record of finished sessions.
+I chose a glass vessel as the timer's main visual. It fills as time passes and changes shape between focus, short break, and long break. When the session ends, the same vessel shows how much focus time was recorded.
 
-## A project made with AI
+I decide what the app should do and how it should look, then check the result in the app. AI agents have written much of the code and helped with debugging and tests.
 
-I lead the product direction, interaction and visual decisions, acceptance criteria, and hands-on review. AI agents have written much of the code and helped me work through architecture, bugs, tests, and revisions.
-
-This is also a learning project. I am interested in the whole process: deciding what the app should do, trying it, noticing what feels wrong, and refining it. The app runs locally, and I am still working on its design and performance.
-
-## A look inside
-
-These screenshots come from the built app on an iPhone 14 Pro simulator running iOS 26.4. Focus shows a paused demo session. Productivity uses generated test history so the charts have something to show.
+## Screenshots
 
 | Focus | Productivity | Settings |
 | :---: | :---: | :---: |
-| <img src="docs/screenshots/focus-light.png" alt="Focus in light mode, with a liquid bubble and a paused timer" width="250"> | <img src="docs/screenshots/productivity-light.png" alt="Productivity in light mode, showing sample completed-session totals and trends" width="250"> | <img src="docs/screenshots/settings-light.png" alt="Settings in light mode, showing session rhythm and alert preferences" width="250"> |
-| <img src="docs/screenshots/focus-dark.png" alt="Focus in dark mode, with a liquid bubble and a paused timer" width="250"> | <img src="docs/screenshots/productivity-dark.png" alt="Productivity in dark mode, showing the same sample history" width="250"> | <img src="docs/screenshots/settings-dark.png" alt="Settings in dark mode, showing the same session and alert controls" width="250"> |
+| <img src="docs/screenshots/focus-light.png" alt="Light Focus page with a paused 12:30 countdown in an amber glass vessel" width="250"> | <img src="docs/screenshots/productivity-light.png" alt="Light Productivity page with all-time focus totals and a stacked Rhythm chart" width="250"> | <img src="docs/screenshots/settings-light.png" alt="Light Settings page with session rhythm and alert preferences" width="250"> |
+| <img src="docs/screenshots/focus-dark.png" alt="Dark Focus page with the same paused countdown" width="250"> | <img src="docs/screenshots/productivity-dark.png" alt="Dark Productivity page with the same generated history" width="250"> | <img src="docs/screenshots/settings-dark.png" alt="Dark Settings page with the same preferences" width="250"> |
 
-The [product vision](./PRODUCT_VISION.md) explains the behavior, design choices, current boundaries, and next steps. [Screenshot notes](./docs/screenshots/README.md) record how these previews were captured.
+Captured on iPhone 18 Pro / iOS 27.2 on 10 November 2026. Focus is a paused demo session. Productivity uses generated test history, not my own records. The [full gallery](docs/screenshots/README.md) includes the other phases, chart selection, empty history, and the capture commands. Productivity and Settings continue below the screenshots.
 
-## What it does
+## What I focused on
 
-- **Focus:** a single-screen timer with start, pause, resume, reset, skip, back, and early completion.
-- **Session rhythm:** focus blocks alternate with short breaks; the final focus block leads to a long break.
-- **Reliable timing:** real timestamps keep progress consistent across backgrounding and relaunching. Paused time is excluded from the totals.
-- **Productivity:** completed-session history, all-time totals, and week, month, and year trends. An active session enters the charts only when it is finished.
-- **Preferences:** adjustable durations and rounds, local notifications, fixed event sounds, haptics, screen-awake behavior, and light, dark, or system appearance.
+A progress ring would have been simpler, but I wanted the timer to feel like an object sitting on the page. Focus is an upright amber drop, the short break is a pale bubble leaning upward, and the long break is broad and low. They stand on the same baseline so changing phase doesn't move the whole object around.
 
-Duration and round changes apply to the next session. Appearance and feedback preferences take effect immediately. Settings and session history are stored locally; active sessions stay on their device.
+| Short break | Long break | Finished early |
+| :---: | :---: | :---: |
+| <img src="docs/screenshots/short-break-light.png" alt="Short-break vessel with 02:30 remaining" width="250"> | <img src="docs/screenshots/long-break-light.png" alt="Long-break vessel with 07:30 remaining" width="250"> | <img src="docs/screenshots/focus-finished-light.png" alt="Early-completion summary with recorded focus time and a Done button" width="250"> |
 
-The active product is the iOS app. Native macOS and Live Activity experiments are archived. SwiftData storage and iCloud history sync remain future work; the current app does not offer cross-device timer control. The feedback and sharing rows in Settings are still marked “Soon.”
+The Didot digits sit inside the glass. Below the surface, the liquid tints and refracts them. That effect uses a Metal shader. The controls stay outside the vessel, and tapping the background hides them for an immersive view. Finishing a session changes the countdown into its focus total in place; Done prepares the next session.
 
-## How it is built
+I also wanted the statistics to be explainable. For example, skipping a focus block after five minutes should keep those five minutes without awarding a completed block. Paused time shouldn't count at all. Productivity only includes sessions once they end, including ones finished early. A session crossing midnight contributes time to both calendar days.
 
-The app uses Swift and SwiftUI, with Charts, Combine, UserNotifications, AVFoundation, and UserDefaults, plus one Metal shader for the Focus bubble's liquid. One `PomodoroStore` owns runtime state for the app process. A running timer derives its remaining time from `Date` and `targetEndDate`; UI refreshes only display that state.
+The all-time summary puts Focus Time first because longer breaks shouldn't make the main number look better. The Rhythm chart shows focus and breaks across the last seven days, 30 days, or 12 months. Tap a day or month to see its figures and the latest five sessions that started there. Daily Focus Avg excludes days without recorded focus; a streak holds through today until a full day is missed.
 
-```text
-VibePomodoro/
-├── VibePomodoroApp.swift   # App composition and the single store
-├── ContentView.swift      # Shared shell and tab navigation
-├── Core/
-│   ├── Engine/            # Deterministic session transitions
-│   ├── Models/            # Settings, snapshots, history, aggregates
-│   └── Store/             # Runtime state, persistence, side effects
-├── Screens/
-│   ├── Focus/
-│   ├── Productivity/
-│   └── Settings/
-└── Shared/                # Shared theme and UI
-```
+Settings uses the same inline wheel for durations and rounds. Those changes apply to the next session, so adjusting a preference doesn't change a timer already running. Appearance, notification, sound, haptic, and screen-awake preferences apply immediately.
 
-Completed sessions have their own archive, separate from the active timer. Productivity reads a derived aggregate cache. A setting change writes only the affected data, keeping history writes out of routine adjustments.
+| Rhythm setting | Choices |
+| --- | --- |
+| Focus | 15–90 minutes, in 5-minute steps |
+| Short Break | 5 or 10 minutes |
+| Long Break | 15, 20, or 30 minutes |
+| Rounds | 1–10 |
 
-## Run it
+The default is four 25-minute focus blocks, with 5-minute short breaks and a final 15-minute long break. The session ends after that long break. Start, pause, resume, reset, skip, back, and early completion are available on Focus. The detailed rules and design decisions are in [PRODUCT_VISION.md](PRODUCT_VISION.md).
 
-Use Xcode with an iOS SDK and simulator runtime that support the project's **iOS 26.2** deployment target or later. The app has no external package dependencies. The Focus bubble's liquid is a Metal shader, and since Xcode 26 the Metal compiler is a separate download; if the build reports a missing Metal Toolchain, install it once:
+## Run locally
+
+The deployment target is iOS 26.2. These screenshots were built with Xcode 27.2 (27B52). There are no external package dependencies.
+
+1. Open `VibePomodoro.xcodeproj` in Xcode.
+2. Select the `VibePomodoro` scheme and an iPhone simulator running iOS 26.2 or later.
+3. Build and run. For a physical device, select your own signing team first.
+
+The liquid shader needs Xcode's Metal Toolchain. If Xcode reports that it is missing, install it with:
 
 ```bash
 xcodebuild -downloadComponent MetalToolchain
 ```
-
-Open `VibePomodoro.xcodeproj`, select the `VibePomodoro` scheme, and choose an iPhone simulator. For a physical device, select your own signing team in Xcode first.
 
 To build from the command line:
 
@@ -70,29 +60,51 @@ To build from the command line:
 xcodebuild \
   -project VibePomodoro.xcodeproj \
   -scheme VibePomodoro \
+  -configuration Debug \
   -destination 'generic/platform=iOS Simulator' \
   build CODE_SIGNING_ALLOWED=NO
 ```
 
-To run the existing unit and UI tests, replace `<Simulator Name>` with an available device from `xcrun simctl list devices available`:
+To run the unit and UI tests on the device used for the screenshots:
 
 ```bash
 xcodebuild \
   -project VibePomodoro.xcodeproj \
   -scheme VibePomodoro \
-  -destination 'platform=iOS Simulator,name=<Simulator Name>' \
+  -destination 'platform=iOS Simulator,name=iPhone 18 Pro,OS=27.2' \
   test CODE_SIGNING_ALLOWED=NO
 ```
 
-The tests cover session transitions, background reconciliation, completed-session aggregation, persistence, reminder feedback, and the main screen flows. Simulator captures show layout and app state; energy use, physical haptics, and lock-screen delivery still need device testing.
+Use `xcrun simctl list devices available` to find another installed destination. The tests cover session transitions, time accounting, recovery, history aggregation, persistence, reminder feedback, and the main screen flows.
 
-## What comes next
+## How it works
 
-The next step is a stable version that is easy to understand, run, and review.
+One `PomodoroStore` owns runtime state for the app process. The engine handles session transitions; screens display state and send actions. A running timer calculates its remaining time from `Date` and `targetEndDate`. Screen refreshes don't own elapsed time, so backgrounding doesn't depend on the app ticking every second.
 
-- Measure the bubble's rendering and energy cost on an iPhone 14 Pro and refine its animation budget.
-- Keep long histories responsive as aggregation and persistence evolve.
-- Explore animated numerals as a possible future visual anchor, with Focus, Productivity, and Settings considered together.
-- Migrate completed-session history to SwiftData when the current behavior is stable, then consider syncing completed history and selected settings through iCloud.
+```text
+VibePomodoro/
+├── VibePomodoroApp.swift       Creates the single store
+├── ContentView.swift          Shared shell and tab navigation
+├── AppIcon.icon/              Icon Composer source
+├── Core/
+│   ├── Engine/                Session construction and transitions
+│   ├── Models/                Settings, snapshots, archives, aggregates
+│   └── Store/                 Runtime, persistence, notifications, feedback
+├── Screens/
+│   ├── Focus/                 Vessels, shader, controls, summary
+│   ├── Productivity/          Summary, chart, session list
+│   └── Settings/              Rhythm wheels and preferences
+└── Shared/                    Reused theme and shell components
+```
 
-The liquid bubble remains the current interface while I explore what might come next.
+Storage currently uses UserDefaults. Settings, the active snapshot, completed sessions, and the derived statistics cache have separate write scopes, so changing a setting doesn't rewrite the history. Clearing productivity history removes the archive and cache while keeping the active timer and settings.
+
+The running liquid surface has a 12 Hz refresh budget; digits update once per second. Continuous surface movement stops when paused, off Focus, or backgrounded. Reduce Motion disables it, and Low Power Mode omits the caustic light. The app also has larger-text layouts, Increase Contrast adjustments, and VoiceOver descriptions for chart slots and session rows.
+
+## Current limits
+
+The app runs locally, and each device owns its active timer. The earlier native macOS and Live Activity experiments are archived. Send Feedback and Share App still say Soon.
+
+I haven't measured sustained rendering, heat, or energy use on the target physical iPhone 14 Pro. Physical haptics and lock-screen notification delivery also need device checks. The simulator screenshots don't establish those results, and long-history performance still needs measurement.
+
+SwiftData and iCloud sync aren't implemented. I want the current accounting and storage behavior settled before migrating history. If I add iCloud later, it will cover completed sessions and explicitly selected settings. Active-session handoff and simultaneous timer control across devices are outside the current scope. Imported sounds, advanced analytics, and a possible interface built around animated numerals are also unimplemented; the glass vessels are the current design.
