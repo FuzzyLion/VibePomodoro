@@ -9,6 +9,8 @@ enum ProductivityLayout {
     enum TrendGroup {
         static let populatedTopInset: CGFloat = 8
         static let emptyTopInset: CGFloat = 4
+        static let captionSpacing: CGFloat = 10
+        static let captionHorizontalPadding: CGFloat = 6
     }
 
     enum SummaryCard {
@@ -17,16 +19,8 @@ enum ProductivityLayout {
         static let stackSpacing: CGFloat = 17
         static let verticalPadding: CGFloat = 20
         static let titleTracking: CGFloat = 0.72
-        static let titleDarkOpacity: Double = 0.54
-        static let titleLightOpacity: Double = 0.45
-        static let valueDarkOpacity: Double = 0.98
-        static let valueLightOpacity: Double = 0.84
-        static let metaDarkOpacity: Double = 0.64
-        static let metaLightOpacity: Double = 0.52
         static let dividerDarkOpacity: Double = 0.10
         static let dividerLightOpacity: Double = 0.08
-        static let accentDarkOpacity: Double = 0.94
-        static let accentLightOpacity: Double = 0.94
         static let accentGlowDarkPrimaryOpacity: Double = 0.12
         static let accentGlowLightPrimaryOpacity: Double = 0.07
         static let accentGlowDarkSecondaryOpacity: Double = 0.05
@@ -38,8 +32,6 @@ enum ProductivityLayout {
     enum PrimaryMetric {
         static let spacing: CGFloat = 10
         static let titleTracking: CGFloat = 0.65
-        static let accessibilityValueFontSize: CGFloat = 36
-        static let defaultValueFontSize: CGFloat = 44
         static let accessibilityMinimumScaleFactor: CGFloat = 0.9
         static let defaultMinimumScaleFactor: CGFloat = 0.72
     }
@@ -48,12 +40,8 @@ enum ProductivityLayout {
         static let accessibilitySpacing: CGFloat = 14
         static let standardSpacing: CGFloat = 16
         static let valueSpacing: CGFloat = 6
-        static let titleDarkOpacity: Double = 0.94
-        static let titleLightOpacity: Double = 0.94
         static let dividerDarkOpacity: Double = 0.10
         static let dividerLightOpacity: Double = 0.08
-        static let valueDarkOpacity: Double = 0.94
-        static let valueLightOpacity: Double = 0.78
         static let labelMinimumScaleFactor: CGFloat = 0.85
         static let valueMinimumScaleFactor: CGFloat = 0.78
         static let verticalDividerHeight: CGFloat = 42
@@ -70,17 +58,6 @@ enum ProductivityLayout {
         static let cornerRadius: CGFloat = 26
         static let stackSpacing: CGFloat = 14
         static let headerSpacing: CGFloat = 10
-        static let iconSize: CGFloat = 15
-        static let iconFrame: CGFloat = 36
-        static let iconCornerRadius: CGFloat = 12
-        static let iconChipDarkOpacity: Double = 0.085
-        static let iconChipLightOpacity: Double = 0.058
-        static let accentLabelDarkOpacity: Double = 0.90
-        static let accentLabelLightOpacity: Double = 0.84
-        static let primaryTextDarkOpacity: Double = 0.94
-        static let primaryTextLightOpacity: Double = 0.80
-        static let secondaryTextDarkOpacity: Double = 0.54
-        static let secondaryTextLightOpacity: Double = 0.48
         static let gridDarkOpacity: Double = 0.10
         static let gridLightOpacity: Double = 0.08
         static let accentOverlayDarkOpacity: Double = 0.022
@@ -88,23 +65,44 @@ enum ProductivityLayout {
         static let chartHeight: CGFloat = 186
         static let chartBottomPadding: CGFloat = 22
         static let xAxisOffset: CGFloat = 8
+        static let unselectedBarOpacity: Double = 0.32
     }
 
-    enum RangeBadge {
-        static let titleTracking: CGFloat = 0.45
-        static let horizontalPadding: CGFloat = 10
-        static let verticalPadding: CGFloat = 6
-        static let fillDarkOpacity: Double = 0.16
-        static let fillLightOpacity: Double = 0.10
-        static let strokeDarkOpacity: Double = 0.18
-        static let strokeLightOpacity: Double = 0.10
-        static let textDarkOpacity: Double = 0.95
-        static let textLightOpacity: Double = 0.88
-        static let strokeWidth: CGFloat = 0.8
+    enum RhythmStats {
+        static let columnSpacing: CGFloat = 24
+        static let labelSpacing: CGFloat = 6
+        static let stackedSpacing: CGFloat = 12
+        static let dotSize: CGFloat = 7
+        static let dotSpacing: CGFloat = 6
+        static let valueMinimumScaleFactor: CGFloat = 0.7
+    }
+
+    enum RhythmChart {
+        static let surfaceLineHeight: CGFloat = 2
+        static let trackCornerExtra: CGFloat = 2
+        static let trackLightOpacity: Double = 0.035
+        static let trackDarkOpacity: Double = 0.045
+        /// A step label closer than this to the average yields to the "avg" marker. Points at the
+        /// default text size, scaled with the axis labels.
+        static let averageLabelClearance: CGFloat = 15
+    }
+
+    enum Sessions {
+        static let stackSpacing: CGFloat = 12
+        static let rowVerticalPadding: CGFloat = 11
+        static let stackedRowSpacing: CGFloat = 6
+        static let columnSpacing: CGFloat = 12
+        static let markerSize: CGFloat = 8.5
+        static let markerSpacing: CGFloat = 7
+        static let compactMarkerSpacing: CGFloat = 4
+        static let focusColumnWidth: CGFloat = 64
+        static let dividerLightOpacity: Double = 0.06
+        static let dividerDarkOpacity: Double = 0.08
     }
 
     enum ChartAxis {
         static let labelMinimumScaleFactor: CGFloat = 0.72
+        static let valueLabelWidth: CGFloat = 32
     }
 }
 
@@ -140,6 +138,7 @@ private struct ProductivityRenderState: Equatable {
 struct ProductivityScreen: View {
     @EnvironmentObject private var store: PomodoroStore
     @State private var selectedRange: ProductivityRange = .week
+    @State private var selectedSlot: Int?
 
     var body: some View {
         let renderState = ProductivityRenderState.build(store: store, selectedRange: selectedRange)
@@ -156,13 +155,28 @@ struct ProductivityScreen: View {
                             ProductivityEmptyStateNote()
                         }
 
-                        VStack(alignment: .leading, spacing: ProductivityLayout.sectionSpacing) {
-                            ForEach(ProductivityChartMetricKind.allCases) { metric in
-                                ProductivityTrendCard(
-                                    metric: metric,
+                        VStack(alignment: .leading, spacing: ProductivityLayout.TrendGroup.captionSpacing) {
+                            ProductivityRangeCaption(
+                                range: renderState.selectedRange,
+                                buckets: renderState.displayBuckets
+                            )
+
+                            VStack(alignment: .leading, spacing: ProductivityLayout.sectionSpacing) {
+                                ProductivityRhythmCard(
                                     buckets: renderState.displayBuckets,
-                                    range: renderState.selectedRange
+                                    range: renderState.selectedRange,
+                                    selectedSlot: $selectedSlot
                                 )
+
+                                // With no history, the empty-state note above already says what will appear here.
+                                if !renderState.showsEmptyState {
+                                    ProductivitySessionsCard(
+                                        sessions: store.completedSessions,
+                                        buckets: renderState.displayBuckets,
+                                        range: renderState.selectedRange,
+                                        selectedSlot: selectedSlot
+                                    )
+                                }
                             }
                         }
                         .padding(.top, renderState.trendTopInset)
@@ -180,6 +194,9 @@ struct ProductivityScreen: View {
                 }
             }
         }
+        .onChange(of: selectedRange) {
+            selectedSlot = nil
+        }
     }
 }
 
@@ -190,15 +207,10 @@ private struct ProductivityRangeToolbarMenu: View {
 
     var body: some View {
         Menu {
+            // Each choice is a toggle, so the system draws its checkmark. A checkmark image in a
+            // button's label disappears at accessibility text sizes, where menus drop images.
             ForEach(ProductivityRange.allCases) { range in
-                Button {
-                    selectRange(range)
-                } label: {
-                    ProductivityRangeMenuItemLabel(
-                        title: range.displayTitle,
-                        isSelected: selectedRange == range
-                    )
-                }
+                Toggle(range.displayTitle, isOn: selection(of: range))
             }
         } label: {
             Image(systemName: "line.3.horizontal.decrease")
@@ -213,24 +225,15 @@ private struct ProductivityRangeToolbarMenu: View {
         colorScheme == .dark ? VibePalette.warmBackground.opacity(0.92) : Color.black.opacity(0.66)
     }
 
-    private func selectRange(_ range: ProductivityRange) {
-        selectedRange = range
-    }
-}
-
-private struct ProductivityRangeMenuItemLabel: View {
-    let title: String
-    let isSelected: Bool
-
-    var body: some View {
-        HStack(spacing: 10) {
-            Text(title)
-
-            Spacer(minLength: 12)
-
-            if isSelected {
-                Image(systemName: "checkmark")
+    /// Choosing the current range again leaves it chosen.
+    private func selection(of range: ProductivityRange) -> Binding<Bool> {
+        Binding(
+            get: { selectedRange == range },
+            set: { isOn in
+                if isOn {
+                    selectedRange = range
+                }
             }
-        }
+        )
     }
 }

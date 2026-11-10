@@ -11,9 +11,83 @@ extension PomodoroStore {
         saveValue(sessions, for: StorageKey.completedSessions, using: defaults, encoder: JSONEncoder())
         defaults.removeObject(forKey: StorageKey.productivityCache)
     }
+
+    /// Seeds an active session for screenshots, for example `focus-2-0.5` (paused halfway through
+    /// the second focus block) or `shortBreak-1-0.3-running`. Earlier steps count as completed.
+    static func seedUITestingFocusFixtureIfRequested(using defaults: UserDefaults) {
+        guard isUITestingLaunch,
+              let fixture = ProcessInfo.processInfo.environment[focusFixtureEnvironmentKey],
+              let session = makeFocusFixture(fixture, now: .now) else {
+            return
+        }
+
+        saveValue(session, for: StorageKey.activeSession, using: defaults, encoder: JSONEncoder())
+    }
+
+    /// Stands in for the system's answer during UI tests and screenshots: `allowed`, `denied`, or
+    /// `notDetermined`. UI-testing launches never ask iOS.
+    static var uiTestingNotificationPermission: NotificationPermission? {
+        guard isUITestingLaunch else { return nil }
+
+        switch ProcessInfo.processInfo.environment[notificationPermissionFixtureEnvironmentKey] {
+        case "allowed":
+            return .allowed
+        case "denied":
+            return .denied
+        case "notDetermined":
+            return .notDetermined
+        default:
+            return nil
+        }
+    }
 }
 
 private extension PomodoroStore {
+    static func makeFocusFixture(_ fixture: String, now: Date) -> SessionSnapshot? {
+        let parts = fixture.split(separator: "-").map(String.init)
+        guard parts.count >= 3,
+              let phase = SessionPhase(rawValue: parts[0]),
+              let round = Int(parts[1]),
+              let progress = Double(parts[2]) else {
+            return nil
+        }
+
+        let isRunning = parts.count > 3 && parts[3] == "running"
+        var session = SessionSnapshot.makeNew(settings: .default, now: now.addingTimeInterval(-24 * 3_600))
+        guard let targetIndex = session.steps.firstIndex(where: { $0.phase == phase && $0.roundNumber == round }) else {
+            return nil
+        }
+
+        let target = session.steps[targetIndex]
+        let elapsed = target.plannedDuration * min(max(progress, 0.001), 0.999)
+        var segmentEnd = now
+        var segments: [ActivitySegment] = []
+
+        for step in session.steps[...targetIndex].reversed() {
+            let duration = step.id == target.id ? elapsed : step.plannedDuration
+            let segmentStart = segmentEnd.addingTimeInterval(-duration)
+            segments.insert(
+                ActivitySegment(
+                    id: UUID(),
+                    stepID: step.id,
+                    phase: step.phase,
+                    roundNumber: step.roundNumber,
+                    startDate: segmentStart,
+                    endDate: segmentEnd
+                ),
+                at: 0
+            )
+            segmentEnd = segmentStart
+        }
+
+        session.segments = segments
+        session.currentStepIndex = targetIndex
+        session.runState = isRunning ? .running : .paused
+        session.currentSegmentStartDate = isRunning ? now : nil
+        session.targetEndDate = isRunning ? now.addingTimeInterval(target.plannedDuration - elapsed) : nil
+        return session
+    }
+
     static func makeLongExtremeProductivityFixture(
         now: Date,
         calendar: Calendar = .autoupdatingCurrent

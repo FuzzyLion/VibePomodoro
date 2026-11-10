@@ -1,9 +1,16 @@
 import SwiftUI
+import UIKit
 
 struct SettingsAlertsSection: View {
     @EnvironmentObject private var store: PomodoroStore
+    @Environment(\.openURL) private var openURL
 
     var body: some View {
+        let presentation = SettingsAlertsPresentation(
+            notificationsEnabled: store.settings.notificationsEnabled,
+            permission: store.notificationPermission
+        )
+
         VStack(alignment: .leading, spacing: SettingsLayout.sectionHeaderBottomSpacing) {
             SettingsSectionHeader(title: "ALERTS")
 
@@ -14,19 +21,26 @@ struct SettingsAlertsSection: View {
                 ),
                 accentOverlay: { EmptyView() }
             ) {
-                VStack(spacing: 0) {
-                    SettingsToggleRow(
-                        isOn: notificationsBinding,
-                        title: "Notifications"
-                    )
+                VStack(alignment: .leading, spacing: 0) {
+                    if presentation.opensSystemSettings {
+                        SettingsSystemSettingsRow(
+                            title: "Notifications",
+                            detail: SettingsAlertsPresentation.blockedNotificationsDetail,
+                            openSettings: openNotificationSettings
+                        )
+                    } else {
+                        SettingsToggleRow(
+                            isOn: notificationsBinding,
+                            title: "Notifications"
+                        )
+                    }
 
                     SettingsDivider()
 
                     SettingsToggleRow(
                         isOn: soundBinding,
                         title: "Sound",
-                        subtitle: store.settings.notificationsEnabled ? nil : "Requires Notifications",
-                        disabled: !store.settings.notificationsEnabled
+                        subtitle: presentation.soundDetail
                     )
 
                     SettingsDivider()
@@ -38,6 +52,11 @@ struct SettingsAlertsSection: View {
                 }
             }
         }
+    }
+
+    private func openNotificationSettings() {
+        guard let url = URL(string: UIApplication.openNotificationSettingsURLString) else { return }
+        openURL(url)
     }
 
     private var notificationsBinding: Binding<Bool> {
@@ -76,7 +95,7 @@ struct SettingsDisplaySection: View {
                 ),
                 accentOverlay: { EmptyView() }
             ) {
-                VStack(spacing: 0) {
+                VStack(alignment: .leading, spacing: 0) {
                     appearanceMenu
 
                     SettingsDivider()
@@ -100,13 +119,11 @@ struct SettingsDisplaySection: View {
 
     private var appearanceMenu: some View {
         Menu {
+            // Each choice is a toggle, so the system draws its checkmark. A checkmark image in a
+            // button's label disappears at accessibility text sizes, where menus drop images.
             ForEach(PomodoroAppearanceMode.allCases) { mode in
-                Button {
-                    store.setAppearanceMode(mode)
-                } label: {
-                    Label(mode.title, systemImage: mode == store.settings.appearanceMode ? "checkmark" : mode.systemImage)
-                }
-                .accessibilityIdentifier("settings.appearance.\(mode.rawValue)")
+                Toggle(mode.title, isOn: appearanceSelection(mode))
+                    .accessibilityIdentifier("settings.appearance.\(mode.rawValue)")
             }
         } label: {
             SettingsMenuRow(
@@ -119,6 +136,18 @@ struct SettingsDisplaySection: View {
         .accessibilityValue(store.settings.appearanceMode.title)
         .accessibilityHint("Opens appearance mode choices.")
         .accessibilityIdentifier("settings.appearance")
+    }
+
+    /// Choosing the current mode again leaves it chosen.
+    private func appearanceSelection(_ mode: PomodoroAppearanceMode) -> Binding<Bool> {
+        Binding(
+            get: { store.settings.appearanceMode == mode },
+            set: { isOn in
+                if isOn {
+                    store.setAppearanceMode(mode)
+                }
+            }
+        )
     }
 }
 
@@ -137,7 +166,7 @@ struct SettingsOtherSection: View {
                 ),
                 accentOverlay: { EmptyView() }
             ) {
-                VStack(spacing: 0) {
+                VStack(alignment: .leading, spacing: 0) {
                     SettingsPlaceholderRow(title: "Send Feedback", status: "Soon")
 
                     SettingsDivider()
@@ -157,7 +186,7 @@ struct SettingsOtherSection: View {
                             disabled: !hasProductivityHistory
                         )
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(SettingsRowButtonStyle())
                     .disabled(!hasProductivityHistory)
                     .accessibilityHint(
                         hasProductivityHistory
@@ -184,6 +213,43 @@ struct SettingsOtherSection: View {
     }
 }
 
+/// A capsule that shows a value or an action at the trailing end of a row.
+private struct SettingsValuePill: View {
+    @Environment(\.colorScheme) private var colorScheme
+    @ScaledMetric(relativeTo: .body) private var minHeight = SettingsLayout.pickerValuePillHeight
+    @ScaledMetric(relativeTo: .body) private var symbolSize: CGFloat = 10
+
+    let text: String
+    let systemImage: String
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Text(text)
+                .font(.system(.body, weight: .semibold))
+                .foregroundStyle(SettingsTheme.primaryTextColor(for: colorScheme))
+                .lineLimit(1)
+                .minimumScaleFactor(0.86)
+
+            Image(systemName: systemImage)
+                .font(.system(size: symbolSize, weight: .bold))
+                .foregroundStyle(SettingsTheme.secondaryTextColor(for: colorScheme).opacity(0.55))
+                .accessibilityHidden(true)
+        }
+        .padding(.leading, 14)
+        .padding(.trailing, 12)
+        .frame(minHeight: minHeight)
+        .background(
+            Capsule(style: .continuous)
+                .fill(SettingsTheme.valuePillFill(for: colorScheme))
+        )
+        .overlay {
+            Capsule(style: .continuous)
+                .strokeBorder(SettingsTheme.valuePillStroke(for: colorScheme), lineWidth: 1)
+        }
+        .fixedSize(horizontal: true, vertical: false)
+    }
+}
+
 private struct SettingsMenuRow: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
@@ -206,6 +272,7 @@ private struct SettingsMenuRow: View {
                 }
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.vertical, SettingsLayout.rowVerticalPadding)
         .contentShape(Rectangle())
     }
@@ -218,29 +285,60 @@ private struct SettingsMenuRow: View {
     }
 
     private var valueLabel: some View {
-        HStack(spacing: 8) {
-            Text(value)
+        SettingsValuePill(text: value, systemImage: "chevron.up.chevron.down")
+    }
+}
+
+/// A row for a setting iOS controls. It says where the setting lives and opens iOS Settings there.
+private struct SettingsSystemSettingsRow: View {
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    let title: String
+    let detail: String
+    let openSettings: () -> Void
+
+    var body: some View {
+        Group {
+            if dynamicTypeSize.isAccessibilitySize {
+                VStack(alignment: .leading, spacing: 10) {
+                    labelStack
+                    openButton
+                }
+            } else {
+                HStack(spacing: 14) {
+                    labelStack
+                    Spacer(minLength: 12)
+                    openButton
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.vertical, SettingsLayout.rowVerticalPadding)
+    }
+
+    private var labelStack: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
                 .font(.system(.body, weight: .semibold))
                 .foregroundStyle(SettingsTheme.primaryTextColor(for: colorScheme))
-                .lineLimit(1)
-                .minimumScaleFactor(0.86)
+                .fixedSize(horizontal: false, vertical: true)
 
-            Image(systemName: "chevron.up.chevron.down")
-                .font(.system(size: 10, weight: .bold))
-                .foregroundStyle(SettingsTheme.secondaryTextColor(for: colorScheme).opacity(0.55))
+            Text(detail)
+                .font(.system(.footnote, weight: .medium))
+                .foregroundStyle(SettingsTheme.secondaryTextColor(for: colorScheme))
+                .fixedSize(horizontal: false, vertical: true)
         }
-        .padding(.leading, 14)
-        .padding(.trailing, 12)
-        .frame(height: SettingsLayout.pickerValuePillHeight)
-        .background(
-            Capsule(style: .continuous)
-                .fill(SettingsTheme.valuePillFill(for: colorScheme))
-        )
-        .overlay {
-            Capsule(style: .continuous)
-                .strokeBorder(SettingsTheme.valuePillStroke(for: colorScheme), lineWidth: 1)
+        .accessibilityElement(children: .combine)
+    }
+
+    private var openButton: some View {
+        Button(action: openSettings) {
+            SettingsValuePill(text: "Open Settings", systemImage: "arrow.up.forward")
         }
-        .fixedSize(horizontal: true, vertical: false)
+        .buttonStyle(SettingsRowButtonStyle())
+        .accessibilityHint("Opens VibePomodoro in iOS Settings.")
+        .accessibilityIdentifier("settings.notifications.openSettings")
     }
 }
 
@@ -251,7 +349,6 @@ private struct SettingsToggleRow: View {
 
     let title: String
     var subtitle: String? = nil
-    var disabled: Bool = false
 
     var body: some View {
         Toggle(isOn: $isOn) {
@@ -271,15 +368,24 @@ private struct SettingsToggleRow: View {
             .padding(.vertical, SettingsLayout.rowVerticalPadding)
         }
         .tint(VibePalette.focusTint)
-        .disabled(disabled)
-        .opacity(disabled ? 0.72 : 1)
         .accessibilityIdentifier(title)
+    }
+}
+
+/// Keeps a row's own colors while it's disabled, so the row can draw a readable disabled look
+/// instead of being faded by the system.
+private struct SettingsRowButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .opacity(configuration.isPressed ? 0.62 : 1)
+            .contentShape(Rectangle())
     }
 }
 
 private struct SettingsDestructiveActionRow: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @ScaledMetric(relativeTo: .body) private var iconSize: CGFloat = 14
 
     let title: String
     let subtitle: String
@@ -300,16 +406,16 @@ private struct SettingsDestructiveActionRow: View {
                 }
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.vertical, SettingsLayout.rowVerticalPadding)
         .contentShape(Rectangle())
-        .opacity(disabled ? 0.72 : 1)
     }
 
     private var labelStack: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(title)
                 .font(.system(.body, weight: .semibold))
-                .foregroundStyle(destructiveTextColor)
+                .foregroundStyle(accentColor)
                 .fixedSize(horizontal: false, vertical: true)
 
             Text(subtitle)
@@ -321,18 +427,23 @@ private struct SettingsDestructiveActionRow: View {
 
     private var trailingIcon: some View {
         Image(systemName: "trash")
-            .font(.system(size: 14, weight: .semibold))
-            .foregroundStyle(disabled ? SettingsTheme.secondaryTextColor(for: colorScheme) : destructiveTextColor)
+            .font(.system(size: iconSize, weight: .semibold))
+            .foregroundStyle(accentColor)
+            .accessibilityHidden(true)
     }
 
-    private var destructiveTextColor: Color {
-        colorScheme == .dark ? Color.red.opacity(0.86) : Color.red.opacity(0.82)
+    /// With nothing to delete, the row reads as ordinary secondary text rather than a faded warning.
+    private var accentColor: ContrastAdaptiveColor {
+        disabled
+            ? SettingsTheme.secondaryTextColor(for: colorScheme)
+            : SettingsTheme.destructiveTextColor(for: colorScheme)
     }
 }
 
 private struct SettingsPlaceholderRow: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @ScaledMetric(relativeTo: .caption2) private var statusSize: CGFloat = 11
 
     let title: String
     let status: String
@@ -352,6 +463,7 @@ private struct SettingsPlaceholderRow: View {
                 }
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.vertical, SettingsLayout.rowVerticalPadding)
     }
 
@@ -363,7 +475,7 @@ private struct SettingsPlaceholderRow: View {
 
     private var statusLabel: some View {
         Text(status.uppercased())
-            .font(.system(size: 11, weight: .semibold))
+            .font(.system(size: statusSize, weight: .semibold))
             .tracking(0.9)
             .foregroundStyle(SettingsTheme.secondaryTextColor(for: colorScheme))
             .padding(.horizontal, 10)

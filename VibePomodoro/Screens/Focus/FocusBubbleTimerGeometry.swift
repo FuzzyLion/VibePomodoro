@@ -11,8 +11,6 @@ struct BubbleShellProfile {
     let lowerCausticOffset: CGSize
     let outerGlowSize: CGSize
     let outerGlowOffset: CGSize
-    let depthPoolSize: CGSize
-    let depthPoolOffset: CGSize
     let innerLensSize: CGSize
     let innerLensOffset: CGSize
     let innerLensRotation: Double
@@ -40,8 +38,6 @@ extension BubbleShellProfile {
             lowerCausticOffset: interpolate(source.lowerCausticOffset, target.lowerCausticOffset, progress),
             outerGlowSize: interpolate(source.outerGlowSize, target.outerGlowSize, progress),
             outerGlowOffset: interpolate(source.outerGlowOffset, target.outerGlowOffset, progress),
-            depthPoolSize: interpolate(source.depthPoolSize, target.depthPoolSize, progress),
-            depthPoolOffset: interpolate(source.depthPoolOffset, target.depthPoolOffset, progress),
             innerLensSize: interpolate(source.innerLensSize, target.innerLensSize, progress),
             innerLensOffset: interpolate(source.innerLensOffset, target.innerLensOffset, progress),
             innerLensRotation: interpolate(source.innerLensRotation, target.innerLensRotation, progress),
@@ -91,8 +87,6 @@ extension SessionPhase {
                 lowerCausticOffset: CGSize(width: 0, height: sphereSize * 0.33),
                 outerGlowSize: CGSize(width: sphereSize * 0.61, height: sphereSize * 0.15),
                 outerGlowOffset: CGSize(width: 0, height: sphereSize * 0.45),
-                depthPoolSize: CGSize(width: sphereSize * 0.75, height: sphereSize * 0.23),
-                depthPoolOffset: CGSize(width: 0, height: sphereSize * 0.34),
                 innerLensSize: CGSize(width: sphereSize * 0.40, height: sphereSize * 0.22),
                 innerLensOffset: CGSize(width: sphereSize * 0.02, height: -sphereSize * 0.18),
                 innerLensRotation: 10,
@@ -114,8 +108,6 @@ extension SessionPhase {
                 lowerCausticOffset: CGSize(width: -sphereSize * 0.02, height: sphereSize * 0.34),
                 outerGlowSize: CGSize(width: sphereSize * 0.66, height: sphereSize * 0.16),
                 outerGlowOffset: CGSize(width: -sphereSize * 0.02, height: sphereSize * 0.44),
-                depthPoolSize: CGSize(width: sphereSize * 0.78, height: sphereSize * 0.24),
-                depthPoolOffset: CGSize(width: -sphereSize * 0.03, height: sphereSize * 0.34),
                 innerLensSize: CGSize(width: sphereSize * 0.42, height: sphereSize * 0.22),
                 innerLensOffset: CGSize(width: -sphereSize * 0.01, height: -sphereSize * 0.19),
                 innerLensRotation: -8,
@@ -137,8 +129,6 @@ extension SessionPhase {
                 lowerCausticOffset: CGSize(width: sphereSize * 0.03, height: sphereSize * 0.35),
                 outerGlowSize: CGSize(width: sphereSize * 0.67, height: sphereSize * 0.16),
                 outerGlowOffset: CGSize(width: sphereSize * 0.03, height: sphereSize * 0.44),
-                depthPoolSize: CGSize(width: sphereSize * 0.79, height: sphereSize * 0.24),
-                depthPoolOffset: CGSize(width: sphereSize * 0.03, height: sphereSize * 0.34),
                 innerLensSize: CGSize(width: sphereSize * 0.44, height: sphereSize * 0.23),
                 innerLensOffset: CGSize(width: sphereSize * 0.04, height: -sphereSize * 0.18),
                 innerLensRotation: 6,
@@ -314,5 +304,184 @@ private extension SessionPhase {
                 CGPoint(x: 0.070, y: 0.290)
             ])
         }
+    }
+}
+
+/// The water line. The wave that ripples it, the surface, and the digit split are computed per
+/// pixel by `bubbleLiquid` in FocusBubbleLiquid.metal.
+enum BubbleWave {
+    static func waterlineY(fillRatio: Double, in rect: CGRect) -> CGFloat {
+        rect.height * (1 - CGFloat(max(0, min(fillRatio, 1.08))))
+    }
+}
+
+/// The bubble as a glass vessel: a wall of glass around the liquid, and a liquid surface
+/// seen slightly from above. Light comes from the top left.
+enum BubbleVessel {
+    /// The inside of the glass as a scale of the outer silhouette, about 6 pt of wall.
+    static let innerScale: CGFloat = 0.955
+
+    static func innerPath(of outer: Path, in rect: CGRect) -> Path {
+        let transform = CGAffineTransform(translationX: rect.midX, y: rect.midY)
+            .scaledBy(x: innerScale, y: innerScale)
+            .translatedBy(x: -rect.midX, y: -rect.midY)
+        return outer.applying(transform)
+    }
+
+    /// The path's outline as straight segments, for cheap horizontal cross-sections.
+    static func polygon(of path: Path, curveSteps: Int = 10) -> [CGPoint] {
+        var points: [CGPoint] = []
+        var current = CGPoint.zero
+
+        path.forEach { element in
+            switch element {
+            case let .move(to: point), let .line(to: point):
+                points.append(point)
+                current = point
+            case let .quadCurve(to: point, control: control):
+                for step in 1...curveSteps {
+                    let t = CGFloat(step) / CGFloat(curveSteps)
+                    let u = 1 - t
+                    points.append(CGPoint(
+                        x: u * u * current.x + 2 * u * t * control.x + t * t * point.x,
+                        y: u * u * current.y + 2 * u * t * control.y + t * t * point.y
+                    ))
+                }
+                current = point
+            case let .curve(to: point, control1: control1, control2: control2):
+                for step in 1...curveSteps {
+                    let t = CGFloat(step) / CGFloat(curveSteps)
+                    let u = 1 - t
+                    points.append(CGPoint(
+                        x: u * u * u * current.x + 3 * u * u * t * control1.x + 3 * u * t * t * control2.x + t * t * t * point.x,
+                        y: u * u * u * current.y + 3 * u * u * t * control1.y + 3 * u * t * t * control2.y + t * t * t * point.y
+                    ))
+                }
+                current = point
+            case .closeSubpath:
+                break
+            }
+        }
+
+        return points
+    }
+
+    /// Where a closed outline crosses a horizontal line, from its left to its right edge.
+    static func horizontalExtent(of polygon: [CGPoint], atY y: CGFloat) -> ClosedRange<CGFloat>? {
+        guard polygon.count > 2 else { return nil }
+
+        var lower = CGFloat.infinity
+        var upper = -CGFloat.infinity
+        for index in polygon.indices {
+            let start = polygon[index]
+            let end = polygon[(index + 1) % polygon.count]
+            guard (start.y <= y && end.y > y) || (end.y <= y && start.y > y) else { continue }
+
+            let x = start.x + (y - start.y) / (end.y - start.y) * (end.x - start.x)
+            lower = min(lower, x)
+            upper = max(upper, x)
+        }
+
+        return lower < upper ? lower...upper : nil
+    }
+
+    /// The liquid's top surface seen slightly from above: an ellipse spanning the inside of the
+    /// vessel at the water line. The shader draws it and ripples its two edges.
+    struct Surface: Equatable {
+        let waterlineY: CGFloat
+        let centerX: CGFloat
+        let radius: CGFloat
+        /// Half the ellipse's height, its near and far edges' distance from the water line.
+        let depth: CGFloat
+    }
+
+    /// `reach` is how far the waves move the edges of the surface up and down.
+    static func surface(
+        in rect: CGRect,
+        innerOutline: [CGPoint],
+        fillRatio: Double,
+        reach: CGFloat = 0
+    ) -> Surface? {
+        let waterlineY = BubbleWave.waterlineY(fillRatio: fillRatio, in: rect)
+        guard waterlineY > rect.minY + 4,
+              waterlineY < rect.maxY - 4,
+              let extent = horizontalExtent(of: innerOutline, atY: waterlineY) else {
+            return nil
+        }
+
+        let depth = min(12, (extent.upperBound - extent.lowerBound) / 2 * 0.09)
+        // The surface's far and near edges and its waves meet the glass a little above and below
+        // the water line. Where the glass is wider there, the surface spans to it and the glass
+        // cuts it off, so no gap of air opens between the surface and the glass.
+        var lower = extent.lowerBound
+        var upper = extent.upperBound
+        for y in [waterlineY - depth - reach, waterlineY + depth + reach] {
+            guard let other = horizontalExtent(of: innerOutline, atY: y) else { continue }
+            lower = min(lower, other.lowerBound)
+            upper = max(upper, other.upperBound)
+        }
+
+        return Surface(
+            waterlineY: waterlineY,
+            centerX: (lower + upper) / 2,
+            radius: (upper - lower) / 2 + 1,
+            depth: depth
+        )
+    }
+
+    /// The inside of the glass as the shader sees it. `values` holds `count` (left, right) pairs
+    /// on rows spread evenly from the top to the bottom of the inside, then `count` (top, bottom)
+    /// pairs on columns spread evenly across it; `bounds` is where they start and end. Rows alone
+    /// lose the bottom and the top, where the glass runs nearly level, so the shader takes the
+    /// distance to the glass from both.
+    struct CrossSections: Equatable {
+        let bounds: CGRect
+        let values: [Float]
+    }
+
+    static func crossSections(of innerOutline: [CGPoint], count: Int) -> CrossSections {
+        guard count > 1,
+              let minX = innerOutline.map(\.x).min(),
+              let maxX = innerOutline.map(\.x).max(),
+              let minY = innerOutline.map(\.y).min(),
+              let maxY = innerOutline.map(\.y).max() else {
+            return CrossSections(bounds: .zero, values: [])
+        }
+
+        let bounds = CGRect(x: minX, y: minY, width: maxX - minX, height: maxY - minY)
+        // The outermost rows and columns sit just inside the bounds, where they still cross the
+        // outline.
+        let inset: CGFloat = 0.25
+        var values: [Float] = []
+        values.reserveCapacity(count * 4)
+
+        for index in 0..<count {
+            let y = interpolate(minY + inset, maxY - inset, CGFloat(index) / CGFloat(count - 1))
+            let extent = horizontalExtent(of: innerOutline, atY: y) ?? bounds.midX...bounds.midX
+            values.append(Float(extent.lowerBound))
+            values.append(Float(extent.upperBound))
+        }
+        // Columns are rows of the outline with its axes swapped.
+        let transposed = innerOutline.map { CGPoint(x: $0.y, y: $0.x) }
+        for index in 0..<count {
+            let x = interpolate(minX + inset, maxX - inset, CGFloat(index) / CGFloat(count - 1))
+            let extent = horizontalExtent(of: transposed, atY: x) ?? bounds.midY...bounds.midY
+            values.append(Float(extent.lowerBound))
+            values.append(Float(extent.upperBound))
+        }
+
+        return CrossSections(bounds: bounds, values: values)
+    }
+}
+
+/// The glass wall: the band between the outer silhouette and the inside of the vessel.
+struct BubbleWallShape: Shape {
+    let phaseMorph: BubblePhaseMorph
+
+    func path(in rect: CGRect) -> Path {
+        let outer = phaseMorph.shape.path(in: rect)
+        var path = outer
+        path.addPath(BubbleVessel.innerPath(of: outer, in: rect))
+        return path
     }
 }

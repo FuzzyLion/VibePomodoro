@@ -39,6 +39,8 @@ xcrun simctl launch booted Qi.VibePomodoro \
 xcrun simctl io booted screenshot docs/screenshots/productivity-light.png
 ```
 
-Terminate the app before relaunching with different arguments, let the page settle, and inspect each screenshot before replacing it. To reproduce the Focus state, prepare a paused `SessionSnapshot` in the isolated suite with the first focus and short break complete and 750 seconds recorded in the second focus block. No app behavior needs to change to make these previews.
+Terminate the app before relaunching with different arguments, let the page settle, and inspect each screenshot before replacing it. To reproduce the Focus state, also pass `VIBE_FOCUS_FIXTURE=focus-2-0.5`. With `--ui-testing`, it seeds a paused session with the first focus and short break complete and 750 seconds recorded in the second focus block. The value reads `<phase>-<round>-<progress>`, for example `shortBreak-1-0.3`, and a trailing `-running` starts the timer instead of pausing it.
+
+UI-testing launches never ask iOS for notification permission. To show how Settings looks when iOS blocks notifications, pass `VIBE_NOTIFICATION_PERMISSION=denied`; `allowed` and `notDetermined` work the same way.
 
 Screenshots document the visible UI. They do not establish physical haptic quality, notification delivery while locked, or real-device energy use.

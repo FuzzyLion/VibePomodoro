@@ -13,6 +13,8 @@ final class PomodoroStore: ObservableObject {
     static let appearanceSystemArgument = "--appearance-system"
     static let defaultsSuiteNameEnvironmentKey = "VIBE_DEFAULTS_SUITE"
     static let productivityFixtureEnvironmentKey = "VIBE_PRODUCTIVITY_FIXTURE"
+    static let focusFixtureEnvironmentKey = "VIBE_FOCUS_FIXTURE"
+    static let notificationPermissionFixtureEnvironmentKey = "VIBE_NOTIFICATION_PERMISSION"
     static let resetStorageEnvironmentKey = "VIBE_RESET_STORE"
     static let uiTestingEnvironmentKey = "VIBE_UI_TESTING"
 
@@ -21,6 +23,7 @@ final class PomodoroStore: ObservableObject {
     @Published var activeSession: SessionSnapshot?
     @Published var completedSessions: [CompletedSession]
     @Published var productivityCache: ProductivityAggregateCache
+    @Published var notificationPermission: NotificationPermission = .unknown
 
     let defaults: UserDefaults
     let feedbackPlayer: ReminderFeedbackPlaying
@@ -40,6 +43,7 @@ final class PomodoroStore: ObservableObject {
         self.feedbackPlayer = feedbackPlayer ?? ReminderFeedbackPlayer()
         Self.resetStorageIfRequested(using: defaults)
         Self.seedUITestingProductivityFixtureIfRequested(using: defaults)
+        Self.seedUITestingFocusFixtureIfRequested(using: defaults)
         var loadedSettings: PomodoroSettings = Self.loadValue(for: StorageKey.settings, using: defaults) ?? .default
         Self.applyLaunchAppearanceOverride(to: &loadedSettings)
         self.settings = loadedSettings
@@ -51,7 +55,7 @@ final class PomodoroStore: ObservableObject {
         reconcileNow(deliverForegroundFeedback: false)
         repairProductivityCacheIfNeeded()
         syncIdleTimer()
-        requestNotificationPermissionsIfNeeded()
+        refreshNotificationPermission()
         syncNotifications()
         syncStepBoundaryTimer()
     }
@@ -112,89 +116,6 @@ final class PomodoroStore: ObservableObject {
             || ProcessInfo.processInfo.environment[resetStorageEnvironmentKey] == "1"
     }
 
-    var currentPhase: SessionPhase {
-        activeSession?.currentPhase ?? .focus
-    }
-
-    var currentRunState: SessionRunState {
-        activeSession?.runState ?? .idle
-    }
-
-    var hasActiveSession: Bool {
-        activeSession != nil
-    }
-
-    var canGoBack: Bool {
-        guard let session = activeSession else { return false }
-        return session.currentStepIndex > 0 || session.hasElapsedTime(now: .now)
-    }
-
-    var shouldShowBackAction: Bool {
-        guard let session = activeSession else { return false }
-
-        switch session.runState {
-        case .idle:
-            return session.hasElapsedTime(now: .now)
-        case .running, .paused, .completed:
-            return true
-        }
-    }
-
-    var canSkip: Bool {
-        activeSession?.currentStep != nil
-    }
-
-    var canResetCurrentStep: Bool {
-        guard let session = activeSession,
-              session.runState != .completed,
-              let step = session.currentStep else { return false }
-
-        return session.runState == .running
-            || session.runState == .paused
-            || session.accumulatedDuration(for: step) > 0
-    }
-
-    var primaryActionTitle: String {
-        guard let session = activeSession else { return "Start" }
-
-        switch session.runState {
-        case .idle:
-            return "Start"
-        case .running:
-            return "Pause"
-        case .paused:
-            return "Resume"
-        case .completed:
-            return "Start Again"
-        }
-    }
-
-    var currentStepTitle: String {
-        activeSession?.currentPhase?.detailTitle ?? SessionPhase.focus.detailTitle
-    }
-
-    var progressLabel: String {
-        guard let session = activeSession, let step = session.currentStep else {
-            return "Round 1 of \(settings.targetRounds)"
-        }
-
-        return "Round \(step.roundNumber) of \(session.targetRounds)"
-    }
-
-    var statusText: String {
-        guard let session = activeSession else { return "READY" }
-        guard session.runState != .completed else { return "COMPLETE" }
-
-        switch session.currentPhase ?? .focus {
-        case .focus:
-            return "FOCUS"
-        case .shortBreak:
-            return "SHORT BREAK"
-        case .longBreak:
-            return "LONG BREAK"
-        }
-    }
-
     func remainingDuration(now: Date = .now) -> TimeInterval {
         activeSession?.remainingDuration(now: now) ?? settings.focusDuration
     }
@@ -227,6 +148,8 @@ final class PomodoroStore: ObservableObject {
             let events = PomodoroEngine.startOrResume(session: &session, now: .now)
             activeSession = session
             handle(events: events)
+            // Asked here rather than at launch, so the prompt arrives when its reason is on screen.
+            requestNotificationPermissionsIfNeeded()
         case .running:
             PomodoroEngine.pause(session: &session, now: .now)
             activeSession = session

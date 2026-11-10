@@ -1,47 +1,5 @@
 import SwiftUI
 
-struct BubbleAnimatedSurfaceLayer: View {
-    let renderState: BubbleRenderState
-    let waveClock: BubbleWaveClock
-    let phaseMorph: BubblePhaseMorph
-    let liquidSourceVisuals: BubbleLiquidVisualState
-    let renderingPolicy: BubbleRenderingPolicy
-
-    var body: some View {
-        Group {
-            if renderingPolicy.animatesSurface {
-                TimelineView(.periodic(from: .now, by: renderState.animationRefreshInterval)) { context in
-                    animatedSurface(at: context.date)
-                }
-            } else {
-                animatedSurface(at: .now)
-            }
-        }
-        .mask(phaseMorph.shape)
-        .allowsHitTesting(false)
-    }
-
-    @ViewBuilder
-    private func animatedSurface(at date: Date) -> some View {
-        let wavePhase = waveClock.phase(at: date)
-        let glowExpansion = 0.44 + (sin(wavePhase * 0.42) + 1) * 0.16
-        let targetLiquidVisuals = BubbleLiquidVisualState(renderState: renderState, at: date)
-        let liquidVisuals = BubbleLiquidVisualState.interpolated(
-            from: liquidSourceVisuals,
-            to: targetLiquidVisuals,
-            progress: phaseMorph.clampedProgress
-        )
-
-        BubbleLiquidLayer(
-            phaseMorph: phaseMorph,
-            visuals: liquidVisuals,
-            wavePhase: wavePhase,
-            glowExpansion: glowExpansion,
-            renderingPolicy: renderingPolicy
-        )
-    }
-}
-
 struct BubbleGlowBackdrop: View {
     @Environment(\.colorScheme) private var colorScheme
 
@@ -52,7 +10,6 @@ struct BubbleGlowBackdrop: View {
     var body: some View {
         let glow = glowExpansion.isFinite ? max(0, glowExpansion) : 0
         let cue = stepBoundaryCueProgress.isFinite ? max(0, min(stepBoundaryCueProgress, 1)) : 0
-        let phase = phaseMorph.visualPhase
         let bubbleShape = phaseMorph.shape
         let profile = phaseMorph.shellProfile(for: FocusScreenLayout.bubbleDiameter)
         let gatheredGlowWidth = profile.outerGlowSize.width * (1 - cue * 0.16)
@@ -65,11 +22,12 @@ struct BubbleGlowBackdrop: View {
         ZStack {
             bubbleShape
                 .stroke(
-                    phase.shadowColor.opacity(
+                    phaseMorph.shadow.opacity(
                         clampedOpacity(
                             colorScheme == .dark
                                 ? 0.034 + glow * 0.008 + cue * 0.008
-                                : 0.015 + glow * 0.004 + cue * 0.004
+                                // In light mode this soft ring is what separates the glass from the page.
+                                : 0.085 + glow * 0.010 + cue * 0.006
                         )
                     ),
                     lineWidth: colorScheme == .dark ? 10.5 : 8.5
@@ -96,14 +54,14 @@ struct BubbleGlowBackdrop: View {
                 .fill(
                     RadialGradient(
                         colors: [
-                            phase.shadowColor.opacity(
+                            phaseMorph.shadow.opacity(
                                 clampedOpacity(
                                     colorScheme == .dark
                                         ? 0.07 + glow * 0.04 + cue * 0.035
                                         : 0.06 + glow * 0.03 + cue * 0.020
                                 )
                             ),
-                            phase.shadowColor.opacity(
+                            phaseMorph.shadow.opacity(
                                 clampedOpacity(
                                     colorScheme == .dark
                                         ? 0.022 + glow * 0.014 + cue * 0.012
@@ -148,249 +106,147 @@ struct BubbleGlowBackdrop: View {
     }
 }
 
-private struct BubbleLiquidLayer: View {
-    @Environment(\.colorScheme) private var colorScheme
+/// The arguments for `bubbleLiquid` in FocusBubbleLiquid.metal, which shades the liquid per pixel
+/// over the layer that holds the countdown. The tint deepens with the light's path through the
+/// liquid, the digits below the surface are refracted, the surface mirrors the light and glints
+/// with the waves, and faint caustic threads drift low on the side away from the light.
+enum BubbleLiquidShader {
+    /// How far from a pixel the shader samples the digits when it refracts them.
+    static let maxSampleOffset = CGSize(width: 16, height: 8)
 
-    let phaseMorph: BubblePhaseMorph
-    let visuals: BubbleLiquidVisualState
-    let wavePhase: Double
-    let glowExpansion: Double
-    let renderingPolicy: BubbleRenderingPolicy
+    /// Rows and columns across the inside of the glass, about 2.5 pt apart.
+    private static let crossSectionCount = 96
+    /// The glass behind the liquid, measured from the rendered bubble. The glass is not part of the
+    /// shaded layer, so the shader uses these to tint it.
+    private static let darkBackdrop = Color(red: 0.150, green: 0.155, blue: 0.168)
+    private static let lightBackdrop = Color(red: 0.964, green: 0.968, blue: 0.976)
 
-    private var phase: SessionPhase {
-        phaseMorph.visualPhase
-    }
-
-    var body: some View {
-        let phase = phaseMorph.visualPhase
-        let profile = phaseMorph.shellProfile(for: FocusScreenLayout.bubbleDiameter)
-        let boundaryCue = max(0, min(visuals.stepBoundaryCueProgress, 1))
-        let visualFillRatio = max(0, min(visuals.fillRatio, 1.08))
-        let amplitude = (profile.waveAmplitudeBase + glowExpansion * profile.waveAmplitudeRange) * (1 - boundaryCue * 0.08)
-        let gatheredDepthPoolSize = CGSize(
-            width: profile.depthPoolSize.width * (1 - boundaryCue * 0.12),
-            height: profile.depthPoolSize.height * (1 - boundaryCue * 0.18)
+    static func shader(
+        phaseMorph: BubblePhaseMorph,
+        frame: BubbleLiquidFrame,
+        renderingPolicy: BubbleRenderingPolicy,
+        isDark: Bool
+    ) -> Shader {
+        let size = FocusScreenLayout.bubbleDiameter
+        let rect = CGRect(x: 0, y: 0, width: size, height: size)
+        let innerOutline = BubbleVessel.polygon(
+            of: BubbleVessel.innerPath(of: phaseMorph.shape.path(in: rect), in: rect),
+            curveSteps: 16
         )
-        let gatheredDepthPoolOffset = CGSize(
-            width: profile.depthPoolOffset.width * (1 - boundaryCue * 0.22),
-            height: profile.depthPoolOffset.height + FocusScreenLayout.bubbleDiameter * boundaryCue * 0.014
+        let surface = BubbleVessel.surface(
+            in: rect,
+            innerOutline: innerOutline,
+            fillRatio: frame.fillRatio,
+            reach: frame.amplitude
         )
+        let sections = BubbleVessel.crossSections(of: innerOutline, count: crossSectionCount)
+        let glow = isDark ? phaseMorph.tint.mix(with: .white, by: 0.45) : Color.white
+        // The paler break colors absorb little light, so they need a denser liquid than amber to
+        // read as color rather than gray.
+        let density = phaseMorph.blendedValue { $0 == .focus ? 1 : (isDark ? 1.8 : 1.45) }
 
-        Canvas(rendersAsynchronously: true) { context, canvasSize in
-            guard canvasSize.width.isFinite,
-                  canvasSize.height.isFinite,
-                  canvasSize.width > 0,
-                  canvasSize.height > 0 else {
-                return
-            }
-
-            let sphereRect = CGRect(origin: .zero, size: canvasSize)
-            let waterlineY = sphereRect.maxY - sphereRect.height * CGFloat(visualFillRatio)
-
-            guard waterlineY.isFinite else { return }
-
-            let liquidPath = WaveLiquidShape(
-                fillRatio: visualFillRatio,
-                phase: wavePhase,
-                amplitude: amplitude
-            ).path(in: sphereRect)
-
-            context.fill(
-                liquidPath,
-                with: .linearGradient(
-                    Gradient(colors: liquidGradientColors),
-                    startPoint: CGPoint(x: sphereRect.midX, y: waterlineY - 18),
-                    endPoint: CGPoint(x: sphereRect.midX, y: sphereRect.maxY)
-                )
-            )
-
-            context.fill(
-                liquidPath,
-                with: .linearGradient(
-                    Gradient(colors: [
-                        Color.clear,
-                        phase.shadowColor.opacity(colorScheme == .dark ? 0.18 : 0.10)
-                    ]),
-                    startPoint: CGPoint(x: sphereRect.midX, y: waterlineY + 8),
-                    endPoint: CGPoint(x: sphereRect.midX, y: sphereRect.maxY)
-                )
-            )
-
-            let secondaryLiquidPath = WaveLiquidShape(
-                fillRatio: min(1.08, visualFillRatio + 0.012),
-                phase: wavePhase * 1.08 + .pi / 5,
-                amplitude: amplitude * (0.55 - boundaryCue * 0.04)
-            ).path(in: sphereRect)
-
-            context.fill(
-                secondaryLiquidPath,
-                with: .linearGradient(
-                    Gradient(colors: secondaryLiquidGradientColors),
-                    startPoint: CGPoint(x: sphereRect.midX, y: waterlineY - 14),
-                    endPoint: CGPoint(x: sphereRect.midX, y: sphereRect.maxY)
-                )
-            )
-
-            if renderingPolicy.rendersDepthPool {
-                var depthPoolContext = context
-                depthPoolContext.clip(to: secondaryLiquidPath)
-                depthPoolContext.fill(
-                    Path(
-                        ellipseIn: CGRect(
-                            x: sphereRect.midX - (gatheredDepthPoolSize.width / 2) + gatheredDepthPoolOffset.width,
-                            y: sphereRect.midY - (gatheredDepthPoolSize.height / 2) + gatheredDepthPoolOffset.height,
-                            width: gatheredDepthPoolSize.width,
-                            height: gatheredDepthPoolSize.height
-                        )
-                    ),
-                    with: .radialGradient(
-                        Gradient(colors: [
-                            phase.shadowColor.opacity(colorScheme == .dark ? 0.34 + boundaryCue * 0.08 : 0.18 + boundaryCue * 0.05),
-                            phase.tintColor.opacity(colorScheme == .dark ? 0.18 + boundaryCue * 0.03 : 0.10 + boundaryCue * 0.02),
-                            Color.clear
-                        ]),
-                        center: CGPoint(
-                            x: sphereRect.midX + gatheredDepthPoolOffset.width * 0.08,
-                            y: sphereRect.maxY - gatheredDepthPoolSize.height * (0.28 - boundaryCue * 0.05)
-                        ),
-                        startRadius: 4,
-                        endRadius: gatheredDepthPoolSize.width * (0.46 - boundaryCue * 0.06)
-                    )
-                )
-            }
-
-            if colorScheme == .dark {
-                var waterlineGlowContext = context
-                waterlineGlowContext.addFilter(.blur(radius: 10 - boundaryCue * 1.8))
-                waterlineGlowContext.fill(
-                    Path(
-                        ellipseIn: CGRect(
-                            x: sphereRect.minX + sphereRect.width * (0.11 + boundaryCue * 0.03),
-                            y: waterlineY - 5 + boundaryCue * 1.4,
-                            width: sphereRect.width * (0.78 - boundaryCue * 0.07),
-                            height: 12 - boundaryCue * 1.8
-                        )
-                    ),
-                    with: .linearGradient(
-                        Gradient(colors: [
-                            Color.white.opacity(0.14 - boundaryCue * 0.04),
-                            phase.glassTint.opacity(0.05 + boundaryCue * 0.02),
-                            Color.clear
-                        ]),
-                        startPoint: CGPoint(x: sphereRect.midX, y: waterlineY - 10),
-                        endPoint: CGPoint(x: sphereRect.midX, y: waterlineY + 10)
-                    )
-                )
-            } else {
-                var waterlineGlowContext = context
-                waterlineGlowContext.addFilter(.blur(radius: 8 - boundaryCue * 1.4))
-                waterlineGlowContext.fill(
-                    Path(
-                        ellipseIn: CGRect(
-                            x: sphereRect.minX + sphereRect.width * (0.12 + boundaryCue * 0.03),
-                            y: waterlineY - 5 + boundaryCue,
-                            width: sphereRect.width * (0.76 - boundaryCue * 0.06),
-                            height: 11 - boundaryCue * 1.4
-                        )
-                    ),
-                    with: .linearGradient(
-                        Gradient(colors: [
-                            Color.white.opacity(0.12 - boundaryCue * 0.035),
-                            phase.tintColor.opacity(0.06 - boundaryCue * 0.02),
-                            Color.clear
-                        ]),
-                        startPoint: CGPoint(x: sphereRect.midX, y: waterlineY - 9),
-                        endPoint: CGPoint(x: sphereRect.midX, y: waterlineY + 9)
-                    )
-                )
-            }
-        }
-    }
-
-    private var secondaryLiquidGradientColors: [Color] {
-        if colorScheme == .dark {
-            return [
-                Color.white.opacity(0.09),
-                Color.white.opacity(0.03),
-                Color.clear
-            ]
-        }
-
-        return [
-            Color.white.opacity(0.14),
-            phase.tintColor.opacity(0.12),
-            Color.clear
-        ]
-    }
-
-    private var liquidGradientColors: [Color] {
-        guard colorScheme == .light else { return phase.liquidGradientColors }
-
-        switch phase {
-        case .focus:
-            return [
-                Color.white.opacity(0.092),
-                Color(red: 0.96, green: 0.92, blue: 0.80).opacity(0.185),
-                Color(red: 0.86, green: 0.74, blue: 0.48).opacity(0.265)
-            ]
-        case .shortBreak:
-            return [
-                Color.white.opacity(0.086),
-                VibePalette.softMist.opacity(0.178),
-                VibePalette.softMistDeep.opacity(0.258)
-            ]
-        case .longBreak:
-            return [
-                Color.white.opacity(0.096),
-                Color(red: 0.84, green: 0.91, blue: 0.89).opacity(0.198),
-                Color(red: 0.69, green: 0.82, blue: 0.79).opacity(0.268)
-            ]
-        }
+        return ShaderLibrary.bubbleLiquid(
+            .float2(Float(size), Float(size)),
+            .float4(
+                Float(BubbleWave.waterlineY(fillRatio: frame.fillRatio, in: rect)),
+                Float(surface?.centerX ?? rect.midX),
+                Float(surface?.radius ?? 0),
+                Float(surface?.depth ?? 0)
+            ),
+            .float4(
+                Float(frame.amplitude),
+                Float(frame.wavePhase),
+                Float(frame.wavePhase * 1.08 + .pi / 5),
+                Float(frame.wavePhase)
+            ),
+            .color(phaseMorph.tint),
+            .color(phaseMorph.shadow),
+            .color(glow),
+            .color(isDark ? darkBackdrop : lightBackdrop),
+            .float4(
+                isDark ? 1 : 0,
+                Float(density),
+                Float(frame.fillRatio),
+                renderingPolicy.rendersCaustic ? 1 : 0
+            ),
+            .float(Float(frame.boundaryCue)),
+            .float4(
+                Float(sections.bounds.minY),
+                Float(sections.bounds.maxY),
+                Float(sections.bounds.minX),
+                Float(sections.bounds.maxX)
+            ),
+            .floatArray(sections.values)
+        )
     }
 }
 
-private struct WaveLiquidShape: Shape {
-    let fillRatio: Double
-    let phase: Double
-    let amplitude: Double
+/// What the vessel casts on the page: a soft shadow, a contact shadow where the glass meets
+/// the surface, and a caustic, the light the liquid focuses, which brightens as it fills.
+struct BubbleGroundLayer: View {
+    @Environment(\.colorScheme) private var colorScheme
 
-    func path(in rect: CGRect) -> Path {
-        guard rect.width.isFinite,
-              rect.height.isFinite,
-              rect.width > 0,
-              rect.height > 0,
-              fillRatio.isFinite,
-              phase.isFinite,
-              amplitude.isFinite else {
-            return Path()
+    let driver: BubbleLiquidDriver
+
+    var body: some View {
+        let isDark = colorScheme == .dark
+        let size = FocusScreenLayout.bubbleDiameter
+        let bounds = driver.phaseMorph.shape.path(in: CGRect(x: 0, y: 0, width: size, height: size)).boundingRect
+
+        ZStack {
+            Ellipse()
+                .fill(Color.black.opacity(isDark ? 0.50 : 0.12))
+                .frame(width: bounds.width * 0.86, height: 22)
+                .blur(radius: isDark ? 11 : 9)
+                .position(x: bounds.midX + size * 0.06, y: bounds.maxY + 2)
+
+            Ellipse()
+                .fill(Color.black.opacity(isDark ? 0.65 : 0.22))
+                .frame(width: bounds.width * 0.52, height: 8)
+                .blur(radius: 3.5)
+                .position(x: bounds.midX + size * 0.02, y: bounds.maxY - 1)
+
+            if driver.renderingPolicy.rendersCaustic {
+                BubbleLiquidTimeline(driver: driver) { frame in
+                    BubbleCaustic(tint: driver.phaseMorph.tint, bounds: bounds, frame: frame, isDark: isDark)
+                }
+            }
         }
+        .frame(width: size, height: size)
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+}
 
-        let clampedFill = max(0, min(fillRatio, 1.08))
-        let baseY = rect.height * (1 - clampedFill)
-        let mainAmplitude = min(rect.height * 0.06, amplitude)
-        let width = rect.width
-        let step = max(CGFloat(5.5), width / 34)
-        let startX = -step
-        let endX = width + step
+/// The light the liquid gathers onto the page, inside the shadow to the lower right. It takes
+/// the liquid's tint and has no hard core, so on a dark page it reads as warm light in the
+/// shadow rather than a highlight. It brightens as the vessel fills.
+private struct BubbleCaustic: View {
+    let tint: Color
+    let bounds: CGRect
+    let frame: BubbleLiquidFrame
+    let isDark: Bool
 
-        var path = Path()
-        path.move(to: CGPoint(x: startX, y: rect.height))
-        path.addLine(to: CGPoint(x: startX, y: baseY))
+    var body: some View {
+        let size = FocusScreenLayout.bubbleDiameter
+        let liquid = max(0.2, min(frame.fillRatio, 1))
+        // The gathered light drifts and breathes with the surface above it.
+        let drift = CGFloat(sin(frame.wavePhase * 0.9))
+        let breath = 0.88 + 0.12 * sin(frame.wavePhase * 1.3 + 0.8)
+        let center = CGPoint(x: bounds.midX + size * 0.10 + drift * 2.5, y: bounds.maxY + 5)
 
-        var x = startX
-        while x <= endX {
-            let relativeX = x / width
-            let primaryAngle = Double(relativeX) * Double.pi * 1.72 + phase
-            let secondaryAngle = Double(relativeX) * Double.pi * 3.34 + phase * 0.68
-            let wave = CGFloat(sin(primaryAngle)) * mainAmplitude
-            let secondaryWave = CGFloat(sin(secondaryAngle)) * mainAmplitude * 0.24
-            let y = baseY + wave + secondaryWave
-            path.addLine(to: CGPoint(x: x, y: y))
-            x += step
+        ZStack {
+            Ellipse()
+                .fill(tint.opacity((isDark ? 0.30 : 0.34) * liquid))
+                .frame(width: bounds.width * 0.50, height: 16)
+                .blur(radius: 9)
+                .position(center)
+
+            Ellipse()
+                .fill(tint.opacity((isDark ? 0.26 : 0.30) * liquid * breath))
+                .frame(width: bounds.width * 0.26, height: 6)
+                .blur(radius: 4)
+                .position(x: center.x + drift * 2, y: center.y - 1)
         }
-
-        path.addLine(to: CGPoint(x: endX, y: rect.height))
-        path.closeSubpath()
-        return path
     }
 }

@@ -1,20 +1,16 @@
 import SwiftUI
 
 struct FocusPageContent: View {
+    @EnvironmentObject private var store: PomodoroStore
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     let renderState: FocusRenderState
     let layout: FocusScreenLayout
-    let size: CGSize
     let bubbleCenter: CGPoint
-    let progressDotsTopPadding: CGFloat
-    let bottomChromeTopPadding: CGFloat
-    let chromeOpacity: Double
-    let isChromeInteractive: Bool
-    let backgroundTapAction: (CGPoint) -> Void
-    let primaryAction: () -> Void
-    let goBackAction: () -> Void
-    let resetAction: () -> Void
-    let requestFinishAction: () -> Void
-    let skipAction: () -> Void
+    let isChromeHidden: Bool
+    let onBackgroundTap: (CGPoint) -> Void
+    let onPrimary: () -> Void
+    let onRequestFinish: () -> Void
 
     var body: some View {
         ZStack {
@@ -24,97 +20,53 @@ struct FocusPageContent: View {
                 .gesture(
                     SpatialTapGesture()
                         .onEnded { value in
-                            backgroundTapAction(value.location)
+                            onBackgroundTap(value.location)
                         }
                 )
 
-            BubbleTimerView(
-                renderState: renderState.bubble
-            )
-            .frame(
-                width: FocusScreenLayout.bubbleDiameter,
-                height: FocusScreenLayout.bubbleDiameter
-            )
-            .position(bubbleCenter)
+            BubbleTimerView(renderState: renderState.bubble)
+                .frame(
+                    width: FocusScreenLayout.bubbleDiameter,
+                    height: FocusScreenLayout.bubbleDiameter
+                )
+                .position(bubbleCenter)
 
-            FocusProgressDotsChrome(
-                renderState: renderState,
-                topPadding: progressDotsTopPadding
-            )
-            .opacity(chromeOpacity)
+            Group {
+                FocusProgressDotsChrome(
+                    renderState: renderState,
+                    topPadding: layout.progressDotsTop(bubbleCenterY: bubbleCenter.y)
+                )
 
-            FocusTopChrome(
-                renderState: renderState,
-                layout: layout,
-                resetAction: resetAction,
-                requestFinishAction: requestFinishAction
-            )
-            .opacity(chromeOpacity)
-            .allowsHitTesting(isChromeInteractive)
+                FocusSummaryCaptionChrome(
+                    caption: renderState.summaryCaption,
+                    topPadding: layout.summaryCaptionTop(bubbleCenterY: bubbleCenter.y)
+                )
 
-            FocusBottomChrome(
-                renderState: renderState,
-                topPadding: bottomChromeTopPadding,
-                primaryAction: primaryAction,
-                goBackAction: goBackAction,
-                skipAction: skipAction
+                FocusTopChrome(
+                    renderState: renderState,
+                    layout: layout,
+                    onReset: store.resetCurrentStep,
+                    onRequestFinish: onRequestFinish
+                )
+
+                FocusBottomChrome(
+                    renderState: renderState,
+                    topPadding: layout.bottomChromeTop(bubbleCenterY: bubbleCenter.y),
+                    onPrimary: onPrimary,
+                    onBack: store.goBackOneStep,
+                    onSkip: store.skipCurrentStep
+                )
+            }
+            // When a session ends, and when Done closes it, the status, the markers, and the
+            // controls change over together rather than switching at once.
+            .animation(
+                reduceMotion ? FocusCompletionMotion.reducedMotionFade : FocusCompletionMotion.chrome,
+                value: renderState.isSessionComplete
             )
-            .opacity(chromeOpacity)
-            .allowsHitTesting(isChromeInteractive)
+            .opacity(isChromeHidden ? 0 : 1)
+            .allowsHitTesting(!isChromeHidden)
         }
-        .frame(width: size.width, height: size.height, alignment: .center)
-    }
-}
-
-struct FocusCompletionBackdropBubble: View {
-    @Environment(\.colorScheme) private var colorScheme
-
-    let renderState: BubbleRenderState
-    let size: CGSize
-    let bubbleCenter: CGPoint
-
-    var body: some View {
-        let bubbleShape = BubbleGlassShape(phase: renderState.phase)
-        let isDark = colorScheme == .dark
-
-        ZStack {
-            bubbleShape
-                .fill(
-                    LinearGradient(
-                        colors: [
-                            Color.white.opacity(isDark ? 0.030 : 0.145),
-                            renderState.phase.tintColor.opacity(isDark ? 0.030 : 0.060),
-                            renderState.phase.shadowColor.opacity(isDark ? 0.018 : 0.035)
-                        ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-
-            bubbleShape
-                .stroke(
-                    Color.white.opacity(isDark ? 0.12 : 0.34),
-                    lineWidth: isDark ? 0.9 : 1.0
-                )
-
-            bubbleShape
-                .stroke(
-                    renderState.phase.shadowColor.opacity(isDark ? 0.035 : 0.045),
-                    lineWidth: 10
-                )
-                .blur(radius: isDark ? 7 : 5)
-                .scaleEffect(1.012)
-        }
-        .frame(
-            width: FocusScreenLayout.bubbleDiameter,
-            height: FocusScreenLayout.bubbleDiameter
-        )
-        .position(bubbleCenter)
-        .opacity(isDark ? 0.28 : 0.32)
-        .blur(radius: isDark ? 3.2 : 2.6)
-        .frame(width: size.width, height: size.height, alignment: .center)
-        .allowsHitTesting(false)
-        .accessibilityHidden(true)
+        .frame(width: layout.size.width, height: layout.size.height, alignment: .center)
     }
 }
 
@@ -143,11 +95,50 @@ private struct FocusProgressDotsChrome: View {
     }
 }
 
+/// A finished session's breakdown under the round markers. It arrives after the vessel has
+/// started to settle and leaves first when Done is tapped.
+private struct FocusSummaryCaptionChrome: View {
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    let caption: String?
+    let topPadding: CGFloat
+
+    var body: some View {
+        ZStack {
+            if let caption {
+                Text(caption)
+                    .font(.system(size: 13, weight: .medium, design: .default))
+                    .monospacedDigit()
+                    .foregroundStyle(FocusControlColors.captionColor(for: colorScheme))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
+                    .transition(reduceMotion ? .opacity : .opacity.combined(with: .offset(y: 6)))
+            }
+        }
+        .animation(animation, value: caption != nil)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .padding(.top, topPadding)
+        .padding(.horizontal, FocusScreenLayout.horizontalPadding)
+        .allowsHitTesting(false)
+    }
+
+    private var animation: Animation {
+        if reduceMotion {
+            return FocusCompletionMotion.reducedMotionFade
+        }
+        return caption != nil ? FocusCompletionMotion.captionIn : FocusCompletionMotion.captionOut
+    }
+}
+
 private struct FocusTopChrome: View {
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     let renderState: FocusRenderState
     let layout: FocusScreenLayout
-    let resetAction: () -> Void
-    let requestFinishAction: () -> Void
+    let onReset: () -> Void
+    let onRequestFinish: () -> Void
 
     var body: some View {
         VStack(spacing: 0) {
@@ -157,28 +148,32 @@ private struct FocusTopChrome: View {
 
                 HStack {
                     FocusActionSlot(size: FocusScreenLayout.topActionButtonHitSize) {
-                        FocusTopBarButton(
-                            systemImage: "arrow.counterclockwise",
-                            isEnabled: renderState.canReset,
-                            accessibilityLabel: "Reset current step",
-                            action: resetAction
-                        )
+                        if renderState.canReset {
+                            topButton("arrow.counterclockwise", label: "Reset current step", action: onReset)
+                        }
                     }
 
-                    Spacer(minLength: layout.topChromeInnerSpacing)
+                    Spacer(minLength: FocusScreenLayout.topChromeInnerSpacing)
 
                     FocusActionSlot(size: FocusScreenLayout.topActionButtonHitSize) {
-                        if renderState.shouldShowFinishAction {
-                            FocusTopBarButton(
-                                systemImage: "flag.checkered",
-                                isEnabled: true,
-                                accessibilityLabel: "Finish session early",
-                                action: requestFinishAction
-                            )
+                        if renderState.showsFinish {
+                            topButton("flag.checkered", label: "Finish session early", action: onRequestFinish)
                         }
                     }
                 }
             }
+
+            // A session finished early says that what was done is kept.
+            ZStack {
+                if let detail = renderState.statusDetail {
+                    Text(detail)
+                        .font(.system(size: 14, weight: .medium, design: .default))
+                        .foregroundStyle(FocusControlColors.captionColor(for: colorScheme))
+                        .multilineTextAlignment(.center)
+                        .transition(reduceMotion ? .opacity : .opacity.combined(with: .offset(y: -4)))
+                }
+            }
+            .animation(detailAnimation, value: renderState.statusDetail != nil)
 
             Spacer(minLength: 0)
         }
@@ -195,41 +190,52 @@ private struct FocusTopChrome: View {
             )
         )
     }
+
+    private var detailAnimation: Animation {
+        if reduceMotion {
+            return FocusCompletionMotion.reducedMotionFade
+        }
+        return renderState.statusDetail != nil ? FocusCompletionMotion.captionIn : FocusCompletionMotion.captionOut
+    }
+
+    private func topButton(_ systemImage: String, label: String, action: @escaping () -> Void) -> some View {
+        FocusIconButton(
+            systemImage: systemImage,
+            diameter: FocusScreenLayout.topActionButtonVisualSize,
+            symbolSize: 17,
+            accessibilityLabel: label,
+            action: action
+        )
+    }
 }
 
 private struct FocusBottomChrome: View {
     let renderState: FocusRenderState
     let topPadding: CGFloat
-    let primaryAction: () -> Void
-    let goBackAction: () -> Void
-    let skipAction: () -> Void
+    let onPrimary: () -> Void
+    let onBack: () -> Void
+    let onSkip: () -> Void
 
     var body: some View {
         HStack(spacing: FocusScreenLayout.bottomControlSpacing) {
             GlassEffectContainer(spacing: FocusScreenLayout.bottomGlassMergeSpacing) {
                 HStack(spacing: FocusScreenLayout.bottomControlSpacing) {
                     FocusActionSlot(size: FocusScreenLayout.bottomSecondaryButtonHitSize) {
-                        FocusBottomSecondaryButton(
-                            systemImage: "chevron.left.2",
-                            isEnabled: renderState.shouldShowBackAction && renderState.canGoBack,
-                            accessibilityLabel: "Back to last step",
-                            action: goBackAction
-                        )
+                        if renderState.showsBack {
+                            sideButton("chevron.left.2", label: "Back to last step", action: onBack)
+                        }
                     }
 
                     FocusPrimaryControlButton(
-                        title: renderState.bubble.actionTitle,
-                        systemImage: primaryActionIconName,
-                        action: primaryAction
+                        action: renderState.primaryAction,
+                        phase: renderState.phase,
+                        onTap: onPrimary
                     )
 
                     FocusActionSlot(size: FocusScreenLayout.bottomSecondaryButtonHitSize) {
-                        FocusBottomSecondaryButton(
-                            systemImage: "chevron.right.2",
-                            isEnabled: renderState.canSkip,
-                            accessibilityLabel: "Skip current step",
-                            action: skipAction
-                        )
+                        if renderState.canSkip {
+                            sideButton("chevron.right.2", label: "Skip current step", action: onSkip)
+                        }
                     }
                 }
             }
@@ -240,25 +246,26 @@ private struct FocusBottomChrome: View {
         .padding(.horizontal, FocusScreenLayout.horizontalPadding)
     }
 
-    private var primaryActionIconName: String {
-        switch renderState.bubble.actionTitle {
-        case "Pause":
-            return "pause.fill"
-        case "Resume", "Start", "Start Again":
-            return "play.fill"
-        default:
-            return "play.fill"
-        }
+    private func sideButton(_ systemImage: String, label: String, action: @escaping () -> Void) -> some View {
+        FocusIconButton(
+            systemImage: systemImage,
+            diameter: FocusScreenLayout.bottomSecondaryButtonSize,
+            symbolSize: 18,
+            accessibilityLabel: label,
+            action: action
+        )
     }
 }
 
+/// Owns a control's hit area and keeps its space when the control is hidden.
 private struct FocusActionSlot<Content: View>: View {
     let size: CGFloat
     @ViewBuilder let content: () -> Content
 
     var body: some View {
-        content()
+        Color.clear
             .frame(width: size, height: size)
+            .overlay { content() }
             .contentShape(Rectangle())
     }
 }

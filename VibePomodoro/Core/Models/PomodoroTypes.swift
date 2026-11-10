@@ -25,28 +25,6 @@ enum SessionPhase: String, Codable, CaseIterable, Identifiable {
             return "Long Break"
         }
     }
-
-    var detailTitle: String {
-        switch self {
-        case .focus:
-            return "Focus Session"
-        case .shortBreak:
-            return "Short Break"
-        case .longBreak:
-            return "Long Break"
-        }
-    }
-
-    var systemImage: String {
-        switch self {
-        case .focus:
-            return "timer"
-        case .shortBreak:
-            return "cup.and.saucer"
-        case .longBreak:
-            return "sparkles"
-        }
-    }
 }
 
 enum SessionRunState: String, Codable {
@@ -56,10 +34,11 @@ enum SessionRunState: String, Codable {
     case completed
 }
 
+/// Listed in menu order: the default first.
 enum PomodoroAppearanceMode: String, Codable, CaseIterable, Identifiable {
+    case system
     case light
     case dark
-    case system
 
     var id: String { rawValue }
 
@@ -73,17 +52,17 @@ enum PomodoroAppearanceMode: String, Codable, CaseIterable, Identifiable {
             return "Dark"
         }
     }
+}
 
-    var systemImage: String {
-        switch self {
-        case .system:
-            return "circle.lefthalf.filled"
-        case .light:
-            return "sun.max"
-        case .dark:
-            return "moon"
-        }
-    }
+/// What iOS currently allows for the app's notifications. It is read from the system and never stored.
+enum NotificationPermission: Equatable {
+    /// Not read from the system yet.
+    case unknown
+    /// The app hasn't asked yet.
+    case notDetermined
+    case allowed
+    /// Turned off in iOS Settings. The app can't deliver notifications until it's turned back on there.
+    case denied
 }
 
 struct PomodoroSettings: Codable, Equatable {

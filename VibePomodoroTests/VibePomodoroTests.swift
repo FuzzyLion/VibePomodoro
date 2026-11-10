@@ -8,6 +8,7 @@
 import Foundation
 import SwiftUI
 import Testing
+import UserNotifications
 @testable import VibePomodoro
 
 @MainActor
@@ -42,6 +43,28 @@ struct VibePomodoroTests {
         ])
         #expect(stats.focusTime == 5 * 60)
         #expect(stats.completedFocusCount == 0)
+    }
+
+    @Test func focusRoundCompletionSeparatesFinishedAndSkippedBlocks() async throws {
+        var settings = PomodoroSettings.default
+        settings.targetRounds = 2
+
+        let start = Date(timeIntervalSince1970: 3_000)
+        var session = SessionSnapshot.makeNew(settings: settings, now: start)
+        _ = PomodoroEngine.startOrResume(session: &session, now: start)
+
+        // Round 1 runs its full duration; round 2 is skipped after five minutes.
+        let firstBreakStart = start.addingTimeInterval(settings.focusDuration)
+        _ = PomodoroEngine.reconcile(session: &session, now: firstBreakStart)
+        let secondFocusStart = firstBreakStart.addingTimeInterval(60)
+        _ = PomodoroEngine.skip(session: &session, now: secondFocusStart)
+        let secondFocusSkip = secondFocusStart.addingTimeInterval(5 * 60)
+        _ = PomodoroEngine.skip(session: &session, now: secondFocusSkip)
+
+        #expect(session.currentPhase == .longBreak)
+        #expect(session.isFocusRoundCompleted(1))
+        #expect(!session.isFocusRoundCompleted(2))
+        #expect(session.statistics(now: secondFocusSkip).completedFocusCount == 1)
     }
 
     @Test func skipFinalRunningStepEmitsPhaseSkippedBeforeSessionComplete() async throws {
@@ -218,6 +241,49 @@ struct VibePomodoroTests {
         let chartCompletedFocus = snapshot.chartPoints.reduce(0) { $0 + $1.completedFocusCount }
         #expect(chartFocus == completedSession.totalFocusTime)
         #expect(chartCompletedFocus == completedSession.completedFocusCount)
+    }
+
+    @Test func streakHoldsThroughTodayUntilTheDayEnds() async throws {
+        let (defaults, suiteName) = makeDefaults()
+        defer { clear(defaults, suiteName: suiteName) }
+
+        let calendar = Calendar.autoupdatingCurrent
+        let now = try #require(calendar.date(from: DateComponents(year: 2026, month: 11, day: 9, hour: 8)))
+        let today = calendar.startOfDay(for: now)
+        func day(_ offset: Int) -> Date {
+            calendar.date(byAdding: .day, value: offset, to: today)!
+        }
+        func summaries(focusedOn offsets: [Int]) -> [ProductivityDailySummary] {
+            offsets.map {
+                ProductivityDailySummary(date: day($0), focusTime: 1_500, shortBreakTime: 0, longBreakTime: 0, completedFocusCount: 1)
+            }
+        }
+        let store = PomodoroStore(defaults: defaults)
+
+        store.productivityCache = ProductivityAggregateCache(dailySummaries: summaries(focusedOn: [-3, -2, -1]))
+        #expect(store.streakLength(now: now) == 3)
+
+        store.productivityCache = ProductivityAggregateCache(dailySummaries: summaries(focusedOn: [-3, -2, -1, 0]))
+        #expect(store.streakLength(now: now) == 4)
+
+        store.productivityCache = ProductivityAggregateCache(dailySummaries: summaries(focusedOn: [0]))
+        #expect(store.streakLength(now: now) == 1)
+
+        store.productivityCache = ProductivityAggregateCache(dailySummaries: summaries(focusedOn: [-3, -2]))
+        #expect(store.streakLength(now: now) == 0)
+
+        store.productivityCache = ProductivityAggregateCache(dailySummaries: [])
+        #expect(store.streakLength(now: now) == 0)
+
+        let recordedElsewhere = ProductivityDailySummary(
+            date: day(-1).addingTimeInterval(3_600),
+            focusTime: 600,
+            shortBreakTime: 0,
+            longBreakTime: 0,
+            completedFocusCount: 0
+        )
+        store.productivityCache = ProductivityAggregateCache(dailySummaries: summaries(focusedOn: [-2, -1]) + [recordedElsewhere])
+        #expect(store.streakLength(now: now) == 2)
     }
 
     @Test func productivityCacheRebuildsFromCompletedSessionsAndSplitsAcrossDays() async throws {
@@ -665,16 +731,6 @@ struct VibePomodoroTests {
     }
 
     @Test func bubbleRenderingPolicyKeepsLowPowerAnimationAtTwelveHertz() async throws {
-        let renderState = BubbleRenderState(
-            phase: .focus,
-            actionTitle: "Pause",
-            targetEndDate: Date().addingTimeInterval(60),
-            remainingDuration: 60,
-            progress: 0.5,
-            plannedDuration: 120,
-            isAnimating: true,
-            shouldTickSeconds: true
-        )
         let normalPolicy = BubbleRenderingPolicy(
             isAnimating: true,
             reduceMotion: false,
@@ -691,12 +747,127 @@ struct VibePomodoroTests {
             lowPowerModeEnabled: false
         )
 
-        #expect(renderState.animationRefreshInterval == 1.0 / 12.0)
+        #expect(BubbleRenderState.visibleAnimationRefreshInterval == 1.0 / 12.0)
         #expect(normalPolicy.animatesSurface)
-        #expect(normalPolicy.rendersDepthPool)
+        #expect(normalPolicy.rendersCaustic)
         #expect(lowPowerPolicy.animatesSurface)
-        #expect(!lowPowerPolicy.rendersDepthPool)
+        #expect(!lowPowerPolicy.rendersCaustic)
         #expect(!reduceMotionPolicy.animatesSurface)
+    }
+
+    @Test func finishedSessionSummaryCountsBlocksBreaksAndFocusShare() async throws {
+        var settings = PomodoroSettings.default
+        settings.focusMinutes = 25
+        settings.shortBreakMinutes = 5
+        settings.longBreakMinutes = 15
+        settings.targetRounds = 3
+
+        let start = Date(timeIntervalSince1970: 40_000)
+        var session = SessionSnapshot.makeNew(settings: settings, now: start)
+        _ = PomodoroEngine.startOrResume(session: &session, now: start)
+
+        // The first focus block and its break, then ten minutes into the second block.
+        let finish = start.addingTimeInterval((25 + 5 + 10) * 60)
+        _ = PomodoroEngine.reconcile(session: &session, now: finish)
+        #expect(FocusRenderState.nodeStates(for: session, fallbackRounds: 3) == [.filled, .half, .inactive])
+
+        // Finishing early stops the second block, so its marker shows it as unfinished.
+        _ = PomodoroEngine.finishSessionEarly(session: &session, now: finish)
+        #expect(FocusRenderState.nodeStates(for: session, fallbackRounds: 3) == [.filled, .skipped, .inactive])
+
+        let statistics = session.statistics(now: finish)
+        let summary = BubbleSessionSummary(session: session, statistics: statistics)
+        #expect(abs(summary.focusTime - 35 * 60) < 1)
+        #expect(abs(summary.focusShare - 35.0 / 75.0) < 0.001)
+        #expect(FocusRenderState.summaryCaption(for: statistics, targetRounds: 3) == "1 of 3 focus blocks · 5m break")
+
+        let single = SessionStatistics(focusTime: 25 * 60, shortBreakTime: 0, longBreakTime: 0, completedFocusCount: 1)
+        #expect(FocusRenderState.summaryCaption(for: single, targetRounds: 1) == "1 of 1 focus block")
+    }
+
+    @Test func finishedSessionVesselRestsBelowTheRimWithACalmSurface() async throws {
+        func summaryState(focusShare: Double) -> BubbleRenderState {
+            BubbleRenderState(
+                phase: .longBreak,
+                targetEndDate: nil,
+                remainingDuration: 0,
+                progress: 0,
+                plannedDuration: 15 * 60,
+                isAnimating: false,
+                shouldTickSeconds: false,
+                summary: BubbleSessionSummary(focusTime: 100 * 60 * focusShare, focusShare: focusShare)
+            )
+        }
+
+        let full = BubbleLiquidVisualState(renderState: summaryState(focusShare: 1), at: .now)
+        #expect(abs(full.fillRatio - BubbleLiquidVisualState.fullRestingFillRatio) < 0.0001)
+        #expect(full.surfaceCalm == 1)
+        #expect(full.stepBoundaryCueProgress == 0)
+
+        let empty = BubbleLiquidVisualState(renderState: summaryState(focusShare: 0), at: .now)
+        #expect(abs(empty.fillRatio - 0.12) < 0.0001)
+
+        let half = BubbleLiquidVisualState(renderState: summaryState(focusShare: 0.5), at: .now)
+        #expect(half.fillRatio > 0.12 && half.fillRatio < full.fillRatio)
+
+        // The last step's final second overfills the vessel; the summary never does.
+        let ending = BubbleRenderState(
+            phase: .longBreak,
+            targetEndDate: nil,
+            remainingDuration: 0,
+            progress: 0,
+            plannedDuration: 15 * 60,
+            isAnimating: false,
+            shouldTickSeconds: false,
+            summary: nil
+        )
+        #expect(BubbleLiquidVisualState(renderState: ending, at: .now).fillRatio > 1)
+        #expect(full.fillRatio < 0.9)
+    }
+
+    @Test func completionDurationsSplitIntoNumbersAndUnits() async throws {
+        let parts = FocusCompletionFormatting.durationParts(100 * 60)
+        #expect(parts == [
+            FocusCompletionFormatting.DurationPart(value: "1", unit: "h"),
+            FocusCompletionFormatting.DurationPart(value: "40", unit: "m")
+        ])
+        #expect(FocusCompletionFormatting.durationText(100 * 60) == "1h 40m")
+        #expect(FocusCompletionFormatting.durationText(2 * 3_600) == "2h")
+        #expect(FocusCompletionFormatting.durationText(25 * 60) == "25m")
+        #expect(FocusCompletionFormatting.durationText(45) == "45s")
+    }
+
+    @Test func vesselCrossSectionAndSurfaceFollowTheWaterLine() async throws {
+        let rect = CGRect(x: 0, y: 0, width: 280, height: 280)
+        let outline = BubbleVessel.polygon(of: Path(ellipseIn: rect.insetBy(dx: 40, dy: 40)))
+
+        // A circle of radius 100 centered in the frame is 200 wide at its middle.
+        let middle = try #require(BubbleVessel.horizontalExtent(of: outline, atY: 140))
+        #expect(abs(middle.lowerBound - 40) < 1)
+        #expect(abs(middle.upperBound - 240) < 1)
+        #expect(BubbleVessel.horizontalExtent(of: outline, atY: 20) == nil)
+
+        // Half full: the surface spans the vessel around the middle; full or empty: no surface.
+        let surface = try #require(BubbleVessel.surface(in: rect, innerOutline: outline, fillRatio: 0.5))
+        #expect(abs(surface.waterlineY - 140) < 1)
+        #expect(abs(surface.centerX - 140) < 1)
+        #expect(surface.radius * 2 > 195)
+        #expect(surface.depth > 0 && surface.depth <= 12)
+        #expect(BubbleVessel.surface(in: rect, innerOutline: outline, fillRatio: 1.08) == nil)
+        #expect(BubbleVessel.surface(in: rect, innerOutline: outline, fillRatio: 0) == nil)
+
+        // The shader's cross-sections span the inside of the glass: rows from its top to its
+        // bottom, then columns from its left to its right.
+        let sections = BubbleVessel.crossSections(of: outline, count: 5)
+        #expect(abs(sections.bounds.minY - 40) < 1 && abs(sections.bounds.maxY - 240) < 1)
+        #expect(abs(sections.bounds.minX - 40) < 1 && abs(sections.bounds.maxX - 240) < 1)
+        #expect(sections.values.count == 20)
+        // The middle row and the middle column cross the circle at its widest.
+        #expect(abs(Double(sections.values[4]) - 40) < 1 && abs(Double(sections.values[5]) - 240) < 1)
+        #expect(abs(Double(sections.values[14]) - 40) < 1 && abs(Double(sections.values[15]) - 240) < 1)
+        // The first row sits just inside the top of the circle, around its middle.
+        #expect(abs(Double(sections.values[0] + sections.values[1]) / 2 - 140) < 1)
+        #expect(sections.values[1] - sections.values[0] < 30)
     }
 
     @Test func appearanceModeDefaultsToSystemAndPersistsUpdates() async throws {
@@ -712,6 +883,66 @@ struct VibePomodoroTests {
 
         let reloadedStore = PomodoroStore(defaults: defaults)
         #expect(reloadedStore.settings.appearanceMode == .dark)
+    }
+
+    @Test func appearanceMenuListsFollowSystemFirst() async throws {
+        #expect(PomodoroAppearanceMode.allCases == [.system, .light, .dark])
+        #expect(PomodoroAppearanceMode.allCases.map(\.title) == ["Follow System", "Light", "Dark"])
+    }
+
+    @Test func notificationPermissionReadsSystemStatuses() async throws {
+        #expect(NotificationPermission(UNAuthorizationStatus.notDetermined) == .notDetermined)
+        #expect(NotificationPermission(UNAuthorizationStatus.denied) == .denied)
+        #expect(NotificationPermission(UNAuthorizationStatus.authorized) == .allowed)
+        #expect(NotificationPermission(UNAuthorizationStatus.provisional) == .allowed)
+        #expect(NotificationPermission(UNAuthorizationStatus.ephemeral) == .allowed)
+    }
+
+    @Test func alertsCardLinksToIOSSettingsOnlyWhenIOSBlocksAnEnabledSwitch() async throws {
+        let blocked = SettingsAlertsPresentation(notificationsEnabled: true, permission: .denied)
+        #expect(blocked.opensSystemSettings)
+        #expect(blocked.soundDetail == SettingsAlertsPresentation.inAppSoundDetail)
+
+        let switchedOff = SettingsAlertsPresentation(notificationsEnabled: false, permission: .denied)
+        #expect(switchedOff.opensSystemSettings == false)
+        #expect(switchedOff.soundDetail == SettingsAlertsPresentation.inAppSoundDetail)
+
+        for permission in [NotificationPermission.unknown, .notDetermined, .allowed] {
+            let on = SettingsAlertsPresentation(notificationsEnabled: true, permission: permission)
+            #expect(on.opensSystemSettings == false)
+            #expect(on.soundDetail == nil)
+
+            let off = SettingsAlertsPresentation(notificationsEnabled: false, permission: permission)
+            #expect(off.opensSystemSettings == false)
+            #expect(off.soundDetail == SettingsAlertsPresentation.inAppSoundDetail)
+        }
+    }
+
+    @Test func soundStillPlaysInTheAppWithNotificationsOff() async throws {
+        let (defaults, suiteName) = makeDefaults()
+        defer { clear(defaults, suiteName: suiteName) }
+
+        var settings = PomodoroSettings.default
+        settings.targetRounds = 2
+        settings.notificationsEnabled = false
+        settings.soundEnabled = true
+
+        let player = RecordingReminderFeedbackPlayer()
+        let store = makeStoreWithRunningSession(
+            settings: settings,
+            start: Date(),
+            defaults: defaults,
+            feedbackPlayer: player
+        )
+
+        #expect(store.notificationPlans(now: Date()).isEmpty)
+
+        store.skipCurrentStep()
+
+        #expect(player.playedActionBatches == [[
+            .sound(.nextPhaseWhoosh),
+            .haptic(.softImpact)
+        ]])
     }
 
     @Test func legacySettingsDecodeWithSystemAppearanceMode() async throws {
@@ -761,13 +992,13 @@ struct VibePomodoroTests {
     }
 
     @Test func productivityEmptySummaryFormattingUsesZeroStateText() async throws {
-        #expect(ProductivityValueFormatting.summarySessionTimeText(0) == "0m")
+        #expect(ProductivityValueFormatting.lifetimeDurationText(0) == "0m")
         #expect(ProductivityValueFormatting.summaryAverageFocusText(0) == "0m")
         #expect(ProductivityValueFormatting.summaryStreakText(0) == "0d")
-        #expect(ProductivityValueFormatting.summaryMetaText(completedSessionCount: 0, completedFocusCount: 0) == "No finished sessions yet")
+        #expect(ProductivityValueFormatting.summaryMetaText(sessionTime: 0, completedSessionCount: 0, completedFocusCount: 0) == "No finished sessions yet")
     }
 
-    @Test func productivityMonthDisplayBucketsRollUpThirtyDailyPointsWithoutChangingTotals() async throws {
+    @Test func productivityMonthDisplayBucketsKeepOneSlotPerDay() async throws {
         let calendar = Calendar(identifier: .gregorian)
         let start = try #require(calendar.date(from: DateComponents(year: 2026, month: 2, day: 20)))
         let points = (0..<30).map { offset in
@@ -780,14 +1011,14 @@ struct VibePomodoroTests {
             )
         }
         let buckets = ProductivityChartDisplay.displayBuckets(from: points, range: .month)
-        let expectedLastBucketStart = try #require(calendar.date(from: DateComponents(year: 2026, month: 3, day: 20)))
+        let expectedLastDay = try #require(calendar.date(from: DateComponents(year: 2026, month: 3, day: 21)))
 
-        #expect(buckets.count == 5)
-        #expect(buckets.reduce(0) { $0 + $1.focusTime } == points.reduce(0) { $0 + $1.focusTime })
-        #expect(buckets.reduce(0) { $0 + $1.breakTime } == points.reduce(0) { $0 + $1.breakTime })
-        #expect(buckets.reduce(0) { $0 + $1.completedFocusCount } == points.reduce(0) { $0 + $1.completedFocusCount })
+        #expect(buckets.count == 30)
+        #expect(buckets.map(\.focusTime) == points.map(\.focusTime))
+        #expect(buckets.map(\.breakTime) == points.map(\.breakTime))
+        #expect(buckets.map(\.completedFocusCount) == points.map(\.completedFocusCount))
         #expect(buckets.first?.labelDate == points.first?.startDate)
-        #expect(buckets.last?.labelDate == expectedLastBucketStart)
+        #expect(buckets.last?.labelDate == expectedLastDay)
     }
 
     @Test func productivityLongMonthDisplayBucketsPreserveDenseThirtyDayTotals() async throws {
@@ -805,8 +1036,8 @@ struct VibePomodoroTests {
 
         let buckets = ProductivityChartDisplay.displayBuckets(from: points, range: .month)
 
-        #expect(buckets.count == 5)
-        #expect(buckets.map(\.slotIndex) == [0, 1, 2, 3, 4])
+        #expect(buckets.count == 30)
+        #expect(buckets.map(\.slotIndex) == Array(0..<30))
         #expect(buckets.reduce(0) { $0 + $1.focusTime } == points.reduce(0) { $0 + $1.focusTime })
         #expect(buckets.reduce(0) { $0 + $1.breakTime } == points.reduce(0) { $0 + $1.breakTime })
         #expect(buckets.reduce(0) { $0 + $1.completedFocusCount } == points.reduce(0) { $0 + $1.completedFocusCount })
@@ -834,7 +1065,7 @@ struct VibePomodoroTests {
         #expect(buckets.reduce(0) { $0 + $1.completedFocusCount } == points.reduce(0) { $0 + $1.completedFocusCount })
     }
 
-    @Test func productivityMonthAxisLabelsUseBucketStartsWithoutOverflowingToNextDate() async throws {
+    @Test func productivityMonthAxisLabelsEveryWeekBackFromToday() async throws {
         let calendar = Calendar(identifier: .gregorian)
         let start = try #require(calendar.date(from: DateComponents(year: 2026, month: 2, day: 20)))
         let points = (0..<30).map { offset in
@@ -847,9 +1078,13 @@ struct VibePomodoroTests {
             )
         }
         let buckets = ProductivityChartDisplay.displayBuckets(from: points, range: .month)
-        let labels = buckets.map { ProductivityChartFormatting.xAxisLabel(for: $0.labelDate, range: .month) }
+        let labels = buckets.enumerated()
+            .filter { ProductivityRange.month.showsAxisLabel(atSlot: $0.offset, slotCount: buckets.count) }
+            .map { ProductivityChartFormatting.xAxisLabel(for: $0.element.labelDate, range: .month) }
 
-        #expect(labels == ["20 Feb", "27 Feb", "6 Mar", "13 Mar", "20 Mar"])
+        #expect(labels == ["21 Feb", "28 Feb", "7 Mar", "14 Mar", "21 Mar"])
+        #expect((0..<7).allSatisfy { ProductivityRange.week.showsAxisLabel(atSlot: $0, slotCount: 7) })
+        #expect((0..<12).allSatisfy { ProductivityRange.year.showsAxisLabel(atSlot: $0, slotCount: 12) })
     }
 
     @Test func productivityYearAxisUsesSingleLetterEnglishMonths() async throws {
@@ -897,50 +1132,55 @@ struct VibePomodoroTests {
     }
 
     @Test func productivityFormattingHandlesExtremeDurations() async throws {
-        #expect(ProductivityValueFormatting.compactDurationText(-42) == "0s")
+        #expect(ProductivityValueFormatting.compactDurationText(-42) == "0m")
+        #expect(ProductivityValueFormatting.compactDurationText(42) == "42s")
         #expect(ProductivityValueFormatting.compactDurationText((27 * 3_600) + (14 * 60)) == "27h 14m")
-        #expect(ProductivityValueFormatting.summarySessionTimeText(99 * 24 * 3_600 + 23 * 3_600) == "99d 23h")
-        #expect(ProductivityValueFormatting.summarySessionTimeText(100 * 24 * 3_600 + 23 * 3_600) == "100d")
+        #expect(ProductivityValueFormatting.lifetimeDurationText(27 * 3_600 + 14 * 60) == "27h 14m")
+        #expect(ProductivityValueFormatting.lifetimeDurationText(99 * 3_600 + 59 * 60) == "99h 59m")
+        #expect(ProductivityValueFormatting.lifetimeDurationText(460 * 3_600 + 12 * 60) == "460h")
+        #expect(ProductivityValueFormatting.lifetimeDurationText(100 * 24 * 3_600 + 23 * 3_600) == "2423h")
+        #expect(ProductivityValueFormatting.lifetimeDurationAccessibilityValue(460 * 3_600 + 12 * 60) == "460 hours")
+        #expect(ProductivityValueFormatting.lifetimeDurationAccessibilityValue(3_600 + 60) == "1 hour 1 minute")
         #expect(ProductivityValueFormatting.summaryAverageFocusText(12.5) == "12h 30m")
         #expect(ProductivityValueFormatting.summaryStreakText(-8) == "0d")
-        #expect(ProductivityValueFormatting.summaryMetaText(completedSessionCount: 24_000, completedFocusCount: 123_456) == "24000 finished sessions • 123456 focus blocks")
+        #expect(
+            ProductivityValueFormatting.summaryMetaText(sessionTime: 2_423 * 3_600, completedSessionCount: 24_000, completedFocusCount: 123_456)
+                == "2423h across 24000 sessions • 123456 focus blocks"
+        )
     }
 
-    @Test func productivityCountAxisHandlesZeroAndLargeCounts() async throws {
-        let zero = ProductivityChartMetricKind.focusSessions.axisStyle(for: [])
-        let low = ProductivityChartMetricKind.focusSessions.axisStyle(for: [
-            makeDisplayBucket(completedFocusCount: 4)
-        ])
-        let medium = ProductivityChartMetricKind.focusSessions.axisStyle(for: [
-            makeDisplayBucket(completedFocusCount: 17)
-        ])
-        let high = ProductivityChartMetricKind.focusSessions.axisStyle(for: [
-            makeDisplayBucket(completedFocusCount: 123)
-        ])
-
-        #expect(zero.step == 1)
-        #expect(zero.upperBound == 4)
-        #expect(low.step == 1)
-        #expect(low.upperBound == 5)
-        #expect(medium.step == 5)
-        #expect(medium.upperBound == 25)
-        #expect(high.step == 10)
-        #expect(high.upperBound == 150)
+    @Test func productivitySummaryFooterCarriesSessionTime() async throws {
+        #expect(
+            ProductivityValueFormatting.summaryMetaText(sessionTime: 100 * 60, completedSessionCount: 1, completedFocusCount: 1)
+                == "1h 40m across 1 session • 1 focus block"
+        )
+        #expect(
+            ProductivityValueFormatting.summaryMetaAccessibilityText(sessionTime: 456 * 3_600, completedSessionCount: 231, completedFocusCount: 841)
+                == "456 hours across 231 sessions, 841 focus blocks"
+        )
     }
 
-    @Test func productivityTimeAxisUsesRequestedStepRules() async throws {
+    @Test func productivityTimeAxisUsesRoundSteps() async throws {
         let underHour = ProductivityChartFormatting.timeAxisStyle(for: 59 * 60)
         let underTwoHours = ProductivityChartFormatting.timeAxisStyle(for: 90 * 60)
-        let overTwoHours = ProductivityChartFormatting.timeAxisStyle(for: 2 * 3600)
+        let overTwoHours = ProductivityChartFormatting.timeAxisStyle(for: 2 * 3_600 + 10 * 60)
+        let busyWeek = ProductivityChartFormatting.timeAxisStyle(for: 17 * 3_600 + 5 * 60)
+        let busyMonth = ProductivityChartFormatting.timeAxisStyle(for: 66 * 3_600 + 35 * 60)
 
         #expect(underHour.step == 20 * 60)
         #expect(underHour.values == [0, 1_200, 2_400, 3_600])
 
-        #expect(underTwoHours.step == 40 * 60)
-        #expect(underTwoHours.values == [0, 2_400, 4_800, 7_200])
+        #expect(underTwoHours.step == 3_600)
+        #expect(underTwoHours.values == [0, 3_600, 7_200])
 
         #expect(overTwoHours.step == 3_600)
         #expect(overTwoHours.values == [0, 3_600, 7_200, 10_800])
+
+        #expect(busyWeek.step == 5 * 3_600)
+        #expect(busyWeek.upperBound == 20 * 3_600)
+
+        #expect(busyMonth.step == 20 * 3_600)
+        #expect(busyMonth.upperBound == 80 * 3_600)
     }
 
     @Test func productivityTimeAxisHandlesLargeDurations() async throws {
@@ -949,9 +1189,170 @@ struct VibePomodoroTests {
 
         #expect(zero.step == 1_200)
         #expect(zero.values == [0, 1_200, 2_400, 3_600])
-        #expect(dayPlus.step == 3_600)
-        #expect(dayPlus.upperBound == 28 * 3_600)
-        #expect(dayPlus.values.last == 28.0 * 3_600)
+        #expect(dayPlus.step == 10 * 3_600)
+        #expect(dayPlus.upperBound == 30 * 3_600)
+        #expect(dayPlus.values.last == 30.0 * 3_600)
+    }
+
+    @Test func productivityAxesStayReadableForAnyBucketSize() async throws {
+        let durations = (0...220).map { 60 * pow(1.07, Double($0)) }
+
+        for duration in durations {
+            let style = ProductivityChartFormatting.timeAxisStyle(for: duration)
+            let labels = style.values.map(ProductivityChartFormatting.axisDurationText)
+
+            #expect(style.values.count <= 5, "\(duration)s gave \(style.values.count) ticks")
+            #expect(style.upperBound >= duration)
+            if duration > 3_600 {
+                #expect(style.step.truncatingRemainder(dividingBy: 3_600) == 0)
+                #expect(labels.allSatisfy { !$0.contains("m") }, "\(labels)")
+            }
+        }
+    }
+
+    @Test func productivityChartLabelsStayShort() async throws {
+        #expect(ProductivityValueFormatting.compactDurationText(2 * 3_600) == "2h")
+        #expect(ProductivityValueFormatting.compactDurationText(3_600 + 5 * 60) == "1h 5m")
+        #expect(ProductivityValueFormatting.compactDurationText(0) == "0m")
+        #expect(ProductivityChartFormatting.axisDurationText(0) == "0")
+        #expect(ProductivityChartFormatting.axisDurationText(40 * 60) == "40m")
+        #expect(ProductivityChartFormatting.axisDurationText(25 * 3_600) == "25h")
+    }
+
+    @Test func productivityRhythmSlotsReadFocusBreaksAndBlocks() async throws {
+        let day = makeDisplayBucket(focusTime: 5 * 3_600, breakTime: 3_600 + 30 * 60, completedFocusCount: 12)
+        let single = makeDisplayBucket(focusTime: 25 * 60, breakTime: 5 * 60, completedFocusCount: 1)
+
+        #expect(ProductivityRhythmTotals([day]).accessibilityText == "5 hours of focus, 1 hour 30 minutes of breaks, 12 focus blocks")
+        #expect(ProductivityRhythmTotals([single]).accessibilityText == "25 minutes of focus, 5 minutes of breaks, 1 focus block")
+        #expect(ProductivityRhythmTotals([makeDisplayBucket()]).accessibilityText == "0 minutes of focus, 0 minutes of breaks, 0 focus blocks")
+    }
+
+    @Test func productivityRhythmTotalsAddUpAndAverageOnlyActiveSlots() async throws {
+        let buckets = [
+            makeDisplayBucket(focusTime: 3 * 3_600, breakTime: 30 * 60, completedFocusCount: 7),
+            makeDisplayBucket(),
+            makeDisplayBucket(focusTime: 3_600, breakTime: 15 * 60, completedFocusCount: 2),
+            makeDisplayBucket(breakTime: 10 * 60)
+        ]
+        let totals = ProductivityRhythmTotals(buckets)
+
+        #expect(totals.focusTime == 4 * 3_600)
+        #expect(totals.breakTime == 55 * 60)
+        #expect(totals.completedFocusCount == 9)
+        // Like Daily Focus Avg, slots without focus stay out of the average.
+        #expect(ProductivityRhythmTotals.averageFocus(over: buckets) == 2 * 3_600)
+        #expect(ProductivityRhythmTotals.averageFocus(over: [makeDisplayBucket()]) == 0)
+    }
+
+    @Test func productivitySessionListShowsTheLatestInTheInterval() async throws {
+        let base = Date(timeIntervalSince1970: 1_800_000_000)
+        let hourly = (0..<8).map { makeStartedSession(at: base.addingTimeInterval(Double($0) * 3_600)) }
+        let earlier = makeStartedSession(at: base.addingTimeInterval(-3_600))
+
+        let latest = ProductivitySessionList.rows(
+            from: hourly + [earlier],
+            startingFrom: base,
+            before: base.addingTimeInterval(8 * 3_600)
+        )
+        let twoHours = ProductivitySessionList.rows(
+            from: hourly,
+            startingFrom: base.addingTimeInterval(2 * 3_600),
+            before: base.addingTimeInterval(4 * 3_600)
+        )
+
+        #expect(latest.sessions.map(\.startDate) == (3..<8).reversed().map { base.addingTimeInterval(Double($0) * 3_600) })
+        #expect(latest.hiddenCount == 3)
+        #expect(twoHours.sessions.map(\.startDate) == [base.addingTimeInterval(3 * 3_600), base.addingTimeInterval(2 * 3_600)])
+        #expect(twoHours.hiddenCount == 0)
+    }
+
+    @Test func completedSessionKnowsWhichRoundsRanTheirFullLength() async throws {
+        let start = Date(timeIntervalSince1970: 1_800_000_000)
+        let session = makeCompletedSession(
+            settings: .default,
+            createdAt: start.addingTimeInterval(-60),
+            completedAt: start.addingTimeInterval(3_600),
+            segments: [
+                makeSegment(phase: .focus, roundNumber: 1, startDate: start, endDate: start.addingTimeInterval(25 * 60)),
+                makeSegment(phase: .shortBreak, roundNumber: 1, startDate: start.addingTimeInterval(25 * 60), endDate: start.addingTimeInterval(30 * 60)),
+                makeSegment(phase: .focus, roundNumber: 2, startDate: start.addingTimeInterval(30 * 60), endDate: start.addingTimeInterval(40 * 60)),
+                makeSegment(phase: .focus, roundNumber: 2, startDate: start.addingTimeInterval(45 * 60), endDate: start.addingTimeInterval(50 * 60))
+            ]
+        )
+
+        #expect(session.startDate == start)
+        #expect(session.isFocusRoundCompleted(1))
+        #expect(!session.isFocusRoundCompleted(2))
+        #expect(!session.isFocusRoundCompleted(3))
+        #expect(session.completedFocusCount == 1)
+    }
+
+    @Test func productivitySessionStartsReadTodayYesterdayOrTheDate() async throws {
+        let calendar = Calendar(identifier: .gregorian)
+        let now = try #require(calendar.date(from: DateComponents(year: 2026, month: 11, day: 9, hour: 12)))
+        let today = try #require(calendar.date(from: DateComponents(year: 2026, month: 11, day: 9, hour: 8, minute: 30)))
+        let yesterday = try #require(calendar.date(from: DateComponents(year: 2026, month: 11, day: 8, hour: 14)))
+        let saturday = try #require(calendar.date(from: DateComponents(year: 2026, month: 11, day: 7, hour: 9)))
+
+        #expect(ProductivityChartFormatting.sessionStartText(today, now: now, calendar: calendar) == "Today\u{2002}08:30")
+        #expect(ProductivityChartFormatting.sessionStartText(yesterday, now: now, calendar: calendar) == "Yesterday\u{2002}14:00")
+        #expect(ProductivityChartFormatting.sessionStartText(saturday, now: now, calendar: calendar) == "Sat 7 Nov\u{2002}09:00")
+        #expect(ProductivityChartFormatting.sessionStartAccessibilityText(saturday, now: now, calendar: calendar) == "Saturday 7 November at 09:00")
+    }
+
+    @Test func productivityRangeCaptionNamesTheDatesCovered() async throws {
+        let calendar = Calendar(identifier: .gregorian)
+        let weekStart = try #require(calendar.date(from: DateComponents(year: 2026, month: 11, day: 3)))
+        let splitWeekStart = try #require(calendar.date(from: DateComponents(year: 2026, month: 10, day: 28)))
+        let monthStart = try #require(calendar.date(from: DateComponents(year: 2026, month: 10, day: 11)))
+        let yearStart = try #require(calendar.date(from: DateComponents(year: 2025, month: 12, day: 1)))
+
+        let week = makeChartBuckets(from: weekStart, count: 7, component: .day, range: .week, calendar: calendar)
+        let splitWeek = makeChartBuckets(from: splitWeekStart, count: 7, component: .day, range: .week, calendar: calendar)
+        let month = makeChartBuckets(from: monthStart, count: 30, component: .day, range: .month, calendar: calendar)
+        let year = makeChartBuckets(from: yearStart, count: 12, component: .month, range: .year, calendar: calendar)
+
+        #expect(ProductivityRange.week.windowTitle == "Last 7 days")
+        #expect(ProductivityChartFormatting.rangeDatesText(for: week, range: .week, calendar: calendar) == "3–9 Nov")
+        #expect(ProductivityChartFormatting.rangeDatesText(for: splitWeek, range: .week, calendar: calendar) == "28 Oct – 3 Nov")
+        #expect(ProductivityChartFormatting.rangeDatesText(for: month, range: .month, calendar: calendar) == "11 Oct – 9 Nov")
+        #expect(ProductivityChartFormatting.rangeDatesText(for: year, range: .year, calendar: calendar) == "Dec 2025 – Nov 2026")
+        #expect(ProductivityChartFormatting.rangeDatesText(for: [], range: .week, calendar: calendar) == "")
+    }
+
+    @Test func productivitySelectionNamesTheTappedDayOrMonth() async throws {
+        let calendar = Calendar(identifier: .gregorian)
+        let friday = try #require(calendar.date(from: DateComponents(year: 2026, month: 11, day: 6)))
+        let october = try #require(calendar.date(from: DateComponents(year: 2026, month: 10, day: 1)))
+        let november = try #require(calendar.date(from: DateComponents(year: 2026, month: 11, day: 1)))
+        let ninthNoon = try #require(calendar.date(from: DateComponents(year: 2026, month: 11, day: 9, hour: 12)))
+        let firstMorning = try #require(calendar.date(from: DateComponents(year: 2026, month: 11, day: 1, hour: 9)))
+
+        let day = try #require(makeChartBuckets(from: friday, count: 1, component: .day, range: .week, calendar: calendar).first)
+        let months = makeChartBuckets(from: october, count: 2, component: .month, range: .year, calendar: calendar)
+        let pastMonth = try #require(months.first)
+        let currentMonth = try #require(months.last)
+
+        #expect(currentMonth.startDate == november)
+        #expect(ProductivityChartFormatting.selectionText(for: day, range: .week, now: ninthNoon, calendar: calendar) == "Fri 6 Nov")
+        #expect(ProductivityChartFormatting.selectionText(for: day, range: .month, now: ninthNoon, calendar: calendar) == "Fri 6 Nov")
+        #expect(ProductivityChartFormatting.selectionText(for: pastMonth, range: .year, now: ninthNoon, calendar: calendar) == "Oct 2026")
+        #expect(ProductivityChartFormatting.selectionText(for: currentMonth, range: .year, now: ninthNoon, calendar: calendar) == "1–9 Nov")
+        #expect(ProductivityChartFormatting.selectionText(for: currentMonth, range: .year, now: firstMorning, calendar: calendar) == "1 Nov")
+        #expect(ProductivityChartFormatting.selectionAccessibilityText(for: day, range: .week, now: ninthNoon) == "Friday 6 November")
+        #expect(ProductivityChartFormatting.selectionAccessibilityText(for: currentMonth, range: .year, now: ninthNoon) == "November 2026 so far")
+    }
+
+    @Test func productivityTapFindsTheSlotUnderTheFinger() async throws {
+        #expect(ProductivityChartDisplay.slotIndex(atX: 0, plotWidth: 280, slotCount: 7) == 0)
+        #expect(ProductivityChartDisplay.slotIndex(atX: 39.9, plotWidth: 280, slotCount: 7) == 0)
+        #expect(ProductivityChartDisplay.slotIndex(atX: 40, plotWidth: 280, slotCount: 7) == 1)
+        #expect(ProductivityChartDisplay.slotIndex(atX: 279.9, plotWidth: 280, slotCount: 7) == 6)
+        #expect(ProductivityChartDisplay.slotIndex(atX: 280, plotWidth: 280, slotCount: 7) == nil)
+        #expect(ProductivityChartDisplay.slotIndex(atX: -1, plotWidth: 280, slotCount: 7) == nil)
+        #expect(ProductivityChartDisplay.slotIndex(atX: 140, plotWidth: 280, slotCount: 0) == nil)
+        #expect(ProductivityChartDisplay.slotIndex(atX: 141, plotWidth: 285, slotCount: 30) == 14)
     }
 
     @Test func productivityXAxisLabelsAreStableAcrossRangesAndBoundaries() async throws {
@@ -1334,6 +1735,36 @@ struct VibePomodoroTests {
             roundNumber: roundNumber,
             startDate: startDate,
             endDate: endDate
+        )
+    }
+
+    private func makeChartBuckets(
+        from start: Date,
+        count: Int,
+        component: Calendar.Component,
+        range: ProductivityRange,
+        calendar: Calendar
+    ) -> [ProductivityDisplayBucket] {
+        let points = (0..<count).map { offset in
+            ProductivityChartPoint(
+                startDate: calendar.date(byAdding: component, value: offset, to: start)!,
+                label: "",
+                focusTime: 0,
+                breakTime: 0,
+                completedFocusCount: 0
+            )
+        }
+        return ProductivityChartDisplay.displayBuckets(from: points, range: range)
+    }
+
+    private func makeStartedSession(at start: Date) -> CompletedSession {
+        makeCompletedSession(
+            settings: .default,
+            createdAt: start,
+            completedAt: start.addingTimeInterval(25 * 60),
+            segments: [
+                makeSegment(phase: .focus, roundNumber: 1, startDate: start, endDate: start.addingTimeInterval(25 * 60))
+            ]
         )
     }
 

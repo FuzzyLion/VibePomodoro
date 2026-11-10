@@ -8,7 +8,6 @@ struct BubbleGlassBackdrop: View {
 
     var body: some View {
         let isDark = colorScheme == .dark
-        let phase = phaseMorph.visualPhase
         let bubbleShape = phaseMorph.shape
         let profile = phaseMorph.shellProfile(for: sphereSize)
 
@@ -16,7 +15,7 @@ struct BubbleGlassBackdrop: View {
             if isDark {
                 bubbleShape
                     .fill(Color.clear)
-                    .glassEffect(.regular.tint(phase.glassTint.opacity(0.075)), in: bubbleShape)
+                    .glassEffect(.regular.tint(phaseMorph.glassTint.opacity(0.075)), in: bubbleShape)
 
                 bubbleShape
                     .fill(Color.white.opacity(0.016))
@@ -36,7 +35,7 @@ struct BubbleGlassBackdrop: View {
                     }
 
                 bubbleShape
-                    .fill(phase.glassTint.opacity(0.095))
+                    .fill(phaseMorph.glassTint.opacity(0.095))
 
                 bubbleShape
                     .fill(
@@ -102,7 +101,7 @@ struct BubbleGlassBackdrop: View {
                             colors: [
                                 Color.white.opacity(0.15),
                                 Color(red: 0.92, green: 0.93, blue: 0.95).opacity(0.12),
-                                phase.tintColor.opacity(0.020)
+                                phaseMorph.tint.opacity(0.020)
                             ],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
@@ -140,7 +139,7 @@ struct BubbleGlassBackdrop: View {
                         RadialGradient(
                             colors: [
                                 Color(red: 0.88, green: 0.89, blue: 0.91).opacity(0.06),
-                                phase.tintColor.opacity(0.028),
+                                phaseMorph.tint.opacity(0.028),
                                 Color.clear
                             ],
                             center: .bottom,
@@ -154,7 +153,7 @@ struct BubbleGlassBackdrop: View {
                 .fill(
                     RadialGradient(
                         colors: [
-                            phase.tintColor.opacity(isDark ? 0.08 : 0.05),
+                            phaseMorph.tint.opacity(isDark ? 0.08 : 0.05),
                             Color.clear
                         ],
                         center: .center,
@@ -203,7 +202,7 @@ struct BubbleGlassBackdrop: View {
                         LinearGradient(
                             colors: [
                                 Color.white.opacity(0.07),
-                                phase.tintColor.opacity(0.05),
+                                phaseMorph.tint.opacity(0.05),
                                 Color.clear
                             ],
                             startPoint: .top,
@@ -230,7 +229,7 @@ struct BubbleGlassBackdrop: View {
                     }
             }
         }
-        .shadow(color: phase.shadowColor.opacity(isDark ? 0.045 : 0.01), radius: isDark ? 18 : 8, y: isDark ? 9 : 3)
+        .shadow(color: phaseMorph.shadow.opacity(isDark ? 0.045 : 0.01), radius: isDark ? 18 : 8, y: isDark ? 9 : 3)
         .shadow(color: Color.white.opacity(isDark ? 0.03 : 0.08), radius: isDark ? 7 : 8, y: -3)
         .allowsHitTesting(false)
     }
@@ -244,7 +243,6 @@ struct BubbleGlassRimOverlay: View {
 
     var body: some View {
         let isDark = colorScheme == .dark
-        let phase = phaseMorph.visualPhase
         let bubbleShape = phaseMorph.shape
         let profile = phaseMorph.shellProfile(for: sphereSize)
 
@@ -267,10 +265,13 @@ struct BubbleGlassRimOverlay: View {
                 )
                 .blur(radius: isDark ? 0.26 : 0.22)
 
-            bubbleShape
-                .stroke(Color.black.opacity(isDark ? 0.26 : 0.06), lineWidth: isDark ? 0.72 : 0.58)
-                .blur(radius: isDark ? 0.24 : 0.16)
-                .offset(y: isDark ? 0.9 : 0.7)
+            if !isDark {
+                // On a light page a faint dark edge keeps the silhouette readable.
+                bubbleShape
+                    .stroke(Color.black.opacity(0.11), lineWidth: 0.58)
+                    .blur(radius: 0.16)
+                    .offset(y: 0.7)
+            }
 
             Ellipse()
                 .fill(
@@ -323,23 +324,36 @@ struct BubbleGlassRimOverlay: View {
                     bubbleShape
                         .stroke(lineWidth: isDark ? 8 : 10)
                 }
+        }
+        .allowsHitTesting(false)
+    }
+}
 
-            Ellipse()
+/// The glass wall between the outer silhouette and the liquid, lit from the top left.
+struct BubbleVesselWall: View {
+    @Environment(\.colorScheme) private var colorScheme
+
+    let phaseMorph: BubblePhaseMorph
+
+    var body: some View {
+        let isDark = colorScheme == .dark
+
+        ZStack {
+            BubbleWallShape(phaseMorph: phaseMorph)
                 .fill(
                     LinearGradient(
-                        colors: [
-                            Color.white.opacity(isDark ? 0.12 : 0.10),
-                            phase.tintColor.opacity(isDark ? 0.10 : 0.06),
-                            Color.clear
-                        ],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
+                        colors: isDark
+                            ? [Color.white.opacity(0.13), Color.white.opacity(0.03), phaseMorph.tint.opacity(0.10)]
+                            : [Color.white.opacity(0.85), Color.white.opacity(0.25), phaseMorph.shadow.opacity(0.10)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    style: FillStyle(eoFill: true)
                 )
-                .frame(width: profile.lowerCausticSize.width, height: profile.lowerCausticSize.height)
-                .blur(radius: isDark ? 10 : 9)
-                .offset(profile.lowerCausticOffset)
-                .mask(bubbleShape)
+
+            phaseMorph.shape
+                .scale(BubbleVessel.innerScale)
+                .stroke(isDark ? Color.white.opacity(0.10) : Color.black.opacity(0.07), lineWidth: 0.7)
         }
         .allowsHitTesting(false)
     }

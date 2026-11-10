@@ -13,10 +13,10 @@ struct ProductivitySummaryStrip: View {
             header
 
             ProductivityPrimarySummaryMetric(
-                title: "Session Time",
-                value: ProductivityValueFormatting.summarySessionTimeText(snapshot.totalSessionTime),
-                accessibilityValue: ProductivityValueFormatting.summarySessionTimeAccessibilityValue(snapshot.totalSessionTime),
-                titleColor: sessionTitleColor,
+                title: "Focus Time",
+                value: ProductivityValueFormatting.lifetimeDurationText(snapshot.totalFocusTime),
+                accessibilityValue: ProductivityValueFormatting.lifetimeDurationAccessibilityValue(snapshot.totalFocusTime),
+                titleColor: focusTitleColor,
                 valueColor: primaryValueColor,
                 dynamicTypeSize: dynamicTypeSize
             )
@@ -26,17 +26,25 @@ struct ProductivitySummaryStrip: View {
             ProductivitySecondaryMetricsRow(
                 snapshot: snapshot,
                 colorScheme: colorScheme,
-                dynamicTypeSize: dynamicTypeSize
+                dynamicTypeSize: dynamicTypeSize,
+                focusLabelColor: focusTitleColor
             )
 
             Text(metaSummaryText)
-                .font(.system(size: 12, weight: .medium))
+                .productivityFont(.footnote)
                 .foregroundStyle(metaTextColor)
                 .fixedSize(horizontal: false, vertical: true)
+                .accessibilityLabel(
+                    ProductivityValueFormatting.summaryMetaAccessibilityText(
+                        sessionTime: snapshot.totalSessionTime,
+                        completedSessionCount: snapshot.completedSessionCount,
+                        completedFocusCount: snapshot.completedFocusCount
+                    )
+                )
         }
         .padding(.horizontal, contentInset)
         .padding(.vertical, ProductivityLayout.SummaryCard.verticalPadding)
-        .productivityGlassCard(
+        .productivityCardChrome(
             colorScheme: colorScheme,
             style: .summary(contentInset: contentInset, cornerRadius: cornerRadius)
         ) {
@@ -46,10 +54,10 @@ struct ProductivitySummaryStrip: View {
 
     private var header: some View {
         Text("ALL TIME COMPLETED SESSIONS")
-            .font(.system(size: 12, weight: .semibold))
+            .productivityFont(.sectionLabel)
             .foregroundStyle(headerTextColor)
             .tracking(ProductivityLayout.SummaryCard.titleTracking)
-            .lineLimit(dynamicTypeSize.isAccessibilitySize ? 3 : 2)
+            .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
             .minimumScaleFactor(0.92)
             .fixedSize(horizontal: false, vertical: true)
     }
@@ -62,27 +70,22 @@ struct ProductivitySummaryStrip: View {
 
     private var metaSummaryText: String {
         ProductivityValueFormatting.summaryMetaText(
+            sessionTime: snapshot.totalSessionTime,
             completedSessionCount: snapshot.completedSessionCount,
             completedFocusCount: snapshot.completedFocusCount
         )
     }
 
-    private var headerTextColor: Color {
-        colorScheme == .dark
-            ? VibePalette.warmBackground.opacity(ProductivityLayout.SummaryCard.titleDarkOpacity)
-            : Color.black.opacity(ProductivityLayout.SummaryCard.titleLightOpacity)
+    private var headerTextColor: ContrastAdaptiveColor {
+        ProductivityTextColors.secondary(colorScheme)
     }
 
-    private var primaryValueColor: Color {
-        colorScheme == .dark
-            ? VibePalette.warmBackground.opacity(ProductivityLayout.SummaryCard.valueDarkOpacity)
-            : Color.black.opacity(ProductivityLayout.SummaryCard.valueLightOpacity)
+    private var primaryValueColor: ContrastAdaptiveColor {
+        ProductivityTextColors.leadFigure(colorScheme)
     }
 
-    private var metaTextColor: Color {
-        colorScheme == .dark
-            ? VibePalette.warmBackground.opacity(ProductivityLayout.SummaryCard.metaDarkOpacity)
-            : Color.black.opacity(ProductivityLayout.SummaryCard.metaLightOpacity)
+    private var metaTextColor: ContrastAdaptiveColor {
+        ProductivityTextColors.secondary(colorScheme)
     }
 
     private var dividerColor: Color {
@@ -91,10 +94,9 @@ struct ProductivitySummaryStrip: View {
             : Color.black.opacity(ProductivityLayout.SummaryCard.dividerLightOpacity)
     }
 
-    private var sessionTitleColor: Color {
-        colorScheme == .dark
-            ? VibePalette.warmAmberAccent.opacity(ProductivityLayout.SummaryCard.accentDarkOpacity)
-            : VibePalette.warmAmberAccentDeep.opacity(ProductivityLayout.SummaryCard.accentLightOpacity)
+    /// Labels of focus metrics take the focus amber; other labels stay neutral.
+    private var focusTitleColor: ContrastAdaptiveColor {
+        ProductivityTextColors.focus(colorScheme)
     }
 
     private var summaryAccentOverlay: some View {
@@ -126,27 +128,20 @@ private struct ProductivityPrimarySummaryMetric: View {
     let title: String
     let value: String
     let accessibilityValue: String
-    let titleColor: Color
-    let valueColor: Color
+    let titleColor: ContrastAdaptiveColor
+    let valueColor: ContrastAdaptiveColor
     let dynamicTypeSize: DynamicTypeSize
 
     var body: some View {
         VStack(alignment: .leading, spacing: ProductivityLayout.PrimaryMetric.spacing) {
             Text(title)
-                .font(.system(size: 12, weight: .semibold))
+                .productivityFont(.sectionLabel)
                 .foregroundStyle(titleColor)
                 .textCase(.uppercase)
                 .tracking(ProductivityLayout.PrimaryMetric.titleTracking)
 
             Text(value)
-                .font(
-                    .system(
-                        size: dynamicTypeSize.isAccessibilitySize
-                            ? ProductivityLayout.PrimaryMetric.accessibilityValueFontSize
-                            : ProductivityLayout.PrimaryMetric.defaultValueFontSize,
-                        weight: .semibold
-                    )
-                )
+                .productivityFont(.primaryFigure)
                 .foregroundStyle(valueColor)
                 .lineLimit(dynamicTypeSize.isAccessibilitySize ? 2 : 1)
                 .minimumScaleFactor(
@@ -167,6 +162,7 @@ private struct ProductivitySecondaryMetricsRow: View {
     let snapshot: ProductivityMetricsSnapshot
     let colorScheme: ColorScheme
     let dynamicTypeSize: DynamicTypeSize
+    let focusLabelColor: ContrastAdaptiveColor
 
     var body: some View {
         Group {
@@ -185,13 +181,13 @@ private struct ProductivitySecondaryMetricsRow: View {
                 title: "Daily Focus Avg",
                 value: ProductivityValueFormatting.summaryAverageFocusText(snapshot.averageFocusHoursPerDay),
                 accessibilityValue: ProductivityValueFormatting.summaryAverageFocusActiveDayAccessibilityValue(snapshot.averageFocusHoursPerDay),
-                titleColor: averageTitleColor
+                titleColor: focusLabelColor
             ),
             ProductivitySecondaryMetricDescriptor(
                 title: "Streak",
                 value: ProductivityValueFormatting.summaryStreakText(snapshot.streakLength),
                 accessibilityValue: ProductivityValueFormatting.summaryStreakAccessibilityValue(snapshot.streakLength),
-                titleColor: streakTitleColor
+                titleColor: ProductivityTextColors.secondary(colorScheme)
             )
         ]
     }
@@ -250,45 +246,36 @@ private struct ProductivitySecondaryMetricsRow: View {
             : Color.black.opacity(ProductivityLayout.SecondaryMetrics.dividerLightOpacity)
     }
 
-    private var averageTitleColor: Color {
-        colorScheme == .dark
-            ? VibePalette.softJade.opacity(ProductivityLayout.SecondaryMetrics.titleDarkOpacity)
-            : VibePalette.softJadeDeep.opacity(ProductivityLayout.SecondaryMetrics.titleLightOpacity)
-    }
-
-    private var streakTitleColor: Color {
-        colorScheme == .dark
-            ? VibePalette.softMist.opacity(ProductivityLayout.SecondaryMetrics.titleDarkOpacity)
-            : VibePalette.softMistDeep.opacity(ProductivityLayout.SecondaryMetrics.titleLightOpacity)
-    }
 }
 
 private struct ProductivitySecondaryMetricDescriptor: Identifiable {
     let title: String
     let value: String
     let accessibilityValue: String
-    let titleColor: Color
+    let titleColor: ContrastAdaptiveColor
 
     var id: String { title }
 }
 
 private struct ProductivitySecondarySummaryItem: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
     let title: String
     let value: String
     let accessibilityValue: String
-    let titleColor: Color
+    let titleColor: ContrastAdaptiveColor
     let colorScheme: ColorScheme
 
     var body: some View {
         VStack(alignment: .leading, spacing: ProductivityLayout.SecondaryMetrics.valueSpacing) {
             Text(title)
-                .font(.system(size: 11, weight: .semibold))
+                .productivityFont(.metricLabel)
                 .foregroundStyle(titleColor)
-                .lineLimit(2)
+                .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
                 .minimumScaleFactor(ProductivityLayout.SecondaryMetrics.labelMinimumScaleFactor)
 
             Text(value)
-                .font(.system(size: 24, weight: .semibold))
+                .productivityFont(.secondaryFigure)
                 .foregroundStyle(valueColor)
                 .minimumScaleFactor(ProductivityLayout.SecondaryMetrics.valueMinimumScaleFactor)
                 .lineLimit(1)
@@ -300,20 +287,25 @@ private struct ProductivitySecondarySummaryItem: View {
         .accessibilityValue(accessibilityValue)
     }
 
-    private var valueColor: Color {
-        colorScheme == .dark
-            ? VibePalette.warmBackground.opacity(ProductivityLayout.SecondaryMetrics.valueDarkOpacity)
-            : Color.black.opacity(ProductivityLayout.SecondaryMetrics.valueLightOpacity)
+    private var valueColor: ContrastAdaptiveColor {
+        ProductivityTextColors.primary(colorScheme)
     }
 }
 
 struct ProductivityEmptyStateNote: View {
+    @Environment(\.colorScheme) private var colorScheme
+
     var body: some View {
-        Text("Complete a full session to start filling these charts. Productivity only reflects finished sessions.")
-            .font(.system(size: 13, weight: .medium))
-            .foregroundStyle(.secondary)
+        Text("Sessions appear here once they end, including ones you finish early. A session in progress isn't counted until then.")
+            .productivityFont(.caption)
+            .foregroundStyle(textColor)
             .padding(.horizontal, ProductivityLayout.EmptyState.horizontalPadding)
             .padding(.top, ProductivityLayout.EmptyState.topPadding)
             .padding(.bottom, ProductivityLayout.EmptyState.bottomPadding)
+    }
+
+    /// Same gray as the range line beneath it, so the two read as one block.
+    private var textColor: ContrastAdaptiveColor {
+        ProductivityTextColors.secondary(colorScheme)
     }
 }

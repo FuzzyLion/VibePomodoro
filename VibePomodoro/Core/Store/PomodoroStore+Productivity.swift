@@ -88,16 +88,22 @@ private extension PomodoroStore {
         return config.bucketStarts.compactMap { buckets[$0] }
     }
 
+    /// Consecutive days with focus time, counted back from today. A day without focus yet doesn't
+    /// end the streak until it is over, so the count starts from yesterday until today has its own.
     func streakLength(from dailySummaries: [ProductivityDailySummary], now: Date) -> Int {
         let calendar = Calendar.autoupdatingCurrent
-        let dailyFocus: [Date: TimeInterval] = Dictionary(uniqueKeysWithValues: dailySummaries.map {
-            (calendar.startOfDay(for: $0.date), $0.focusTime)
-        })
+        // Days recorded in another time zone can land on the same local day; merge them.
+        let dailyFocus: [Date: TimeInterval] = Dictionary(
+            dailySummaries.map { (calendar.startOfDay(for: $0.date), $0.focusTime) },
+            uniquingKeysWith: +
+        )
 
         guard !dailyFocus.isEmpty else { return 0 }
 
+        let today = calendar.startOfDay(for: now)
+        let todayHasFocus = (dailyFocus[today] ?? 0) > 0
         var streak = 0
-        var day = calendar.startOfDay(for: now)
+        var day = todayHasFocus ? today : (calendar.date(byAdding: .day, value: -1, to: today) ?? today)
 
         while let focusTime = dailyFocus[day], focusTime > 0 {
             streak += 1
