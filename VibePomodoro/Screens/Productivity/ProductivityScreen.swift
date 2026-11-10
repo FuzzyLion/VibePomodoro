@@ -19,15 +19,8 @@ enum ProductivityLayout {
         static let stackSpacing: CGFloat = 17
         static let verticalPadding: CGFloat = 20
         static let titleTracking: CGFloat = 0.72
-        static let titleDarkOpacity: Double = 0.54
-        static let titleLightOpacity: Double = 0.58
-        static let valueDarkOpacity: Double = 0.98
-        static let valueLightOpacity: Double = 0.84
-        static let metaDarkOpacity: Double = 0.64
-        static let metaLightOpacity: Double = 0.58
         static let dividerDarkOpacity: Double = 0.10
         static let dividerLightOpacity: Double = 0.08
-        static let accentDarkOpacity: Double = 0.94
         static let accentGlowDarkPrimaryOpacity: Double = 0.12
         static let accentGlowLightPrimaryOpacity: Double = 0.07
         static let accentGlowDarkSecondaryOpacity: Double = 0.05
@@ -49,8 +42,6 @@ enum ProductivityLayout {
         static let valueSpacing: CGFloat = 6
         static let dividerDarkOpacity: Double = 0.10
         static let dividerLightOpacity: Double = 0.08
-        static let valueDarkOpacity: Double = 0.94
-        static let valueLightOpacity: Double = 0.78
         static let labelMinimumScaleFactor: CGFloat = 0.85
         static let valueMinimumScaleFactor: CGFloat = 0.78
         static let verticalDividerHeight: CGFloat = 42
@@ -67,10 +58,6 @@ enum ProductivityLayout {
         static let cornerRadius: CGFloat = 26
         static let stackSpacing: CGFloat = 14
         static let headerSpacing: CGFloat = 10
-        static let primaryTextDarkOpacity: Double = 0.94
-        static let primaryTextLightOpacity: Double = 0.80
-        static let secondaryTextDarkOpacity: Double = 0.54
-        static let secondaryTextLightOpacity: Double = 0.58
         static let gridDarkOpacity: Double = 0.10
         static let gridLightOpacity: Double = 0.08
         static let accentOverlayDarkOpacity: Double = 0.022

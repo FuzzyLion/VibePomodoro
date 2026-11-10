@@ -14,6 +14,7 @@ final class PomodoroStore: ObservableObject {
     static let defaultsSuiteNameEnvironmentKey = "VIBE_DEFAULTS_SUITE"
     static let productivityFixtureEnvironmentKey = "VIBE_PRODUCTIVITY_FIXTURE"
     static let focusFixtureEnvironmentKey = "VIBE_FOCUS_FIXTURE"
+    static let notificationPermissionFixtureEnvironmentKey = "VIBE_NOTIFICATION_PERMISSION"
     static let resetStorageEnvironmentKey = "VIBE_RESET_STORE"
     static let uiTestingEnvironmentKey = "VIBE_UI_TESTING"
 
@@ -22,6 +23,7 @@ final class PomodoroStore: ObservableObject {
     @Published var activeSession: SessionSnapshot?
     @Published var completedSessions: [CompletedSession]
     @Published var productivityCache: ProductivityAggregateCache
+    @Published var notificationPermission: NotificationPermission = .unknown
 
     let defaults: UserDefaults
     let feedbackPlayer: ReminderFeedbackPlaying
@@ -53,7 +55,7 @@ final class PomodoroStore: ObservableObject {
         reconcileNow(deliverForegroundFeedback: false)
         repairProductivityCacheIfNeeded()
         syncIdleTimer()
-        requestNotificationPermissionsIfNeeded()
+        refreshNotificationPermission()
         syncNotifications()
         syncStepBoundaryTimer()
     }
@@ -146,6 +148,8 @@ final class PomodoroStore: ObservableObject {
             let events = PomodoroEngine.startOrResume(session: &session, now: .now)
             activeSession = session
             handle(events: events)
+            // Asked here rather than at launch, so the prompt arrives when its reason is on screen.
+            requestNotificationPermissionsIfNeeded()
         case .running:
             PomodoroEngine.pause(session: &session, now: .now)
             activeSession = session

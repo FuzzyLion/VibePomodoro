@@ -23,6 +23,23 @@ extension PomodoroStore {
 
         saveValue(session, for: StorageKey.activeSession, using: defaults, encoder: JSONEncoder())
     }
+
+    /// Stands in for the system's answer during UI tests and screenshots: `allowed`, `denied`, or
+    /// `notDetermined`. UI-testing launches never ask iOS.
+    static var uiTestingNotificationPermission: NotificationPermission? {
+        guard isUITestingLaunch else { return nil }
+
+        switch ProcessInfo.processInfo.environment[notificationPermissionFixtureEnvironmentKey] {
+        case "allowed":
+            return .allowed
+        case "denied":
+            return .denied
+        case "notDetermined":
+            return .notDetermined
+        default:
+            return nil
+        }
+    }
 }
 
 private extension PomodoroStore {

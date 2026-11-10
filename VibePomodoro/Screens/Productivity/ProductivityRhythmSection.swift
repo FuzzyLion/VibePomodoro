@@ -239,18 +239,27 @@ private struct ProductivityRhythmChart: View {
                 let total = bucket.focusTime + bucket.breakTime
                 let opacity = barOpacity(for: bucket)
 
-                // A full-height column for every slot carries it for VoiceOver. Week and Year draw it as
-                // an empty glass, so a day without focus still shows its place.
+                // An invisible column spanning the whole slot carries it for VoiceOver. A tap on its
+                // accessibility frame lands in the slot's own span; iOS 27 frames a mark placed at a single
+                // x from that x to one slot further, which would put the tap on the next slot.
+                BarMark(
+                    xStart: .value("Slot start", bucket.slotValue - 0.5),
+                    xEnd: .value("Slot end", bucket.slotValue + 0.5)
+                )
+                .foregroundStyle(Color.clear)
+                .accessibilityLabel(ProductivityChartFormatting.selectionAccessibilityText(for: bucket, range: range))
+                .accessibilityValue(ProductivityRhythmTotals([bucket]).accessibilityText)
+
+                // Week and Year draw an empty glass in every slot, so a day without focus still shows its place.
                 BarMark(
                     x: .value("Slot", bucket.slotValue),
-                    yStart: .value("Column start", 0),
-                    yEnd: .value("Column end", axisStyle.upperBound),
+                    yStart: .value("Track start", 0),
+                    yEnd: .value("Track end", axisStyle.upperBound),
                     width: .fixed(range.barWidth)
                 )
                 .clipShape(TopRoundedBarShape(radius: range.barTopCornerRadius + ProductivityLayout.RhythmChart.trackCornerExtra))
                 .foregroundStyle(range.showsBarTracks ? trackColor : Color.clear)
-                .accessibilityLabel(ProductivityChartFormatting.selectionAccessibilityText(for: bucket, range: range))
-                .accessibilityValue(ProductivityRhythmTotals([bucket]).accessibilityText)
+                .accessibilityHidden(true)
 
                 if bucket.focusTime > 0 {
                     BarMark(
@@ -417,8 +426,9 @@ private struct ProductivityRhythmChart: View {
             : Color.black.opacity(ProductivityLayout.RhythmChart.trackLightOpacity)
     }
 
-    private var averageColor: Color {
-        isDark ? VibePalette.amberGold.opacity(0.75) : VibePalette.amberGoldInk
+    /// The dashed line and its "avg" label share the focus labels' amber.
+    private var averageColor: ContrastAdaptiveColor {
+        ProductivityTextColors.focus(colorScheme)
     }
 
     private var gridColor: Color {
@@ -433,7 +443,7 @@ private struct ProductivityAxisValueLabel: View {
     @ScaledMetric(relativeTo: .caption2) private var width = ProductivityLayout.ChartAxis.valueLabelWidth
 
     let text: String
-    let color: Color
+    let color: ContrastAdaptiveColor
 
     var body: some View {
         Text(text)
@@ -451,7 +461,7 @@ private struct ProductivityCustomXAxis: View {
     let buckets: [ProductivityDisplayBucket]
     let range: ProductivityRange
     let plotFrame: CGRect
-    let textColor: Color
+    let textColor: ContrastAdaptiveColor
 
     var body: some View {
         if hasValidPlotFrame {

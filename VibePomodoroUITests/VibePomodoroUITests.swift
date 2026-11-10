@@ -159,7 +159,7 @@ final class VibePomodoroUITests: XCTestCase {
         XCTAssertTrue(shortBreakRow.waitForExistence(timeout: 2), app.debugDescription)
 
         let shortBreakPicker = app.descendants(matching: .any)["settings.sessionRhythm.shortBreak.picker"]
-        XCTAssertFalse(shortBreakPicker.exists)
+        XCTAssertFalse(shortBreakPicker.exists, app.debugDescription)
 
         shortBreakRow.tap()
         XCTAssertTrue(
@@ -205,6 +205,82 @@ final class VibePomodoroUITests: XCTestCase {
         XCTAssertTrue(app.buttons["Follow System"].waitForExistence(timeout: 2), app.debugDescription)
         app.buttons["Follow System"].tap()
         XCTAssertTrue(app.staticTexts["Follow System"].waitForExistence(timeout: 2), app.debugDescription)
+    }
+
+    @MainActor
+    func testSettingsLinksToIOSSettingsWhenNotificationsAreBlocked() throws {
+        let app = makeCleanApp(
+            arguments: ["--open-settings"],
+            environment: ["VIBE_NOTIFICATION_PERMISSION": "denied"]
+        )
+        app.launch()
+
+        XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 8), app.debugDescription)
+
+        let openSettings = app.buttons["settings.notifications.openSettings"]
+        XCTAssertTrue(openSettings.waitForExistence(timeout: 4), app.debugDescription)
+        XCTAssertTrue(element(in: app, containing: "Off in iOS Settings").exists, app.debugDescription)
+        XCTAssertFalse(app.switches["Notifications"].exists)
+
+        // Sound also plays inside the app, so it stays adjustable and says where it can be heard.
+        let sound = app.switches["Sound"]
+        XCTAssertTrue(sound.exists, app.debugDescription)
+        XCTAssertTrue(sound.isEnabled)
+        XCTAssertTrue(element(in: app, containing: "Only while the app is open").exists, app.debugDescription)
+    }
+
+    @MainActor
+    func testSettingsRowsStayLeadingAtTheLargestTextSize() throws {
+        let app = makeCleanApp(
+            arguments: [
+                "--open-settings",
+                "--appearance-light",
+                "-UIPreferredContentSizeCategoryName",
+                "UICTContentSizeCategoryAccessibilityXXXL"
+            ]
+        )
+        app.launch()
+
+        XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 8), app.debugDescription)
+        attachScreenshot(named: "settings-largest-text-top")
+
+        // At this size a row stacks its label over its value. A section label marks the card's leading
+        // edge, and a value that sits more than a pill's inset to its right has drifted to the center.
+        let appearanceMenu = app.buttons["settings.appearance"]
+        scrollUntilHittable(appearanceMenu, in: app, maxSwipes: 8)
+        let display = app.staticTexts["DISPLAY"]
+        let appearanceValue = app.staticTexts["Light"]
+        XCTAssertTrue(display.exists && appearanceValue.exists, app.debugDescription)
+        XCTAssertLessThan(appearanceValue.frame.minX - display.frame.minX, 20)
+        attachScreenshot(named: "settings-largest-text-display")
+
+        appearanceMenu.tap()
+        XCTAssertTrue(app.buttons["Dark"].waitForExistence(timeout: 2), app.debugDescription)
+        attachScreenshot(named: "settings-largest-text-appearance-menu")
+        app.buttons["Light"].tap()
+
+        let shareAppStatus = app.staticTexts.matching(NSPredicate(format: "label == 'SOON'")).element(boundBy: 1)
+        scrollUntilHittable(shareAppStatus, in: app, maxSwipes: 8)
+        let other = app.staticTexts["OTHER"]
+        XCTAssertTrue(other.exists && shareAppStatus.exists, app.debugDescription)
+        XCTAssertLessThan(shareAppStatus.frame.minX - other.frame.minX, 20)
+        app.swipeUp()
+        attachScreenshot(named: "settings-largest-text-bottom")
+    }
+
+    @MainActor
+    private func attachScreenshot(named name: String) {
+        let attachment = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+        attachment.name = name
+        attachment.lifetime = .keepAlways
+        add(attachment)
+    }
+
+    @MainActor
+    private func element(in app: XCUIApplication, containing text: String) -> XCUIElement {
+        app.descendants(matching: .any)
+            .matching(NSPredicate(format: "label CONTAINS %@", text))
+            .firstMatch
     }
 
     @MainActor

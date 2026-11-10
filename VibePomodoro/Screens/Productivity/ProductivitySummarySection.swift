@@ -76,22 +76,16 @@ struct ProductivitySummaryStrip: View {
         )
     }
 
-    private var headerTextColor: Color {
-        colorScheme == .dark
-            ? VibePalette.warmBackground.opacity(ProductivityLayout.SummaryCard.titleDarkOpacity)
-            : Color.black.opacity(ProductivityLayout.SummaryCard.titleLightOpacity)
+    private var headerTextColor: ContrastAdaptiveColor {
+        ProductivityTextColors.secondary(colorScheme)
     }
 
-    private var primaryValueColor: Color {
-        colorScheme == .dark
-            ? VibePalette.warmBackground.opacity(ProductivityLayout.SummaryCard.valueDarkOpacity)
-            : Color.black.opacity(ProductivityLayout.SummaryCard.valueLightOpacity)
+    private var primaryValueColor: ContrastAdaptiveColor {
+        ProductivityTextColors.leadFigure(colorScheme)
     }
 
-    private var metaTextColor: Color {
-        colorScheme == .dark
-            ? VibePalette.warmBackground.opacity(ProductivityLayout.SummaryCard.metaDarkOpacity)
-            : Color.black.opacity(ProductivityLayout.SummaryCard.metaLightOpacity)
+    private var metaTextColor: ContrastAdaptiveColor {
+        ProductivityTextColors.secondary(colorScheme)
     }
 
     private var dividerColor: Color {
@@ -101,10 +95,8 @@ struct ProductivitySummaryStrip: View {
     }
 
     /// Labels of focus metrics take the focus amber; other labels stay neutral.
-    private var focusTitleColor: Color {
-        colorScheme == .dark
-            ? VibePalette.warmAmberAccent.opacity(ProductivityLayout.SummaryCard.accentDarkOpacity)
-            : VibePalette.amberGoldInk
+    private var focusTitleColor: ContrastAdaptiveColor {
+        ProductivityTextColors.focus(colorScheme)
     }
 
     private var summaryAccentOverlay: some View {
@@ -136,8 +128,8 @@ private struct ProductivityPrimarySummaryMetric: View {
     let title: String
     let value: String
     let accessibilityValue: String
-    let titleColor: Color
-    let valueColor: Color
+    let titleColor: ContrastAdaptiveColor
+    let valueColor: ContrastAdaptiveColor
     let dynamicTypeSize: DynamicTypeSize
 
     var body: some View {
@@ -170,7 +162,7 @@ private struct ProductivitySecondaryMetricsRow: View {
     let snapshot: ProductivityMetricsSnapshot
     let colorScheme: ColorScheme
     let dynamicTypeSize: DynamicTypeSize
-    let focusLabelColor: Color
+    let focusLabelColor: ContrastAdaptiveColor
 
     var body: some View {
         Group {
@@ -260,7 +252,7 @@ private struct ProductivitySecondaryMetricDescriptor: Identifiable {
     let title: String
     let value: String
     let accessibilityValue: String
-    let titleColor: Color
+    let titleColor: ContrastAdaptiveColor
 
     var id: String { title }
 }
@@ -271,7 +263,7 @@ private struct ProductivitySecondarySummaryItem: View {
     let title: String
     let value: String
     let accessibilityValue: String
-    let titleColor: Color
+    let titleColor: ContrastAdaptiveColor
     let colorScheme: ColorScheme
 
     var body: some View {
@@ -295,10 +287,8 @@ private struct ProductivitySecondarySummaryItem: View {
         .accessibilityValue(accessibilityValue)
     }
 
-    private var valueColor: Color {
-        colorScheme == .dark
-            ? VibePalette.warmBackground.opacity(ProductivityLayout.SecondaryMetrics.valueDarkOpacity)
-            : Color.black.opacity(ProductivityLayout.SecondaryMetrics.valueLightOpacity)
+    private var valueColor: ContrastAdaptiveColor {
+        ProductivityTextColors.primary(colorScheme)
     }
 }
 
@@ -315,9 +305,7 @@ struct ProductivityEmptyStateNote: View {
     }
 
     /// Same gray as the range line beneath it, so the two read as one block.
-    private var textColor: Color {
-        colorScheme == .dark
-            ? VibePalette.warmBackground.opacity(ProductivityLayout.TrendCard.secondaryTextDarkOpacity)
-            : Color.black.opacity(ProductivityLayout.TrendCard.secondaryTextLightOpacity)
+    private var textColor: ContrastAdaptiveColor {
+        ProductivityTextColors.secondary(colorScheme)
     }
 }

@@ -13,11 +13,60 @@ struct PomodoroNotificationPlan: Equatable {
     }
 }
 
-extension PomodoroStore {
-    func requestNotificationPermissionsIfNeeded() {
-        guard !Self.isUITestingLaunch else { return }
+extension NotificationPermission {
+    init(_ status: UNAuthorizationStatus) {
+        switch status {
+        case .notDetermined:
+            self = .notDetermined
+        case .denied:
+            self = .denied
+        case .authorized, .provisional, .ephemeral:
+            self = .allowed
+        @unknown default:
+            self = .allowed
+        }
+    }
+}
 
-        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { _, _ in }
+extension PomodoroStore {
+    /// Asks iOS once, while notifications are on in the app and iOS hasn't been asked yet. Called on the
+    /// first Start and when Notifications is turned on, so the prompt arrives when its reason is visible.
+    func requestNotificationPermissionsIfNeeded() {
+        guard !Self.isUITestingLaunch,
+              settings.notificationsEnabled,
+              notificationPermission == .unknown || notificationPermission == .notDetermined else {
+            return
+        }
+
+        Task {
+            _ = try? await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge])
+            await updateNotificationPermission()
+            // Reminders for a session that started before the answer.
+            syncNotifications()
+        }
+    }
+
+    /// Reads what iOS allows now. Called at launch and whenever the app returns to the foreground,
+    /// since people change it in iOS Settings.
+    func refreshNotificationPermission() {
+        Task {
+            await updateNotificationPermission()
+        }
+    }
+
+    func updateNotificationPermission() async {
+        let permission: NotificationPermission
+        if Self.isUITestingLaunch {
+            permission = Self.uiTestingNotificationPermission ?? .notDetermined
+        } else {
+            let status = await UNUserNotificationCenter.current().notificationSettings().authorizationStatus
+            permission = NotificationPermission(status)
+        }
+
+        // Publishing redraws every view that watches the store, the Focus bubble included.
+        if notificationPermission != permission {
+            notificationPermission = permission
+        }
     }
 
     func syncNotifications() {

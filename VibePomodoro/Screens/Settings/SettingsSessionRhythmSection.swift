@@ -46,7 +46,7 @@ struct SettingsSessionRhythmSection: View {
                 trailingText: "Next session only"
             )
 
-            VStack(spacing: 0) {
+            VStack(alignment: .leading, spacing: 0) {
                 ForEach(Array(timerFields.enumerated()), id: \.element.id) { index, field in
                     timerRow(for: field)
 
@@ -71,7 +71,8 @@ struct SettingsSessionRhythmSection: View {
             rowAccessibilityIdentifier: "settings.sessionRhythm.\(field.id)",
             pickerAccessibilityIdentifier: "settings.sessionRhythm.\(field.id).picker",
             toggleExpansion: {
-                withAnimation(.spring(response: 0.38, dampingFraction: 0.86)) {
+                // No bounce: the drawer's height must never spring past zero while it closes.
+                withAnimation(.spring(duration: 0.38, bounce: 0)) {
                     expandedField = expandedField == field ? nil : field
                 }
             }
@@ -122,10 +123,10 @@ private struct SettingsExpandablePickerRow: View {
     let toggleExpansion: () -> Void
 
     var body: some View {
-        VStack(spacing: 0) {
+        VStack(alignment: .leading, spacing: 0) {
             Button(action: toggleExpansion) {
                 disclosureContent
-                    .frame(minHeight: SettingsLayout.pickerValuePillHeight, alignment: .center)
+                    .frame(maxWidth: .infinity, minHeight: SettingsLayout.pickerValuePillHeight, alignment: .leading)
             }
             .buttonStyle(SettingsPickerDisclosureButtonStyle())
             .accessibilityLabel(title)
@@ -135,7 +136,6 @@ private struct SettingsExpandablePickerRow: View {
 
             pickerDrawer
         }
-        .animation(.spring(response: 0.32, dampingFraction: 0.9), value: isExpanded)
         .padding(.vertical, SettingsLayout.pickerRowVerticalPadding)
         .accessibilityElement(children: .contain)
     }
@@ -180,9 +180,11 @@ private struct SettingsExpandablePickerRow: View {
     private var indicatorView: some View {
         switch indicator {
         case let .dot(color):
+            // Same width as the symbol's frame, so every title starts at the same x.
             Circle()
                 .fill(color)
                 .frame(width: 10, height: 10)
+                .frame(width: 12)
         case let .symbol(systemName, color):
             Image(systemName: systemName)
                 .font(.system(size: 12, weight: .semibold))
@@ -191,13 +193,30 @@ private struct SettingsExpandablePickerRow: View {
         }
     }
 
-    @ViewBuilder
+    /// The wheel hangs under its row at its resting place and the slot unrolls over it from the row's
+    /// lower edge, so nothing is ever drawn over another row. The slot's height, the rows below, the
+    /// card and the chevron all follow the one animation started by `toggleExpansion`.
+    ///
+    /// The wheel exists only while its drawer is open or closing. A closed wheel left in the hierarchy
+    /// stays reachable by VoiceOver even when hidden from accessibility.
     private var pickerDrawer: some View {
-        if isExpanded {
-            picker
-                .padding(.top, SettingsLayout.expandedPickerTopSpacing)
-                .transition(.opacity.combined(with: .move(edge: .top)))
+        ZStack(alignment: .top) {
+            if isExpanded {
+                picker
+                    .padding(.top, SettingsLayout.expandedPickerTopSpacing)
+                    .transition(SettingsPickerDrawerHoldTransition())
+            }
         }
+        // Full width even while empty, so only the slot's height ever changes.
+        .frame(maxWidth: .infinity)
+        .frame(
+            height: isExpanded ? SettingsLayout.expandedPickerDrawerHeight : 0,
+            alignment: .top
+        )
+        .clipped()
+        // Without this a wheel inserted while its row is moving appears at its final screen position
+        // at once, ahead of the row. The group makes it travel with the slot.
+        .geometryGroup()
     }
 
     private var picker: some View {
@@ -283,9 +302,20 @@ private struct SettingsExpandablePickerRow: View {
     }
 }
 
+/// Keeps the wheel drawn until the drawer has finished closing over it. The drawer's clip does the
+/// revealing and the covering, so the wheel itself should not visibly change. A transition that
+/// changes nothing removes the view at once, hence the imperceptible opacity step.
+private struct SettingsPickerDrawerHoldTransition: Transition {
+    func body(content: Content, phase: TransitionPhase) -> some View {
+        content.opacity(phase.isIdentity ? 1 : 0.99)
+    }
+}
+
 private struct SettingsPickerValueDisclosure: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.settingsPickerDisclosureIsPressed) private var isPressed
+    @ScaledMetric(relativeTo: .body) private var minHeight = SettingsLayout.pickerValuePillHeight
+    @ScaledMetric(relativeTo: .body) private var chevronSize: CGFloat = 13
 
     let valueText: String
     let isExpanded: Bool
@@ -301,13 +331,14 @@ private struct SettingsPickerValueDisclosure: View {
                 .frame(minWidth: SettingsLayout.pickerValueMinWidth)
 
             Image(systemName: "chevron.right")
-                .font(.system(size: 13, weight: .semibold))
+                .font(.system(size: chevronSize, weight: .semibold))
                 .foregroundStyle(SettingsTheme.secondaryTextColor(for: colorScheme).opacity(0.48))
                 .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                .accessibilityHidden(true)
         }
         .padding(.leading, 14)
         .padding(.trailing, 12)
-        .frame(height: SettingsLayout.pickerValuePillHeight)
+        .frame(minHeight: minHeight)
         .glassEffect(
             .regular.tint(
                 isPressed

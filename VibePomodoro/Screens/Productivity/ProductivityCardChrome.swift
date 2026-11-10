@@ -164,18 +164,33 @@ extension View {
     }
 }
 
-/// Text colors shared by the Productivity cards.
+/// Every text color on the Productivity page. Each keeps at least 4.5:1 on iOS 27, whose default
+/// glass draws the dark cards lighter than iOS 26 did, and turns stronger with Increase Contrast.
 enum ProductivityTextColors {
-    static func primary(_ colorScheme: ColorScheme) -> Color {
+    /// Titles, figures, and session rows.
+    static func primary(_ colorScheme: ColorScheme) -> ContrastAdaptiveColor {
         colorScheme == .dark
-            ? VibePalette.warmBackground.opacity(ProductivityLayout.TrendCard.primaryTextDarkOpacity)
-            : Color.black.opacity(ProductivityLayout.TrendCard.primaryTextLightOpacity)
+            ? ContrastAdaptiveColor(VibePalette.warmBackground.opacity(0.94), increased: VibePalette.warmBackground)
+            : ContrastAdaptiveColor(Color.black.opacity(0.80), increased: Color.black.opacity(0.9))
     }
 
-    static func secondary(_ colorScheme: ColorScheme) -> Color {
+    /// The summary's Focus Time figure, a little stronger than the rest.
+    static func leadFigure(_ colorScheme: ColorScheme) -> ContrastAdaptiveColor {
         colorScheme == .dark
-            ? VibePalette.warmBackground.opacity(ProductivityLayout.TrendCard.secondaryTextDarkOpacity)
-            : Color.black.opacity(ProductivityLayout.TrendCard.secondaryTextLightOpacity)
+            ? ContrastAdaptiveColor(VibePalette.warmBackground.opacity(0.98), increased: VibePalette.warmBackground)
+            : ContrastAdaptiveColor(Color.black.opacity(0.84), increased: Color.black.opacity(0.92))
+    }
+
+    /// Labels, axis values, the range line, and other quieter text.
+    static func secondary(_ colorScheme: ColorScheme) -> ContrastAdaptiveColor {
+        colorScheme == .dark
+            ? ContrastAdaptiveColor(VibePalette.warmBackground.opacity(0.76), increased: VibePalette.warmBackground.opacity(0.9))
+            : ContrastAdaptiveColor(Color.black.opacity(0.58), increased: Color.black.opacity(0.72))
+    }
+
+    /// Labels of focus metrics and the average marker.
+    static func focus(_ colorScheme: ColorScheme) -> ContrastAdaptiveColor {
+        VibePalette.amberText(for: colorScheme)
     }
 }
 

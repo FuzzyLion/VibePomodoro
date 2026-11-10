@@ -101,6 +101,8 @@ One phase ending and the next phase starting form a single boundary event. That 
 
 A completion event uses the completion response on its own. In the background or while locked, local notifications carry the boundary or completion sound. The app does not try to drive haptics in the background. Settings adjustments use their own gentle haptic response.
 
+The app asks iOS for notification permission on the first **Start**, not at launch, so the request comes when its reason is on screen. It reads the permission again each time it returns to the foreground, because people change it in iOS Settings.
+
 ## What Productivity counts
 
 Productivity counts effective running time from archived sessions. Pauses are excluded. A session enters the charts when it ends, whether through the normal sequence, a final Skip, or confirmed early completion. An active session stays out of the formal totals and charts.
@@ -216,9 +218,9 @@ Charts use evenly spaced buckets, with labels and bars centered on the same slot
 
 The value axis uses round steps and at most four intervals. Up to an hour it reads 0–60 minutes in 20-minute steps; above that it uses whole hours only, so no axis label needs minutes. Axis labels sit in a fixed-width column, so the plot keeps its width whatever the axis reads.
 
-Bars carry no value labels. Tapping a slot puts its date at the top right of the Rhythm card, its figures in the top row, and dims the other bars; the Sessions card then lists the sessions that started in that slot. The figures keep their columns while a slot is selected, so the row doesn't shift. A tapped month can hold dozens of sessions, so the list shows its latest five and a line such as *29 more*. Tapping the same slot again, or the axis labels beside the chart, returns to the range, and changing the range clears the selection. The month in progress names the days it covers so far, such as *1–9 Nov*. Selection is by tap only, so a drag that starts on the chart still scrolls the page. VoiceOver reads each slot's date with its focus, breaks, and blocks, and each session's start with its completed rounds and focus time.
+Bars carry no value labels. Tapping a slot puts its date at the top right of the Rhythm card, its figures in the top row, and dims the other bars; the Sessions card then lists the sessions that started in that slot. The figures keep their columns while a slot is selected, so the row doesn't shift. A tapped month can hold dozens of sessions, so the list shows its latest five and a line such as *29 more*. Tapping the same slot again, or the axis labels beside the chart, returns to the range, and changing the range clears the selection. The month in progress names the days it covers so far, such as *1–9 Nov*. Selection is by tap only, so a drag that starts on the chart still scrolls the page. VoiceOver reads each slot's date with its focus, breaks, and blocks, and each session's start with its completed rounds and focus time. Each slot's accessibility frame covers exactly that slot, so activating it selects that day.
 
-In light mode, semantic accent colors need enough depth to maintain contrast. Text in amber uses a deeper ink version of it, and all text on the cards reaches at least 4.5:1.
+Semantic accent colors need enough contrast in both appearances. Text in amber uses an ink version of it: deeper in light mode, lighter in dark mode. All text on the page reaches at least 4.5:1 on iOS 27, whose glass draws the dark cards lighter than iOS 26 did, and gets stronger with Increase Contrast.
 
 Text on the page grows with Dynamic Type. Each size follows the system text style closest to it, so the page looks the same at the default size. At accessibility sizes the summary's metrics and the Rhythm row stack, a selected slot's date takes its own line under the title, and a session row puts its start on one line and its markers and focus time on the next. Chart axis labels stop growing at xxLarge, because seven day names share the plot's width with the value column; a tapped slot's date and figures above the chart carry the detail at any size. The range button keeps its size, like other bar items.
 
@@ -227,6 +229,8 @@ The range menu can produce the system console message `Called -[UIContextMenuInt
 ## Settings design
 
 Settings should feel familiar and settled. **Session Rhythm** is the main card. **Alerts**, **Display**, and **Other** use quieter cards from the same visual family. Page-specific styling belongs in `Screens/Settings`, with names that reflect its role.
+
+At accessibility text sizes, a row's label and value stack, and every row stays aligned to the leading edge. Section labels and badges grow with the text. Text keeps at least 4.5:1 on iOS 27's glass, which draws the dark cards lighter than iOS 26 did. With Increase Contrast on, text and dividers get stronger.
 
 ### Session Rhythm
 
@@ -239,19 +243,21 @@ Use fixed choices rather than free-form input:
 | Long Break | 15, 20, or 30 minutes |
 | Rounds | 1–10 |
 
+All four settings use the same wheel, in a drawer beneath their row, so the card behaves one way throughout. The drawer unrolls in place from the row's lower edge and rolls back the same way. The wheel stays attached to its row and is never drawn over another one. The card, the rows below, and the chevron move in a single animation, and opening one row closes the other.
+
 Keep **Next session only** in the card heading. These changes must leave the active session's duration and round structure intact. When the page appears, `PomodoroStore` normalizes older saved values to the nearest supported choice without feedback.
 
 ### Alerts and Display
 
-Alerts contains **Notifications**, **Sound**, and **Haptics**. The Sound control requires Notifications. Event sounds have fixed mappings, so this page has no per-event sound picker.
+Alerts contains **Notifications**, **Sound**, and **Haptics**. Sound covers the event sounds inside the app as well as the sound a notification carries. It stays adjustable when Notifications is off, and its subtitle then reads **Only while the app is open**. If iOS blocks notifications while the switch is on, the Notifications row reads **Off in iOS Settings** and shows an **Open Settings** button in place of its switch. Event sounds have fixed mappings, so this page has no per-event sound picker.
 
-Display contains **Appearance** and **Keep Screen On**. Appearance offers **Follow System / Light / Dark**, applies immediately, and saves the choice. Keep Screen On is labeled **Active sessions only** and prevents automatic locking only while the timer is running. Pausing restores normal system behavior.
+Display contains **Appearance** and **Keep Screen On**. Appearance offers **Follow System / Light / Dark** in that order and marks the current choice with the system checkmark. It applies immediately and saves the choice. Keep Screen On is labeled **Active sessions only** and prevents automatic locking only while the timer is running. Pausing restores normal system behavior.
 
 ### Other
 
 **Send Feedback** and **Share App** are placeholders marked **Soon**. **Clear Productivity History** is the maintenance action.
 
-The history row stays visible. With no history, disable it and show **No history yet**. Otherwise, tapping it opens the final destructive confirmation alert directly. Keep the title's destructive styling, with an ordinary secondary-color subtitle. Confirming deletes `completedSessions` and `productivityCache` while preserving the active session and settings.
+The history row stays visible. With no history, disable it and show **No history yet**. Its title and icon then take the secondary text color instead of a faded red. Otherwise, tapping it opens the final destructive confirmation alert directly. Keep the title's destructive styling, with an ordinary secondary-color subtitle. Confirming deletes `completedSessions` and `productivityCache` while preserving the active session and settings.
 
 ## Shared visual language
 
@@ -286,7 +292,7 @@ Bubble surface animation and countdown refreshes have separate schedules. The vi
 | Timing and recovery | Pauses add no time; recovery crosses multiple boundaries correctly; relaunch does not duplicate archives. |
 | Controls | Skip awards no unfinished rounds, Reset clears the current step, Back rolls time back, and early completion preserves only elapsed time. |
 | Statistics | Midnight splitting, range totals, empty states, large durations, and a fresh history after clearing. |
-| Interface | All three pages in light and dark mode, a single-screen Focus layout, pickers, menus, completion, larger text, and Reduce Motion. |
+| Interface | All three pages in light and dark mode, a single-screen Focus layout, pickers, menus, completion, larger text, Increase Contrast, and Reduce Motion. |
 | Physical device | Sustained rendering and energy use on iPhone 14 Pro, lock-screen notifications, sound, and haptics. |
 
 The repository includes unit tests and UI smoke tests. Screenshots verify the visible layout and state. Device testing covers the parts a simulator cannot establish, including physical haptics, lock-screen delivery, and energy use. Build and test commands are in the README.

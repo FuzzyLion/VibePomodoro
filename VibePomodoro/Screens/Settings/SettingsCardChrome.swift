@@ -206,6 +206,7 @@ struct SettingsCard<Content: View, AccentOverlay: View>: View {
 struct SettingsCardHeader: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @ScaledMetric(relativeTo: .caption) private var titleSize: CGFloat = 12
 
     let title: String
     var trailingText: String? = nil
@@ -234,7 +235,7 @@ struct SettingsCardHeader: View {
 
     private var titleLabel: some View {
         Text(title)
-            .font(.system(size: 12, weight: .semibold))
+            .font(.system(size: titleSize, weight: .semibold))
             .tracking(SettingsLayout.sectionTitleTracking)
             .foregroundStyle(SettingsTheme.sectionLabelColor(for: colorScheme))
             .accessibilityAddTraits(.isHeader)
@@ -250,6 +251,7 @@ struct SettingsCardHeader: View {
 struct SettingsSectionHeader: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @ScaledMetric(relativeTo: .caption) private var titleSize: CGFloat = 12
 
     let title: String
     var trailingText: String? = nil
@@ -278,7 +280,7 @@ struct SettingsSectionHeader: View {
 
     private var titleLabel: some View {
         Text(title)
-            .font(.system(size: 12, weight: .semibold))
+            .font(.system(size: titleSize, weight: .semibold))
             .tracking(SettingsLayout.sectionTitleTracking)
             .foregroundStyle(SettingsTheme.sectionLabelColor(for: colorScheme))
             .accessibilityAddTraits(.isHeader)

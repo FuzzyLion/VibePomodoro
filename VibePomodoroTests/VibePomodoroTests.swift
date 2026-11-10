@@ -8,6 +8,7 @@
 import Foundation
 import SwiftUI
 import Testing
+import UserNotifications
 @testable import VibePomodoro
 
 @MainActor
@@ -882,6 +883,66 @@ struct VibePomodoroTests {
 
         let reloadedStore = PomodoroStore(defaults: defaults)
         #expect(reloadedStore.settings.appearanceMode == .dark)
+    }
+
+    @Test func appearanceMenuListsFollowSystemFirst() async throws {
+        #expect(PomodoroAppearanceMode.allCases == [.system, .light, .dark])
+        #expect(PomodoroAppearanceMode.allCases.map(\.title) == ["Follow System", "Light", "Dark"])
+    }
+
+    @Test func notificationPermissionReadsSystemStatuses() async throws {
+        #expect(NotificationPermission(UNAuthorizationStatus.notDetermined) == .notDetermined)
+        #expect(NotificationPermission(UNAuthorizationStatus.denied) == .denied)
+        #expect(NotificationPermission(UNAuthorizationStatus.authorized) == .allowed)
+        #expect(NotificationPermission(UNAuthorizationStatus.provisional) == .allowed)
+        #expect(NotificationPermission(UNAuthorizationStatus.ephemeral) == .allowed)
+    }
+
+    @Test func alertsCardLinksToIOSSettingsOnlyWhenIOSBlocksAnEnabledSwitch() async throws {
+        let blocked = SettingsAlertsPresentation(notificationsEnabled: true, permission: .denied)
+        #expect(blocked.opensSystemSettings)
+        #expect(blocked.soundDetail == SettingsAlertsPresentation.inAppSoundDetail)
+
+        let switchedOff = SettingsAlertsPresentation(notificationsEnabled: false, permission: .denied)
+        #expect(switchedOff.opensSystemSettings == false)
+        #expect(switchedOff.soundDetail == SettingsAlertsPresentation.inAppSoundDetail)
+
+        for permission in [NotificationPermission.unknown, .notDetermined, .allowed] {
+            let on = SettingsAlertsPresentation(notificationsEnabled: true, permission: permission)
+            #expect(on.opensSystemSettings == false)
+            #expect(on.soundDetail == nil)
+
+            let off = SettingsAlertsPresentation(notificationsEnabled: false, permission: permission)
+            #expect(off.opensSystemSettings == false)
+            #expect(off.soundDetail == SettingsAlertsPresentation.inAppSoundDetail)
+        }
+    }
+
+    @Test func soundStillPlaysInTheAppWithNotificationsOff() async throws {
+        let (defaults, suiteName) = makeDefaults()
+        defer { clear(defaults, suiteName: suiteName) }
+
+        var settings = PomodoroSettings.default
+        settings.targetRounds = 2
+        settings.notificationsEnabled = false
+        settings.soundEnabled = true
+
+        let player = RecordingReminderFeedbackPlayer()
+        let store = makeStoreWithRunningSession(
+            settings: settings,
+            start: Date(),
+            defaults: defaults,
+            feedbackPlayer: player
+        )
+
+        #expect(store.notificationPlans(now: Date()).isEmpty)
+
+        store.skipCurrentStep()
+
+        #expect(player.playedActionBatches == [[
+            .sound(.nextPhaseWhoosh),
+            .haptic(.softImpact)
+        ]])
     }
 
     @Test func legacySettingsDecodeWithSystemAppearanceMode() async throws {

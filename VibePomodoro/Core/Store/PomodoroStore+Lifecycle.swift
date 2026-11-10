@@ -11,6 +11,7 @@ extension PomodoroStore {
             reconcileNow(deliverForegroundFeedback: false)
             syncIdleTimer()
             syncNotifications()
+            refreshNotificationPermission()
         case .inactive, .background:
             persist(.activeSession)
         @unknown default:
