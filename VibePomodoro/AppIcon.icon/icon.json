@@ -1,146 +1,293 @@
 {
-  "fill": {
-    "automatic-gradient": "srgb:0.96500,0.95700,0.94100,1.00000"
-  },
-  "fill-specializations": [
+  "fill-specializations" : [
     {
-      "value": {
-        "automatic-gradient": "srgb:0.96500,0.95700,0.94100,1.00000"
+      "value" : {
+        "automatic-gradient" : "srgb:0.96500,0.95700,0.94100,1.00000"
       }
     },
     {
-      "appearance": "dark",
-      "value": {
-        "automatic-gradient": "srgb:0.11000,0.11200,0.12500,1.00000"
+      "appearance" : "dark",
+      "value" : {
+        "automatic-gradient" : "srgb:0.11000,0.11200,0.12500,1.00000"
       }
     }
   ],
-  "groups": [
+  "groups" : [
     {
-      "name": "Short break",
-      "layers": [
+      "layers" : [
         {
-          "name": "Short break",
-          "image-name": "shortBreak.svg",
-          "glass": true,
-          "fill-specializations": [
+          "fill-specializations" : [
             {
-              "value": {
-                "solid": "srgb:0.58824,0.75294,0.88627,1.00000"
+              "value" : {
+                "solid" : "srgb:0.58824,0.75294,0.88627,1.00000"
               }
             },
             {
-              "appearance": "tinted",
-              "value": {
-                "solid": "srgb:1.00000,1.00000,1.00000,1.00000"
+              "appearance" : "dark",
+              "value" : {
+                "solid" : "srgb:0.83529,0.90196,0.95294,1.00000"
+              }
+            },
+            {
+              "appearance" : "tinted",
+              "value" : {
+                "solid" : "srgb:1.00000,1.00000,1.00000,1.00000"
               }
             }
           ],
-          "opacity-specializations": [
+          "glass" : true,
+          "image-name" : "shortBreak.svg",
+          "name" : "Short break glass",
+          "opacity-specializations" : [
             {
-              "value": 1.0
+              "value" : 0.2
             },
             {
-              "appearance": "tinted",
-              "value": 1.0
+              "appearance" : "dark",
+              "value" : 0.2
+            },
+            {
+              "appearance" : "tinted",
+              "value" : 0.45
+            }
+          ]
+        },
+        {
+          "fill-specializations" : [
+            {
+              "value" : {
+                "linear-gradient" : [
+                  "srgb:0.65490,0.79216,0.90588,1.00000",
+                  "srgb:0.50588,0.64706,0.76078,1.00000"
+                ],
+                "orientation" : {
+                  "start" : {
+                    "x" : 0.5,
+                    "y" : 0
+                  },
+                  "stop" : {
+                    "x" : 0.5,
+                    "y" : 1
+                  }
+                }
+              }
+            },
+            {
+              "appearance" : "tinted",
+              "value" : {
+                "solid" : "srgb:1.00000,1.00000,1.00000,1.00000"
+              }
+            }
+          ],
+          "glass" : false,
+          "image-name" : "shortBreakLiquid.svg",
+          "name" : "Short break liquid",
+          "opacity-specializations" : [
+            {
+              "value" : 1
+            },
+            {
+              "appearance" : "tinted",
+              "value" : 1
             }
           ]
         }
       ],
-      "shadow": {
-        "kind": "neutral",
-        "opacity": 0.5
+      "name" : "Short break",
+      "shadow" : {
+        "kind" : "layer-color",
+        "opacity" : 0.5
       },
-      "translucency": {
-        "enabled": true,
-        "value": 0.35
+      "translucency" : {
+        "enabled" : true,
+        "value" : 0.35
       }
     },
     {
-      "name": "Long break",
-      "layers": [
+      "layers" : [
         {
-          "name": "Long break",
-          "image-name": "longBreak.svg",
-          "glass": true,
-          "fill-specializations": [
+          "fill-specializations" : [
             {
-              "value": {
-                "solid": "srgb:0.47059,0.72157,0.62745,1.00000"
+              "value" : {
+                "solid" : "srgb:0.47059,0.72157,0.62745,1.00000"
               }
             },
             {
-              "appearance": "tinted",
-              "value": {
-                "solid": "srgb:1.00000,1.00000,1.00000,1.00000"
+              "appearance" : "dark",
+              "value" : {
+                "solid" : "srgb:0.78824,0.89020,0.85098,1.00000"
+              }
+            },
+            {
+              "appearance" : "tinted",
+              "value" : {
+                "solid" : "srgb:1.00000,1.00000,1.00000,1.00000"
               }
             }
           ],
-          "opacity-specializations": [
+          "glass" : true,
+          "image-name" : "longBreak.svg",
+          "name" : "Long break glass",
+          "opacity-specializations" : [
             {
-              "value": 1.0
+              "value" : 0.2
             },
             {
-              "appearance": "tinted",
-              "value": 0.7
+              "appearance" : "dark",
+              "value" : 0.2
+            },
+            {
+              "appearance" : "tinted",
+              "value" : 0.315
+            }
+          ]
+        },
+        {
+          "fill-specializations" : [
+            {
+              "value" : {
+                "linear-gradient" : [
+                  "srgb:0.55686,0.76471,0.68627,1.00000",
+                  "srgb:0.40392,0.61961,0.54118,1.00000"
+                ],
+                "orientation" : {
+                  "start" : {
+                    "x" : 0.5,
+                    "y" : 0
+                  },
+                  "stop" : {
+                    "x" : 0.5,
+                    "y" : 1
+                  }
+                }
+              }
+            },
+            {
+              "appearance" : "tinted",
+              "value" : {
+                "solid" : "srgb:1.00000,1.00000,1.00000,1.00000"
+              }
+            }
+          ],
+          "glass" : false,
+          "image-name" : "longBreakLiquid.svg",
+          "name" : "Long break liquid",
+          "opacity-specializations" : [
+            {
+              "value" : 1
+            },
+            {
+              "appearance" : "tinted",
+              "value" : 0.7
             }
           ]
         }
       ],
-      "shadow": {
-        "kind": "neutral",
-        "opacity": 0.5
+      "name" : "Long break",
+      "shadow" : {
+        "kind" : "layer-color",
+        "opacity" : 0.5
       },
-      "translucency": {
-        "enabled": true,
-        "value": 0.35
+      "translucency" : {
+        "enabled" : true,
+        "value" : 0.35
       }
     },
     {
-      "name": "Focus",
-      "layers": [
+      "layers" : [
         {
-          "name": "Focus",
-          "image-name": "focus.svg",
-          "glass": true,
-          "fill-specializations": [
+          "fill-specializations" : [
             {
-              "value": {
-                "solid": "srgb:0.88627,0.66667,0.30588,1.00000"
+              "value" : {
+                "solid" : "srgb:0.88627,0.66667,0.30588,1.00000"
               }
             },
             {
-              "appearance": "tinted",
-              "value": {
-                "solid": "srgb:1.00000,1.00000,1.00000,1.00000"
+              "appearance" : "dark",
+              "value" : {
+                "solid" : "srgb:0.95294,0.86667,0.72157,1.00000"
+              }
+            },
+            {
+              "appearance" : "tinted",
+              "value" : {
+                "solid" : "srgb:1.00000,1.00000,1.00000,1.00000"
               }
             }
           ],
-          "opacity-specializations": [
+          "glass" : true,
+          "image-name" : "focus.svg",
+          "name" : "Focus glass",
+          "opacity-specializations" : [
             {
-              "value": 1.0
+              "value" : 0.2
             },
             {
-              "appearance": "tinted",
-              "value": 0.4
+              "appearance" : "dark",
+              "value" : 0.2
+            },
+            {
+              "appearance" : "tinted",
+              "value" : 0.18
+            }
+          ]
+        },
+        {
+          "fill-specializations" : [
+            {
+              "value" : {
+                "linear-gradient" : [
+                  "srgb:0.90588,0.72157,0.41569,1.00000",
+                  "srgb:0.76078,0.57255,0.26275,1.00000"
+                ],
+                "orientation" : {
+                  "start" : {
+                    "x" : 0.5,
+                    "y" : 0
+                  },
+                  "stop" : {
+                    "x" : 0.5,
+                    "y" : 1
+                  }
+                }
+              }
+            },
+            {
+              "appearance" : "tinted",
+              "value" : {
+                "solid" : "srgb:1.00000,1.00000,1.00000,1.00000"
+              }
+            }
+          ],
+          "glass" : false,
+          "image-name" : "focusLiquid.svg",
+          "name" : "Focus liquid",
+          "opacity-specializations" : [
+            {
+              "value" : 1
+            },
+            {
+              "appearance" : "tinted",
+              "value" : 0.4
             }
           ]
         }
       ],
-      "shadow": {
-        "kind": "neutral",
-        "opacity": 0.5
+      "name" : "Focus",
+      "shadow" : {
+        "kind" : "layer-color",
+        "opacity" : 0.5
       },
-      "translucency": {
-        "enabled": true,
-        "value": 0.35
+      "translucency" : {
+        "enabled" : true,
+        "value" : 0.35
       }
     }
   ],
-  "supported-platforms": {
-    "circles": [
+  "supported-platforms" : {
+    "circles" : [
       "watchOS"
     ],
-    "squares": "shared"
+    "squares" : "shared"
   }
 }
