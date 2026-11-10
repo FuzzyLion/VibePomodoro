@@ -69,7 +69,7 @@ float squared(float x) {
 } // namespace bubble
 
 // The liquid inside the bubble, applied as a layer effect to the layer that holds the countdown.
-// Above the wave line the digits keep their glass treatment; below it they are seen through the
+// Above the wave line the digits keep their solid treatment; below it they are seen through the
 // liquid, magnified a little by the round vessel, bent by the surface, and filtered by the tint.
 //
 // surface:   water line y, surface center x, surface half width, perspective depth (0 = no surface)
@@ -229,7 +229,7 @@ float squared(float x) {
 
     float4 liquid = float4(min(rgb, float3(alpha)), alpha);
 
-    // Above the wave line the digits stay in front of the surface, crisp and in their glass colors.
+    // Above the wave line the digits stay in front of the surface, crisp and in their own colors.
     float4 dryAbove = dry * (1.0 - below);
     float4 composite = dryAbove + liquid * (1.0 - dryAbove.a);
     return half4(mix(dry, composite, inLiquid));
