@@ -351,8 +351,7 @@ struct BubbleVesselWall: View {
                     style: FillStyle(eoFill: true)
                 )
 
-            phaseMorph.shape
-                .scale(BubbleVessel.innerScale)
+            BubbleInnerShape(phaseMorph: phaseMorph)
                 .stroke(isDark ? Color.white.opacity(0.10) : Color.black.opacity(0.07), lineWidth: 0.7)
         }
         .allowsHitTesting(false)

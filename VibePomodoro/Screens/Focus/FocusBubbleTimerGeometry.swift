@@ -72,8 +72,58 @@ func interpolate(_ source: Double, _ target: Double, _ progress: CGFloat) -> Dou
     source + ((target - source) * Double(progress))
 }
 
+extension BubbleShellProfile {
+    /// The highlights and glows were placed for outlines that fill the frame. This moves and
+    /// scales them onto an outline that fills `frame`, given in units of the frame, so they stay
+    /// on the glass wherever the vessel stands.
+    func fitted(to frame: CGRect, sphereSize: CGFloat) -> BubbleShellProfile {
+        let scale = CGSize(
+            width: frame.width / BubbleVessel.outlineExtent,
+            height: frame.height / BubbleVessel.outlineExtent
+        )
+        let center = CGSize(
+            width: (frame.midX - 0.5) * sphereSize,
+            height: (frame.midY - 0.5) * sphereSize
+        )
+        func size(_ size: CGSize) -> CGSize {
+            CGSize(width: size.width * scale.width, height: size.height * scale.height)
+        }
+        func offset(_ offset: CGSize) -> CGSize {
+            CGSize(
+                width: center.width + offset.width * scale.width,
+                height: center.height + offset.height * scale.height
+            )
+        }
+
+        return BubbleShellProfile(
+            upperSpecularSize: size(upperSpecularSize),
+            upperSpecularOffset: offset(upperSpecularOffset),
+            upperSpecularRotation: upperSpecularRotation,
+            shoulderSpecularSize: size(shoulderSpecularSize),
+            shoulderSpecularOffset: offset(shoulderSpecularOffset),
+            shoulderSpecularRotation: shoulderSpecularRotation,
+            lowerCausticSize: size(lowerCausticSize),
+            lowerCausticOffset: offset(lowerCausticOffset),
+            outerGlowSize: size(outerGlowSize),
+            outerGlowOffset: offset(outerGlowOffset),
+            innerLensSize: size(innerLensSize),
+            innerLensOffset: offset(innerLensOffset),
+            innerLensRotation: innerLensRotation,
+            sideRefractionSize: size(sideRefractionSize),
+            sideRefractionOffset: offset(sideRefractionOffset),
+            sideRefractionRotation: sideRefractionRotation,
+            waveAmplitudeBase: waveAmplitudeBase,
+            waveAmplitudeRange: waveAmplitudeRange
+        )
+    }
+}
+
 extension SessionPhase {
     func bubbleShellProfile(for sphereSize: CGFloat) -> BubbleShellProfile {
+        baseShellProfile(for: sphereSize).fitted(to: bubbleOutline.frame, sphereSize: sphereSize)
+    }
+
+    private func baseShellProfile(for sphereSize: CGFloat) -> BubbleShellProfile {
         switch self {
         case .focus:
             return BubbleShellProfile(
@@ -222,37 +272,6 @@ private struct BubbleShapeGeometry {
         )
     }
 
-    static func smoothClosedLoop(
-        points: [CGPoint],
-        controlScale: CGFloat = 0.12
-    ) -> BubbleShapeGeometry {
-        guard points.count > 2 else {
-            return BubbleShapeGeometry(start: points.first ?? .zero, segments: [])
-        }
-
-        let count = points.count
-        let segments = points.indices.map { index in
-            let previous = points[(index + count - 1) % count]
-            let current = points[index]
-            let next = points[(index + 1) % count]
-            let afterNext = points[(index + 2) % count]
-
-            return BubbleShapeCurveSegment(
-                control1: CGPoint(
-                    x: current.x + ((next.x - previous.x) * controlScale),
-                    y: current.y + ((next.y - previous.y) * controlScale)
-                ),
-                control2: CGPoint(
-                    x: next.x - ((afterNext.x - current.x) * controlScale),
-                    y: next.y - ((afterNext.y - current.y) * controlScale)
-                ),
-                end: next
-            )
-        }
-
-        return BubbleShapeGeometry(start: points[0], segments: segments)
-    }
-
     private func scaled(_ point: CGPoint, in rect: CGRect) -> CGPoint {
         CGPoint(
             x: rect.minX + (rect.width * point.x),
@@ -267,64 +286,141 @@ private struct BubbleShapeCurveSegment {
     let end: CGPoint
 }
 
-private extension SessionPhase {
-    var bubbleShapeGeometry: BubbleShapeGeometry {
-        switch self {
-        case .focus:
-            return BubbleShapeGeometry.smoothClosedLoop(points: [
-                CGPoint(x: 0.440, y: 0.020),
-                CGPoint(x: 0.735, y: 0.048),
-                CGPoint(x: 0.995, y: 0.300),
-                CGPoint(x: 0.905, y: 0.825),
-                CGPoint(x: 0.635, y: 0.988),
-                CGPoint(x: 0.205, y: 0.915),
-                CGPoint(x: 0.015, y: 0.585),
-                CGPoint(x: 0.130, y: 0.180)
-            ])
-        case .shortBreak:
-            return BubbleShapeGeometry.smoothClosedLoop(points: [
-                CGPoint(x: 0.490, y: 0.026),
-                CGPoint(x: 0.805, y: 0.125),
-                CGPoint(x: 0.935, y: 0.360),
-                CGPoint(x: 0.965, y: 0.665),
-                CGPoint(x: 0.540, y: 0.982),
-                CGPoint(x: 0.165, y: 0.815),
-                CGPoint(x: 0.035, y: 0.525),
-                CGPoint(x: 0.075, y: 0.215)
-            ])
-        case .longBreak:
-            return BubbleShapeGeometry.smoothClosedLoop(points: [
-                CGPoint(x: 0.490, y: 0.024),
-                CGPoint(x: 0.835, y: 0.085),
-                CGPoint(x: 0.930, y: 0.300),
-                CGPoint(x: 0.965, y: 0.595),
-                CGPoint(x: 0.845, y: 0.835),
-                CGPoint(x: 0.535, y: 0.982),
-                CGPoint(x: 0.175, y: 0.855),
-                CGPoint(x: 0.070, y: 0.290)
-            ])
+/// A phase's outline: a smooth closed curve that turns gently all the way round, so the light on
+/// the glass glides along it instead of catching on corners. It is an ellipse that widens toward
+/// its bottom (or, with a negative `taper`, toward its top), with a faint three-lobed swell,
+/// turned by `tilt` degrees. Every outline stands on the same ground line, centered across the
+/// frame, and its longer side spans the same share of it.
+private struct BubbleOutline {
+    let taper: Double
+    let width: Double
+    let height: Double
+    let tilt: Double
+    var lobes: Double = 0
+    var lobePhase: Double = 0
+
+    /// Where every outline meets the page, as a share of the frame's height.
+    static let ground: CGFloat = 0.985
+    /// Cubic segments around the outline; each follows its stretch of the curve within a small
+    /// fraction of a point.
+    static let segmentCount = 12
+
+    struct Fitted {
+        let geometry: BubbleShapeGeometry
+        /// The outline's bounds, in units of the frame.
+        let frame: CGRect
+    }
+
+    private func point(at t: Double) -> CGPoint {
+        let swell = 1 + lobes * cos(3 * (t - lobePhase))
+        let x = cos(t) * (1 + taper * sin(t)) * width * swell
+        let y = sin(t) * height * swell
+        let angle = tilt * .pi / 180
+        return CGPoint(x: x * cos(angle) - y * sin(angle), y: x * sin(angle) + y * cos(angle))
+    }
+
+    var fitted: Fitted {
+        let samples = (0..<720).map { point(at: Double($0) * 2 * .pi / 720) }
+        let minX = samples.map(\.x).min() ?? -1
+        let maxX = samples.map(\.x).max() ?? 1
+        let minY = samples.map(\.y).min() ?? -1
+        let maxY = samples.map(\.y).max() ?? 1
+        let scale = BubbleVessel.outlineExtent / max(maxX - minX, maxY - minY)
+        let shift = CGPoint(x: 0.5 - (minX + maxX) / 2 * scale, y: Self.ground - maxY * scale)
+        func place(_ point: CGPoint) -> CGPoint {
+            CGPoint(x: shift.x + point.x * scale, y: shift.y + point.y * scale)
         }
+
+        // Each segment is the cubic that meets the curve at both of its ends heading the same way
+        // as the curve, so neighboring segments join without a kink.
+        let step = 2 * Double.pi / Double(Self.segmentCount)
+        let delta = 1e-4
+        func handle(at t: Double) -> CGPoint {
+            let before = point(at: t - delta)
+            let after = point(at: t + delta)
+            let length = scale * step / 3 / (2 * delta)
+            return CGPoint(x: (after.x - before.x) * length, y: (after.y - before.y) * length)
+        }
+        let segments = (0..<Self.segmentCount).map { index in
+            let start = Double(index) * step
+            let end = start + step
+            let from = place(point(at: start))
+            let to = place(point(at: end))
+            let leaving = handle(at: start)
+            let arriving = handle(at: end)
+            return BubbleShapeCurveSegment(
+                control1: CGPoint(x: from.x + leaving.x, y: from.y + leaving.y),
+                control2: CGPoint(x: to.x - arriving.x, y: to.y - arriving.y),
+                end: to
+            )
+        }
+
+        return Fitted(
+            geometry: BubbleShapeGeometry(start: place(point(at: 0)), segments: segments),
+            frame: CGRect(
+                x: shift.x + minX * scale,
+                y: shift.y + minY * scale,
+                width: (maxX - minX) * scale,
+                height: (maxY - minY) * scale
+            )
+        )
+    }
+}
+
+/// Each phase's outline has a gesture of its own, computed once.
+private enum BubbleOutlines {
+    /// Focus: an upright drop, full and steady low down and gathered toward the top. It stands
+    /// taller than it is wide, so it never reads as the long break's broad shape.
+    static let focus = BubbleOutline(taper: 0.19, width: 0.95, height: 1.0, tilt: -3).fitted
+    /// Short break: a bubble on its way up, wider high up and leaning.
+    static let shortBreak = BubbleOutline(taper: -0.12, width: 0.90, height: 1.0, tilt: 9).fitted
+    /// Long break: broad and low, at rest.
+    static let longBreak = BubbleOutline(
+        taper: 0.05, width: 1.0, height: 0.86, tilt: -5, lobes: 0.012, lobePhase: 0.4
+    ).fitted
+}
+
+private extension SessionPhase {
+    var bubbleOutline: BubbleOutline.Fitted {
+        switch self {
+        case .focus: BubbleOutlines.focus
+        case .shortBreak: BubbleOutlines.shortBreak
+        case .longBreak: BubbleOutlines.longBreak
+        }
+    }
+
+    var bubbleShapeGeometry: BubbleShapeGeometry {
+        bubbleOutline.geometry
     }
 }
 
 /// The water line. The wave that ripples it, the surface, and the digit split are computed per
-/// pixel by `bubbleLiquid` in FocusBubbleLiquid.metal.
+/// pixel by `bubbleLiquid` in FocusBubbleLiquid.metal. The liquid rises from the bottom of `rect`,
+/// the vessel's bounds, to its top.
 enum BubbleWave {
     static func waterlineY(fillRatio: Double, in rect: CGRect) -> CGFloat {
-        rect.height * (1 - CGFloat(max(0, min(fillRatio, 1.08))))
+        rect.maxY - rect.height * CGFloat(max(0, min(fillRatio, 1.08)))
     }
 }
 
 /// The bubble as a glass vessel: a wall of glass around the liquid, and a liquid surface
 /// seen slightly from above. Light comes from the top left.
 enum BubbleVessel {
+    /// The longer side of every outline, as a share of the frame.
+    static let outlineExtent: CGFloat = 0.97
     /// The inside of the glass as a scale of the outer silhouette, about 6 pt of wall.
     static let innerScale: CGFloat = 0.955
 
+    /// The inside of the glass: the outer silhouette scaled about its own middle, so the wall is
+    /// as thick at the top as at the bottom wherever the vessel stands in the frame.
     static func innerPath(of outer: Path, in rect: CGRect) -> Path {
-        let transform = CGAffineTransform(translationX: rect.midX, y: rect.midY)
+        let bounds = outer.boundingRect
+        let center = bounds.isEmpty
+            ? CGPoint(x: rect.midX, y: rect.midY)
+            : CGPoint(x: bounds.midX, y: bounds.midY)
+        let transform = CGAffineTransform(translationX: center.x, y: center.y)
             .scaledBy(x: innerScale, y: innerScale)
-            .translatedBy(x: -rect.midX, y: -rect.midY)
+            .translatedBy(x: -center.x, y: -center.y)
         return outer.applying(transform)
     }
 
@@ -471,6 +567,15 @@ enum BubbleVessel {
         }
 
         return CrossSections(bounds: bounds, values: values)
+    }
+}
+
+/// The inside of the glass, which holds the liquid.
+struct BubbleInnerShape: Shape {
+    let phaseMorph: BubblePhaseMorph
+
+    func path(in rect: CGRect) -> Path {
+        BubbleVessel.innerPath(of: phaseMorph.shape.path(in: rect), in: rect)
     }
 }
 
