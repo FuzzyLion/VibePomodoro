@@ -96,7 +96,7 @@ struct SettingsDisplaySection: View {
                 accentOverlay: { EmptyView() }
             ) {
                 VStack(alignment: .leading, spacing: 0) {
-                    appearanceMenu
+                    appearanceRow
 
                     SettingsDivider()
 
@@ -117,25 +117,31 @@ struct SettingsDisplaySection: View {
         )
     }
 
-    private var appearanceMenu: some View {
-        Menu {
-            // Each choice is a toggle, so the system draws its checkmark. A checkmark image in a
-            // button's label disappears at accessibility text sizes, where menus drop images.
-            ForEach(PomodoroAppearanceMode.allCases) { mode in
-                Toggle(mode.title, isOn: appearanceSelection(mode))
-                    .accessibilityIdentifier("settings.appearance.\(mode.rawValue)")
+    private var appearanceRow: some View {
+        SettingsMenuRow(title: "Appearance") {
+            Menu {
+                // Each choice is a toggle, so the system draws its checkmark. A checkmark image in a
+                // button's label disappears at accessibility text sizes, where menus drop images.
+                ForEach(PomodoroAppearanceMode.allCases) { mode in
+                    Toggle(mode.title, isOn: appearanceSelection(mode))
+                        .accessibilityIdentifier("settings.appearance.\(mode.rawValue)")
+                }
+            } label: {
+                // The glass pill alone is the label. iOS morphs the menu out of a glass label and
+                // back into it. A label without glass gets a white snapshot of its bounds instead,
+                // and the snapshot stays on the row for about a second after the menu closes.
+                SettingsValuePill(
+                    text: store.settings.appearanceMode.title,
+                    systemImage: "chevron.up.chevron.down"
+                )
             }
-        } label: {
-            SettingsMenuRow(
-                title: "Appearance",
-                value: store.settings.appearanceMode.title
-            )
+            .buttonStyle(.plain)
+            .background { SettingsCardLiftShadow(shape: Capsule(style: .continuous)) }
+            .accessibilityLabel("Appearance")
+            .accessibilityValue(store.settings.appearanceMode.title)
+            .accessibilityHint("Opens appearance mode choices.")
+            .accessibilityIdentifier("settings.appearance")
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Appearance")
-        .accessibilityValue(store.settings.appearanceMode.title)
-        .accessibilityHint("Opens appearance mode choices.")
-        .accessibilityIdentifier("settings.appearance")
     }
 
     /// Choosing the current mode again leaves it chosen.
@@ -213,7 +219,8 @@ struct SettingsOtherSection: View {
     }
 }
 
-/// A capsule that shows a value or an action at the trailing end of a row.
+/// A glass capsule that shows a value or an action at the trailing end of a row, drawn like the
+/// Session Rhythm value pills.
 private struct SettingsValuePill: View {
     @Environment(\.colorScheme) private var colorScheme
     @ScaledMetric(relativeTo: .body) private var minHeight = SettingsLayout.pickerValuePillHeight
@@ -238,43 +245,50 @@ private struct SettingsValuePill: View {
         .padding(.leading, 14)
         .padding(.trailing, 12)
         .frame(minHeight: minHeight)
-        .background(
-            Capsule(style: .continuous)
-                .fill(SettingsTheme.valuePillFill(for: colorScheme))
+        .glassEffect(
+            .regular.tint(SettingsTheme.valuePillFill(for: colorScheme)),
+            in: Capsule(style: .continuous)
         )
         .overlay {
             Capsule(style: .continuous)
                 .strokeBorder(SettingsTheme.valuePillStroke(for: colorScheme), lineWidth: 1)
         }
+        .shadow(color: Color.black.opacity(colorScheme == .dark ? 0.02 : 0.012), radius: 8, y: 3)
         .fixedSize(horizontal: true, vertical: false)
     }
 }
 
-private struct SettingsMenuRow: View {
+/// A row whose value is chosen from a menu. The title stays outside the menu: a glass effect in a
+/// menu's label covers the whole label, so a full-width label would turn the row into a capsule.
+private struct SettingsMenuRow<MenuControl: View>: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     let title: String
-    let value: String
+    let menu: MenuControl
+
+    init(title: String, @ViewBuilder menu: () -> MenuControl) {
+        self.title = title
+        self.menu = menu()
+    }
 
     var body: some View {
         Group {
             if dynamicTypeSize.isAccessibilitySize {
                 VStack(alignment: .leading, spacing: 10) {
                     titleLabel
-                    valueLabel
+                    menu
                 }
             } else {
                 HStack(spacing: 14) {
                     titleLabel
                     Spacer(minLength: 12)
-                    valueLabel
+                    menu
                 }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.vertical, SettingsLayout.rowVerticalPadding)
-        .contentShape(Rectangle())
     }
 
     private var titleLabel: some View {
@@ -282,10 +296,8 @@ private struct SettingsMenuRow: View {
             .font(.system(.body, weight: .semibold))
             .foregroundStyle(SettingsTheme.primaryTextColor(for: colorScheme))
             .fixedSize(horizontal: false, vertical: true)
-    }
-
-    private var valueLabel: some View {
-        SettingsValuePill(text: value, systemImage: "chevron.up.chevron.down")
+            // The menu carries the title as its accessibility label.
+            .accessibilityHidden(true)
     }
 }
 
@@ -335,6 +347,7 @@ private struct SettingsSystemSettingsRow: View {
     private var openButton: some View {
         Button(action: openSettings) {
             SettingsValuePill(text: "Open Settings", systemImage: "arrow.up.forward")
+                .settingsCardLift()
         }
         .buttonStyle(SettingsRowButtonStyle())
         .accessibilityHint("Opens VibePomodoro in iOS Settings.")

@@ -131,6 +131,14 @@ private struct SettingsCardChromeModifier<AccentOverlay: View>: ViewModifier {
         let shape = RoundedRectangle(cornerRadius: style.cornerRadius, style: .continuous)
 
         content
+            .environment(
+                \.settingsCardShadow,
+                SettingsCardShadow(
+                    color: style.shadowColor(for: colorScheme),
+                    radius: style.shadowRadius(for: colorScheme),
+                    y: style.shadowYOffset(for: colorScheme)
+                )
+            )
             .background {
                 shape
                     .fill(.regularMaterial)
@@ -140,6 +148,14 @@ private struct SettingsCardChromeModifier<AccentOverlay: View>: ViewModifier {
                         accentOverlay
                             .clipShape(shape)
                     }
+                    // The shadow belongs to the surface alone. Around the content it is inherited
+                    // by every control in the card, and iOS then draws a menu's closing animation
+                    // as a white, shadowed rectangle that stays on the row for over a second.
+                    .shadow(
+                        color: style.shadowColor(for: colorScheme),
+                        radius: style.shadowRadius(for: colorScheme),
+                        y: style.shadowYOffset(for: colorScheme)
+                    )
             }
             .overlay {
                 shape
@@ -154,15 +170,62 @@ private struct SettingsCardChromeModifier<AccentOverlay: View>: ViewModifier {
                     .frame(height: 1)
                     .padding(.horizontal, style.highlightHorizontalInset)
             }
-            .shadow(
-                color: style.shadowColor(for: colorScheme),
-                radius: style.shadowRadius(for: colorScheme),
-                y: style.shadowYOffset(for: colorScheme)
-            )
+    }
+}
+
+/// The shadow of the card a view sits in.
+struct SettingsCardShadow: Equatable {
+    let color: Color
+    let radius: CGFloat
+    let y: CGFloat
+}
+
+extension EnvironmentValues {
+    @Entry var settingsCardShadow: SettingsCardShadow?
+}
+
+private struct SettingsCardLiftModifier: ViewModifier {
+    @Environment(\.settingsCardShadow) private var shadow
+
+    func body(content: Content) -> some View {
+        content.shadow(color: shadow?.color ?? .clear, radius: shadow?.radius ?? 0, y: shadow?.y ?? 0)
+    }
+}
+
+/// The enclosing card's shadow drawn on its own, in the outline of `shape`. A menu can't cast that
+/// shadow itself, because iOS then draws the menu's closing animation with it, so this goes behind
+/// the menu instead.
+struct SettingsCardLiftShadow<Outline: Shape>: View {
+    @Environment(\.settingsCardShadow) private var shadow
+
+    let shape: Outline
+
+    var body: some View {
+        if let shadow {
+            shape
+                .fill(shadow.color)
+                .blur(radius: shadow.radius)
+                .offset(y: shadow.y)
+                // Keep it out from under the control, where it would show through the glass.
+                .mask {
+                    Rectangle()
+                        .padding(-(shadow.radius * 3 + abs(shadow.y)))
+                        .overlay { shape.blendMode(.destinationOut) }
+                        .compositingGroup()
+                }
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+        }
     }
 }
 
 extension View {
+    /// Casts the enclosing card's shadow from this view, so a raised control keeps its lift now
+    /// that the card's shadow no longer reaches its content.
+    func settingsCardLift() -> some View {
+        modifier(SettingsCardLiftModifier())
+    }
+
     func settingsCardChrome<AccentOverlay: View>(
         colorScheme: ColorScheme,
         style: SettingsCardChromeStyle,

@@ -352,6 +352,7 @@ private struct SettingsPickerValueDisclosure: View {
                 .strokeBorder(SettingsTheme.valuePillStroke(for: colorScheme), lineWidth: 1)
         }
         .shadow(color: Color.black.opacity(colorScheme == .dark ? 0.02 : 0.012), radius: 8, y: 3)
+        .settingsCardLift()
         .scaleEffect(isPressed ? 0.985 : 1)
         .animation(.easeOut(duration: 0.12), value: isPressed)
         .fixedSize(horizontal: true, vertical: false)

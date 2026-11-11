@@ -217,7 +217,7 @@ Keep Next session only in the card heading. Preserve the active session's durati
 
 Alerts contains Notifications, Sound, and Haptics. Sound controls both in-app event sounds and notification sound. It remains adjustable with Notifications off, when its subtitle reads Only while the app is open. If the app switch is on but iOS denies permission, show Off in iOS Settings and replace that switch with Open Settings. Event-to-sound mappings are fixed; there is no per-event sound picker.
 
-Display contains Appearance and Keep Screen On. The appearance menu orders Follow System / Light / Dark, uses system checkmarks, saves its choice, and applies immediately. Keep Screen On says Active sessions only and prevents automatic locking only while running. Pause restores normal system behavior.
+Display contains Appearance and Keep Screen On. The appearance menu orders Follow System / Light / Dark, uses system checkmarks, saves its choice, and applies immediately. It opens from a glass value pill like the rhythm rows, and closes back into that pill without leaving a highlight on the row. Keep Screen On says Active sessions only and prevents automatic locking only while running. Pause restores normal system behavior.
 
 Other contains Send Feedback and Share App, both marked Soon, and Clear Productivity History. Keep the history action visible. Disable it with No history yet when empty, using secondary text for both title and icon. Otherwise use destructive title styling, an ordinary secondary subtitle, and open the final confirmation alert directly. Confirmation removes `completedSessions` and `productivityCache`, preserving the active session and settings.
 
